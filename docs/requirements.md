@@ -5,8 +5,8 @@
 **Document Type:** Product Requirements Specification  
 **Product Working Title:** AI Practitioner Social Network  
 **Prepared For:** Product and Engineering Stakeholders  
-**Platform Constraint:** Azure Static Web Apps, Azure Functions, Azure Table Storage  
-**Status:** Draft 1
+**Platform Constraint:** Azure Static Web Apps, Azure Functions, Azure Cosmos DB for NoSQL, Azure Blob Storage, Azure AI Search  
+**Status:** Draft 2
 
 ---
 
@@ -17,8 +17,10 @@ The system must allow users to register, maintain accounts, publish short-form p
 
 This specification also reflects the technical constraints nominated for the solution:
 - **Frontend:** Azure Static Web Apps
-- **Backend:** Azure Functions
-- **Primary storage:** Azure Table Storage
+- **Backend (API):** Azure Functions (Flex Consumption plan)
+- **Primary structured storage:** Azure Cosmos DB for NoSQL — used for users, posts, feeds, reactions, follows, notifications metadata, reports, and moderation entities
+- **Binary media storage:** Azure Blob Storage — used for images, video, audio, and GIF assets
+- **Search:** Azure AI Search — used for full-text, hashtag, semantic, and user discovery search over content indexed from Cosmos DB
 
 ---
 
@@ -45,7 +47,8 @@ The product shall:
 - support rich media posts and responses
 - support lightweight engagement patterns such as likes, dislikes, emoji reactions, and GIF replies
 - support optional notifications for new content and interactions
-- operate within the technical limitations of static frontend delivery, serverless backend execution, and Table Storage data modelling
+- provide responsive, relevance-tuned search across users, posts, hashtags, and threads
+- operate within an Azure-native architecture composed of Static Web Apps, Functions, Cosmos DB for NoSQL, Blob Storage, and AI Search
 
 ---
 
@@ -97,20 +100,21 @@ An administrator can manage platform settings, user status, moderation policies,
 
 ## 7. Assumptions and Constraints
 ### 7.1 Technical Constraints
-The solution must be designed around the following architectural limitations:
-- frontend is served as a static web application through Azure Static Web Apps
-- backend logic is implemented using Azure Functions
-- core data persistence uses Azure Table Storage
-- binary media cannot be stored directly in Azure Table Storage and will require object storage such as Azure Blob Storage
-- Azure Table Storage is not a relational database and does not support joins in the same way as SQL systems
-- data models must therefore be denormalised and query patterns must be designed carefully around PartitionKey and RowKey strategies
+The solution must be designed around the following architectural decisions:
+- frontend is served as a static web application through Azure Static Web Apps, with integrated routing to a managed Azure Functions API
+- backend logic is implemented using Azure Functions on the Flex Consumption plan, exposing HTTP-triggered REST endpoints and event-driven background workers
+- structured application data is stored in Azure Cosmos DB for NoSQL, using JSON documents and partitioned containers
+- binary media is stored in Azure Blob Storage; only blob references and metadata are stored in Cosmos DB
+- search is provided by Azure AI Search, populated from Cosmos DB via the indexer pull model and/or Functions-based push enrichment
+- Cosmos DB is a horizontally partitioned NoSQL store; data models must be designed around access patterns, partition key selection, and request unit (RU) consumption rather than relational joins
+- cross-partition fan-out and feed materialisation use the Cosmos DB change feed processed by Azure Functions
 
 ### 7.2 Delivery Assumptions
 - the frontend will be a browser-based web application
 - users will access the system from desktop and mobile browsers
 - the platform will initially support public posts only
-- identity may be implemented using Azure-compatible authentication mechanisms such as email/password and social identity providers
-- media files will be uploaded through controlled backend services and stored externally to Table Storage
+- identity will use Azure Static Web Apps' built-in authentication providers (Microsoft Entra ID and GitHub) and/or a custom OpenID Connect provider where required
+- media files will be uploaded directly to Azure Blob Storage using short-lived, server-issued user delegation SAS tokens, with metadata recorded in Cosmos DB
 
 ---
 
@@ -120,30 +124,45 @@ The product shall consist of the following major components:
 
 1. **Static Frontend Application**
    - delivered via Azure Static Web Apps
-   - responsible for rendering UI, authentication flows, feed experience, profile pages, posting interfaces, notification settings, and moderation/reporting screens
+   - responsible for rendering UI, authentication flows, feed experience, profile pages, posting interfaces, notification settings, search, and moderation/reporting screens
+   - calls the backend through the Static Web Apps managed `/api` reverse proxy, eliminating CORS configuration
 
 2. **API Layer**
-   - implemented as Azure Functions
-   - responsible for registration, account management, post creation, feed generation, follow relationships, reactions, media upload orchestration, notifications, moderation, and administrative operations
+   - implemented as Azure Functions on the Flex Consumption plan
+   - HTTP-triggered functions provide the REST API surface for registration, account management, post creation, feed retrieval, follow relationships, reactions, media upload orchestration, notifications, moderation, search, and administrative operations
+   - Cosmos DB-trigger and Blob-trigger functions provide event-driven background processing for fan-out, counter aggregation, search index sync, notification dispatch, and media post-processing
 
-3. **Primary Data Store**
-   - Azure Table Storage for structured application entities
-   - used for users, posts, follows, reactions, notifications metadata, reports, and denormalised feed records
+3. **Primary Data Store — Azure Cosmos DB for NoSQL**
+   - stores structured application entities as JSON documents
+   - hosts containers for users, profiles, posts, threads, follows, reactions, feed entries, notifications, reports, and moderation actions
+   - denormalised feed and counter documents support low-latency feed reads
+   - the change feed (latest version mode) is consumed by Azure Functions for fan-out, search synchronisation, and notification triggering
 
-4. **Media Storage**
-   - Azure Blob Storage for uploaded images, video, audio, and GIF asset references
+4. **Media Storage — Azure Blob Storage**
+   - stores uploaded images, video, audio, and GIF assets as block blobs in purpose-named containers (e.g. `images`, `video`, `audio`, `gif`)
+   - direct upload from the browser uses short-lived user delegation SAS tokens issued by the Functions API
+   - public read access is brokered via Azure CDN / Azure Front Door for cacheable delivery
 
-5. **Notification Services**
-   - optional service integration for email, push, or in-app notifications
-   - notification state and preferences persisted in Table Storage
+5. **Search — Azure AI Search**
+   - provides full-text, hashtag, faceted, and (optionally) hybrid/semantic search across posts, users, and threads
+   - indexes are populated from Cosmos DB containers using the built-in Cosmos DB indexer (pull) for bulk/initial sync and via Functions on the change feed (push) for near real-time updates
+   - separate indexes for `posts`, `users`, and `hashtags` to allow independent schema and tuning
+
+6. **Notification Services**
+   - in-app notifications stored in Cosmos DB
+   - optional email delivery via Azure Communication Services Email
+   - optional browser push via the Web Push protocol or Azure Notification Hubs
+   - notification state and user preferences persisted in Cosmos DB
 
 ### 8.2 Architectural Principles
 The design shall:
 - minimise server-side rendering dependencies
-- favour event-driven and asynchronous processing for costly operations
+- favour event-driven and asynchronous processing for costly operations using the Cosmos DB change feed
 - denormalise read models where needed for acceptable feed performance
 - separate binary storage from structured entity storage
-- support horizontal growth through serverless functions and partitioned table design
+- delegate search to a purpose-built search engine (Azure AI Search) rather than emulating it on Cosmos DB
+- support horizontal growth through serverless functions, Cosmos DB partitioning, and AI Search replicas/partitions
+- prefer managed identities and Microsoft Entra ID for service-to-service authentication wherever supported
 
 ---
 
@@ -343,9 +362,17 @@ Browsing features shall include:
 - hashtag or topic browsing, if implemented
 
 ### 9.7.3 Search
-Basic search is desirable but may be limited in the first release due to architecture. If provided, it may initially support:
-- user search by handle or display name
-- post search by simple keyword indexes or tags
+The system shall provide a first-class search experience powered by Azure AI Search.
+
+The first release shall support:
+- user search by handle, display name, and bio (autocomplete and prefix matching)
+- post search by full-text content, hashtags, and author handle
+- hashtag and topic browsing with facet counts
+- filtering by date range and media type
+- relevance-tuned ranking with optional semantic ranker
+- optional hybrid/vector search over post content as a future enhancement
+
+Search results shall respect visibility rules, moderation status, and account suspension state.
 
 ---
 
@@ -454,27 +481,32 @@ Likely logical entities include:
 - ModerationAction
 - MediaReference
 
-## 10.2 Table Storage Design Principles
-Because Azure Table Storage is the primary data store, the system shall be designed around access patterns rather than strict normalisation.
+## 10.2 Cosmos DB for NoSQL Design Principles
+Because Azure Cosmos DB for NoSQL is the primary data store, the system shall be designed around access patterns and partition strategy rather than strict normalisation.
 
 The design should:
-- use denormalised entities for performance-critical reads
-- use PartitionKey values aligned with major query paths
-- use RowKey values that support uniqueness and sort ordering
-- minimise cross-partition scans where possible
-- accept eventual consistency in selected views where needed
+- model each major entity family in its own container with a partition key chosen for the dominant access pattern (e.g. `/userId` for per-user reads, `/threadId` for thread reads, `/feedOwnerId` for personal feeds)
+- use denormalised documents for performance-critical reads (e.g. feed entries embed author handle, avatar URL, post excerpt, and counts)
+- maintain aggregate counters via change feed processing rather than synchronous updates
+- prefer point reads (`id` + partition key) over cross-partition queries
+- use the Cosmos DB change feed to fan out writes to follower feeds, refresh search indexes, and dispatch notifications
+- choose Session consistency by default, with Strong consistency reserved for security-sensitive single-document reads
+- size container throughput using autoscale RU/s, with shared-throughput databases used only for low-traffic ancillary containers
+- accept eventual consistency in fan-out feed materialisation and search indexing
 
 ## 10.3 Indicative Entity Model
-### User Entity
+All entities are JSON documents stored in Cosmos DB containers. Container, partition key, and `id` shape are illustrative and finalised in the technical specification.
+
+### User Document (container: `users`, pk: `/id`)
 May include:
-- user id
+- id (user id)
 - email
-- username
+- username (handle)
 - account status
 - created date
 - security metadata
 
-### Profile Entity
+### Profile Document (container: `users`, embedded or sibling document, pk: `/id`)
 May include:
 - user id
 - display name
@@ -483,7 +515,7 @@ May include:
 - banner URL
 - expertise tags
 
-### Post Entity
+### Post Document (container: `posts`, pk: `/threadId`)
 May include:
 - post id
 - author user id
@@ -497,13 +529,15 @@ May include:
 - visibility state
 - aggregate counters
 
-### Follow Entity
+### Follow Document (container: `follows`, pk: `/followerId`)
 May include:
 - follower user id
 - followed user id
 - created timestamp
 
-### Reaction Entity
+A mirrored `followers` container partitioned on `/followedId` may be maintained via the change feed for efficient reverse lookups.
+
+### Reaction Document (container: `reactions`, pk: `/postId`)
 May include:
 - post id
 - reacting user id
@@ -511,7 +545,7 @@ May include:
 - emoji value if applicable
 - created timestamp
 
-### Feed Entity
+### Feed Entry Document (container: `feeds`, pk: `/feedOwnerId`)
 May include:
 - target user id
 - feed item id
@@ -520,7 +554,7 @@ May include:
 - created timestamp
 - ranking or ordering metadata
 
-### Notification Entity
+### Notification Document (container: `notifications`, pk: `/targetUserId`)
 May include:
 - notification id
 - target user id
@@ -681,21 +715,22 @@ All integrations shall be abstracted to allow change without rewriting core busi
 ---
 
 ## 16. Risks and Technical Considerations
-### 16.1 Table Storage Limitations
-Azure Table Storage introduces several design risks:
-- complex relational queries are difficult
-- feed generation can become expensive at scale
-- search capability is limited
-- aggregation and counters may require asynchronous updates
-- thread retrieval can require careful partitioning and denormalisation
+### 16.1 Cosmos DB Considerations
+Azure Cosmos DB for NoSQL is well-suited to social workloads but introduces design considerations:
+- partition key choice is the single biggest determinant of cost and scalability and is hard to change later
+- cross-partition queries consume disproportionate RU/s and should be avoided in hot paths
+- request unit (RU/s) consumption must be modelled per access pattern; autoscale RU/s should be used to absorb bursts
+- denormalised feed materialisation creates write amplification proportional to follower count, which must be bounded for celebrity users
+- change feed consumers must be idempotent and tolerate at-least-once delivery
 
 ### 16.2 Recommended Design Response
-To address these limitations, the solution should:
-- precompute or denormalise user feed entries
-- store aggregate counters separately where needed
-- use asynchronous Azure Functions for fan-out and notification processing
-- store media externally in Blob Storage
-- consider future migration paths if usage grows beyond comfortable Table Storage patterns
+To address these considerations, the solution should:
+- precompute follower feeds via change-feed-driven Functions, with a fan-out cap and a pull-on-read fallback for users with very large follower counts
+- maintain aggregate counters (likes, replies, follower counts) asynchronously through change feed processing
+- use Azure Functions on the change feed for fan-out, notifications, and AI Search index synchronisation
+- store all media externally in Blob Storage and reference by URL/blob path in Cosmos DB
+- delegate full-text and faceted search to Azure AI Search rather than implementing it in Cosmos DB queries
+- ensure all change feed processors are idempotent (deterministic document ids, upsert semantics)
 
 ### 16.3 Media Complexity
 Audio and video uploads introduce:
@@ -751,7 +786,8 @@ The first release shall be considered functionally acceptable when:
 - a user can react using like, dislike, emoji, and GIF-based response mechanisms
 - a user can manage notification preferences and receive supported notifications
 - moderators can review reports and take moderation actions
-- the solution operates on Azure Static Web Apps, Azure Functions, and Azure Table Storage, with Blob Storage used for media if implemented
+- a user can search for users, posts, and hashtags through the Azure AI Search–backed search experience
+- the solution operates on Azure Static Web Apps, Azure Functions, Azure Cosmos DB for NoSQL, Azure Blob Storage, and Azure AI Search
 
 ---
 
@@ -771,10 +807,19 @@ Potential future enhancements include:
 ---
 
 ## 21. Implementation Notes
-For this product, it is important not to pretend Azure Table Storage is a relational social platform database. 
-It is workable, but only if the system is designed around constrained access patterns, denormalised views, asynchronous processing, and simple query shapes.
+The chosen Azure-native stack (Static Web Apps + Functions + Cosmos DB for NoSQL + Blob Storage + AI Search) is well suited to a microblogging workload of this shape. Each service is responsible for what it does best:
 
-For a lightweight first version, this architecture is viable. 
-For a heavy, high-scale, highly dynamic social graph with advanced search and ranking, it will hit limits sooner than a more capable data platform.
+- **Static Web Apps** delivers the SPA globally over a CDN and proxies API traffic to Functions with no CORS plumbing.
+- **Functions on Flex Consumption** provides elastic HTTP and event-driven compute, scales to zero, and integrates natively with Cosmos DB triggers and Blob triggers.
+- **Cosmos DB for NoSQL** provides predictable single-digit-millisecond reads and writes for partition-keyed documents, with the change feed acting as the backbone for fan-out, counters, search sync, and notifications.
+- **Blob Storage** keeps large binary payloads off the database hot path and is delivered through CDN/Front Door.
+- **AI Search** removes the need to emulate full-text search on the primary store and provides a clear path to semantic and vector search.
+
+The critical design discipline is:
+- choose partition keys deliberately and document them
+- treat the change feed as the integration backbone, not as an afterthought
+- keep Functions stateless and idempotent
+- never store binary blobs in Cosmos DB
+- never use Cosmos DB queries for free-text search — use AI Search
 
 
