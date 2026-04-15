@@ -22,6 +22,7 @@ npm run test
 ### `api`
 
 - Vitest covers the health envelope generation and HTTP handler behavior
+- Vitest covers the `usersByHandle` change-feed mirror logic, including stale-handle cleanup and non-fatal collision handling
 - TypeScript compilation validates the Azure Functions source and module graph
 - ESLint checks the Node/TypeScript implementation
 

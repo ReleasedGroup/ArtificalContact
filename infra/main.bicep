@@ -78,6 +78,7 @@ module functions './modules/functions.bicep' = {
     names: naming.outputs.names
     tags: tags
     applicationInsightsConnectionString: observability.outputs.applicationInsightsConnectionString
+    cosmosAccountName: cosmos.outputs.accountName
     cosmosDatabaseName: cosmos.outputs.databaseName
     cosmosEndpoint: cosmos.outputs.endpoint
     keyVaultResourceId: observability.outputs.keyVaultId

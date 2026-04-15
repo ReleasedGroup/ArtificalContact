@@ -16,12 +16,20 @@ describe('getEnvironmentConfig', () => {
       AZURE_REGION: 'australiaeast',
       BUILD_SHA: 'sha-1234',
       COSMOS_DATABASE_NAME: 'acn',
-      COSMOS_ENDPOINT: 'https://cosmos.example',
+      COSMOS_CONNECTION__accountEndpoint: 'https://cosmos.example',
     })
 
     expect(config.buildSha).toBe('sha-1234')
     expect(config.region).toBe('australiaeast')
     expect(config.cosmosDatabaseName).toBe('acn')
     expect(config.cosmosEndpoint).toBe('https://cosmos.example')
+  })
+
+  it('falls back to the legacy COSMOS_ENDPOINT setting when the connection prefix is absent', () => {
+    const config = getEnvironmentConfig({
+      COSMOS_ENDPOINT: 'https://legacy-cosmos.example',
+    })
+
+    expect(config.cosmosEndpoint).toBe('https://legacy-cosmos.example')
   })
 })

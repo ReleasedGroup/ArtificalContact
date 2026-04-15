@@ -2,6 +2,7 @@ param location string
 param names object
 param tags object = {}
 param applicationInsightsConnectionString string
+param cosmosAccountName string
 param cosmosDatabaseName string
 param cosmosEndpoint string
 param keyVaultResourceId string
@@ -32,6 +33,10 @@ var tableServiceUri = 'https://${storageAccountName}.table.${environment().suffi
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
   name: storageAccountName
+}
+
+resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' existing = {
+  name: cosmosAccountName
 }
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
@@ -109,6 +114,14 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
           value: cosmosDatabaseName
         }
         {
+          name: 'COSMOS_CONNECTION__accountEndpoint'
+          value: cosmosEndpoint
+        }
+        {
+          name: 'COSMOS_CONNECTION__credential'
+          value: 'managedidentity'
+        }
+        {
           name: 'COSMOS_ENDPOINT'
           value: cosmosEndpoint
         }
@@ -126,6 +139,16 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
         }
       ]
     }
+  }
+}
+
+resource cosmosDataContributorRoleAssignment 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-05-15' = {
+  name: guid(cosmosAccount.id, functionApp.name, 'cosmos-data-contributor')
+  parent: cosmosAccount
+  properties: {
+    principalId: functionApp.identity.principalId
+    roleDefinitionId: '${cosmosAccount.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002'
+    scope: cosmosAccount.id
   }
 }
 
