@@ -46,25 +46,38 @@ function ComposerHarness({
 }
 
 describe('PostComposer', () => {
-  const originalCreateObjectURL = URL.createObjectURL
-  const originalRevokeObjectURL = URL.revokeObjectURL
+  const originalCreateObjectURLDescriptor = Object.getOwnPropertyDescriptor(
+    URL,
+    'createObjectURL',
+  )
+  const originalRevokeObjectURLDescriptor = Object.getOwnPropertyDescriptor(
+    URL,
+    'revokeObjectURL',
+  )
+  let createObjectURLMock: ReturnType<typeof vi.fn>
+  let revokeObjectURLMock: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
+    createObjectURLMock = vi.fn((file: File) => `blob:${file.name}`)
+    revokeObjectURLMock = vi.fn()
+
     Object.defineProperty(URL, 'createObjectURL', {
       configurable: true,
-      value: vi.fn((file: File) => `blob:${file.name}`),
+      value: createObjectURLMock,
     })
     Object.defineProperty(URL, 'revokeObjectURL', {
       configurable: true,
-      value: vi.fn(),
+      value: revokeObjectURLMock,
     })
   })
 
   afterEach(() => {
-    if (originalCreateObjectURL) {
+    if (originalCreateObjectURLDescriptor) {
       Object.defineProperty(URL, 'createObjectURL', {
-        configurable: true,
-        value: originalCreateObjectURL,
+        configurable: originalCreateObjectURLDescriptor.configurable,
+        enumerable: originalCreateObjectURLDescriptor.enumerable,
+        value: originalCreateObjectURLDescriptor.value,
+        writable: originalCreateObjectURLDescriptor.writable,
       })
     } else {
       delete (
@@ -72,10 +85,12 @@ describe('PostComposer', () => {
       ).createObjectURL
     }
 
-    if (originalRevokeObjectURL) {
+    if (originalRevokeObjectURLDescriptor) {
       Object.defineProperty(URL, 'revokeObjectURL', {
-        configurable: true,
-        value: originalRevokeObjectURL,
+        configurable: originalRevokeObjectURLDescriptor.configurable,
+        enumerable: originalRevokeObjectURLDescriptor.enumerable,
+        value: originalRevokeObjectURLDescriptor.value,
+        writable: originalRevokeObjectURLDescriptor.writable,
       })
     } else {
       delete (
@@ -129,7 +144,7 @@ describe('PostComposer', () => {
   })
 
   it('adds multiple image previews from drag and drop and removes them individually', () => {
-    render(<ComposerHarness />)
+    const { unmount } = render(<ComposerHarness />)
 
     const dropZone = screen.getByRole('group', {
       name: 'Post image attachments',
@@ -137,9 +152,7 @@ describe('PostComposer', () => {
     const firstImage = new File(['first'], 'diagram-a.png', {
       type: 'image/png',
     })
-    const secondImage = new File(['second'], 'diagram-b.png', {
-      type: 'image/png',
-    })
+    const secondImage = new File(['second'], 'diagram-b.webp')
 
     fireEvent.dragEnter(dropZone, {
       dataTransfer: { files: [firstImage, secondImage] },
@@ -156,13 +169,14 @@ describe('PostComposer', () => {
     ).toHaveAttribute('src', 'blob:diagram-a.png')
     expect(
       screen.getByRole('img', {
-        name: 'Selected media preview: diagram-b.png',
+        name: 'Selected media preview: diagram-b.webp',
       }),
-    ).toHaveAttribute('src', 'blob:diagram-b.png')
+    ).toHaveAttribute('src', 'blob:diagram-b.webp')
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove diagram-a.png' }))
 
     expect(screen.getByText('1 image ready')).toBeInTheDocument()
+    expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:diagram-a.png')
     expect(
       screen.queryByRole('img', {
         name: 'Selected media preview: diagram-a.png',
@@ -170,8 +184,12 @@ describe('PostComposer', () => {
     ).not.toBeInTheDocument()
     expect(
       screen.getByRole('img', {
-        name: 'Selected media preview: diagram-b.png',
+        name: 'Selected media preview: diagram-b.webp',
       }),
     ).toBeInTheDocument()
+
+    unmount()
+
+    expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:diagram-b.webp')
   })
 })

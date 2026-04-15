@@ -75,6 +75,20 @@ function getFileSignature(file: File): string {
   return `${file.name}-${file.size}-${file.lastModified}-${file.type}`
 }
 
+function isAcceptedImageFile(file: File): boolean {
+  const normalizedContentType = file.type.trim().toLowerCase()
+
+  if (normalizedContentType.startsWith('image/')) {
+    return true
+  }
+
+  if (normalizedContentType.length > 0) {
+    return false
+  }
+
+  return /\.(avif|gif|jpe?g|png|webp)$/i.test(file.name)
+}
+
 function createPreviewUrl(file: File): string | null {
   if (typeof URL.createObjectURL !== 'function') {
     return null
@@ -99,7 +113,7 @@ function mergeUniqueImageFiles(
   const signatures = new Set(existingFiles.map((file) => file.signature))
 
   for (const file of incomingFiles) {
-    if (!file.type.startsWith('image/')) {
+    if (!isAcceptedImageFile(file)) {
       continue
     }
 
@@ -159,6 +173,7 @@ export function PostComposer({
     !isComposerTextEmpty(value)
 
   const isReplyComposer = variant === 'reply'
+  const isDropZoneActive = isDragActive && !isMediaInputDisabled
 
   useEffect(() => {
     const previousMediaFiles = previousMediaFilesRef.current
@@ -236,10 +251,6 @@ export function PostComposer({
 
   const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
-
-    if (isMediaInputDisabled) {
-      return
-    }
 
     dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
 
@@ -365,7 +376,7 @@ export function PostComposer({
                 : 'Post image attachments'
             }
             className={`rounded-[1.25rem] border border-dashed px-4 py-4 transition ${
-              isDragActive
+              isDropZoneActive
                 ? 'border-sky-300/70 bg-sky-400/10'
                 : 'border-white/10 bg-white/[0.03]'
             } ${isMediaInputDisabled ? 'opacity-60' : ''}`}
@@ -392,16 +403,21 @@ export function PostComposer({
                     {formatImageCount(mediaFiles.length)}
                   </span>
                 )}
-                <label
-                  className={`cursor-pointer rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-slate-200 transition ${
-                    isMediaInputDisabled
-                      ? 'cursor-not-allowed text-slate-500'
-                      : 'hover:border-sky-300/40 hover:bg-sky-400/10 hover:text-sky-100'
-                  }`}
-                  htmlFor={mediaInputId}
-                >
-                  Browse images
-                </label>
+                {isMediaInputDisabled ? (
+                  <span
+                    aria-disabled="true"
+                    className="cursor-not-allowed rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-slate-500 transition"
+                  >
+                    Browse images
+                  </span>
+                ) : (
+                  <label
+                    className="cursor-pointer rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-slate-200 transition hover:border-sky-300/40 hover:bg-sky-400/10 hover:text-sky-100"
+                    htmlFor={mediaInputId}
+                  >
+                    Browse images
+                  </label>
+                )}
               </div>
             </div>
 
