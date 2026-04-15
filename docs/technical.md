@@ -142,6 +142,7 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 | `listPostReactions` | GET `/api/posts/{id}/reactions` | Paginated; `?type=all\|like\|dislike\|emoji\|gif&limit=&continuationToken=` |
 | `getThread` | GET `/api/threads/{threadId}` | Cross-partition-free; `threadId` is the partition key |
 | `replyToPost` | POST `/api/posts/{id}/replies` | |
+| `searchGifs` | GET `/api/gifs/search` | Authenticated Tenor-backed GIF picker search for reply composition |
 | `deletePost` | DELETE `/api/posts/{id}` | Soft delete for the author or a moderator; sets `deletedAt` and clears the stored body text |
 | `react` | POST `/api/posts/{id}/reactions` | `{ type: "like" \| "dislike" \| "emoji" \| "gif", value? }` |
 | `unreact` | DELETE `/api/posts/{id}/reactions` | Optional query `?emoji={value}` removes one additive emoji; otherwise deletes the caller's full reaction document |
@@ -594,7 +595,7 @@ The change feed handles everything else automatically:
 1. **Vector search:** when do we add embeddings to `posts-v2`? Probably after launch + 4 weeks of data.
 2. **Multi-region writes:** likely deferred until > 50k DAU.
 3. **Notification channels:** confirm Web Push vs Notification Hubs by end of Sprint 3.
-4. **GIF picker:** Tenor vs Giphy — depends on commercial terms.
+4. **GIF picker provider changes:** Tenor now backs the Sprint 5 reply flow; revisit only if commercial terms or quotas change.
 5. **Account deletion under GDPR:** confirm tombstone vs full purge with legal.
 
 ---

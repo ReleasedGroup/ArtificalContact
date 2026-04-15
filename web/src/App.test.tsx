@@ -1489,6 +1489,147 @@ describe('App', () => {
     })
   })
 
+  it('lets an authenticated viewer publish a GIF-only Tenor reply', async () => {
+    window.history.replaceState({}, '', '/p/post-1')
+
+    const storedReplies: Array<Record<string, unknown>> = []
+
+    mockFetch.mockImplementation(async (input, init) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(200, {
+          data: createResolvedMeProfile(),
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/posts/post-1') {
+        return createJsonResponse(200, {
+          data: createPublicPost(),
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/threads/post-1') {
+        return createJsonResponse(200, {
+          data: {
+            threadId: 'post-1',
+            posts: [
+              createThreadPost(),
+              ...storedReplies
+                .filter((reply) => reply.deletedAt === null)
+                .map((reply) => createThreadPost(reply)),
+            ],
+            continuationToken: null,
+          },
+          errors: [],
+        })
+      }
+
+      if (String(input).startsWith('/api/gifs/search')) {
+        return createJsonResponse(200, {
+          data: {
+            mode:
+              String(input).includes('q=party+parrot') ? 'search' : 'featured',
+            query:
+              String(input).includes('q=party+parrot') ? 'party parrot' : '',
+            results: [
+              {
+                id: 'tenor-123',
+                title: 'Party parrot celebration',
+                previewUrl: 'https://media.tenor.com/party-parrot-tiny.gif',
+                gifUrl: 'https://media.tenor.com/party-parrot-full.gif',
+                width: 320,
+                height: 240,
+              },
+            ],
+          },
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/posts/post-1/replies') {
+        const payload = JSON.parse(String(init?.body ?? '{}')) as {
+          media?: Array<Record<string, unknown>>
+          text?: string
+        }
+
+        storedReplies.push({
+          id: 'reply-gif',
+          type: 'reply',
+          kind: 'user',
+          threadId: 'post-1',
+          parentId: 'post-1',
+          authorId: 'github:abc123',
+          authorHandle: 'ada',
+          authorDisplayName: 'Ada Lovelace',
+          authorAvatarUrl: null,
+          text: payload.text ?? '',
+          hashtags: [],
+          mentions: [],
+          media: payload.media ?? [],
+          counters: {
+            likes: 0,
+            dislikes: 0,
+            emoji: 0,
+            replies: 0,
+          },
+          visibility: 'public',
+          createdAt: '2026-04-15T00:11:00.000Z',
+          updatedAt: '2026-04-15T00:11:00.000Z',
+          deletedAt: null,
+        })
+
+        return createJsonResponse(201, {
+          data: {
+            post: storedReplies[0],
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    renderApp()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Standalone post detail' }),
+    ).toBeInTheDocument()
+
+    fireEvent.change(screen.getByPlaceholderText('Search Tenor'), {
+      target: { value: 'party parrot' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Find GIFs' }))
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Reply with GIF: Party parrot celebration',
+      }),
+    )
+
+    expect(
+      await screen.findByText('GIF reply published and thread refreshed.'),
+    ).toBeInTheDocument()
+    expect(
+      await screen.findByAltText('gif attachment from Ada Lovelace'),
+    ).toHaveAttribute('src', 'https://media.tenor.com/party-parrot-tiny.gif')
+
+    expect(storedReplies[0]).toMatchObject({
+      id: 'reply-gif',
+      text: '',
+      media: [
+        {
+          id: 'tenor-123',
+          kind: 'gif',
+          url: 'https://media.tenor.com/party-parrot-full.gif',
+          thumbUrl: 'https://media.tenor.com/party-parrot-tiny.gif',
+          width: 320,
+          height: 240,
+        },
+      ],
+    })
+  })
+
   it('flattens replies beyond depth 3 while preserving replying-to context', async () => {
     window.history.replaceState({}, '', '/p/reply-4')
 

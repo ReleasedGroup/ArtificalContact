@@ -18,6 +18,8 @@
     "MEDIA_VIDEO_CONTAINER_NAME": "video",
     "POSTS_CONTAINER_NAME": "posts",
     "POST_MAX_LENGTH": "280",
+    "TENOR_API_KEY": "",
+    "TENOR_CLIENT_KEY": "artificialcontact-web",
     "USERS_CONTAINER_NAME": "users",
     "MEDIA_CONTAINER_NAME": "media",
     "CONTENT_SAFETY_ENDPOINT": "",

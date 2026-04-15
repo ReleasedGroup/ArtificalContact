@@ -1,12 +1,20 @@
-import { startTransition, useEffect, useState, type ReactNode } from 'react'
+import {
+  startTransition,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import type { MeProfile } from '../lib/me'
 import { getOptionalMe } from '../lib/me'
 import { createReply, deletePost } from '../lib/post-write'
+import type { GifSearchResult } from '../lib/gif-search'
 import {
   PostComposer,
   type PostComposerMediaFile,
   type PostComposerSubmission,
 } from './PostComposer'
+import { ReplyGifPicker } from './ReplyGifPicker'
 import { getComposerSegments } from '../lib/composer'
 import {
   getPublicPost,
@@ -740,6 +748,7 @@ function ReadyPostDetail({
   replyState,
   viewer,
   onReplyDraftChange,
+  onGifReplySelect,
   onReplyMediaFilesChange,
   onReplySubmit,
 }: {
@@ -751,6 +760,7 @@ function ReadyPostDetail({
   replyState: ReplyState
   viewer: MeProfile | null
   onReplyDraftChange: (nextValue: string) => void
+  onGifReplySelect: (gif: GifSearchResult) => void
   onReplyMediaFilesChange: (nextFiles: PostComposerMediaFile[]) => void
   onReplySubmit: (submission: PostComposerSubmission) => void
 }) {
@@ -836,7 +846,8 @@ function ReadyPostDetail({
                   <p className="mt-2 text-sm leading-7 text-slate-400">
                     Publish a reply to the currently selected post and refresh
                     the public thread view in place. Attached image previews
-                    stay local until the reply upload path is available.
+                    stay local until the reply upload path is available, while
+                    Tenor GIF replies publish immediately.
                   </p>
                 </div>
 
@@ -888,6 +899,16 @@ function ReadyPostDetail({
                   value={replyDraft}
                   variant="reply"
                 />
+
+                {canReply && (
+                  <ReplyGifPicker
+                    disabled={
+                      replyState.status === 'submitting' ||
+                      deleteState.status === 'deleting'
+                    }
+                    onSelect={onGifReplySelect}
+                  />
+                )}
               </div>
             </article>
           )}
@@ -1090,6 +1111,8 @@ export function PostDetailScreen({ postId }: { postId: string }) {
     status: 'idle',
   })
   const [refreshToken, setRefreshToken] = useState(0)
+  const hasLoadedPostDetailRef = useRef(false)
+  const previousPostIdRef = useRef(postId)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -1124,9 +1147,16 @@ export function PostDetailScreen({ postId }: { postId: string }) {
   }, [postId])
 
   useEffect(() => {
-    startTransition(() => {
-      setPostState({ status: 'loading' })
-    })
+    const shouldResetLoadingState =
+      !hasLoadedPostDetailRef.current || previousPostIdRef.current !== postId
+
+    previousPostIdRef.current = postId
+
+    if (shouldResetLoadingState) {
+      startTransition(() => {
+        setPostState({ status: 'loading' })
+      })
+    }
 
     const controller = new AbortController()
 
@@ -1136,6 +1166,7 @@ export function PostDetailScreen({ postId }: { postId: string }) {
         const thread = await getThread(post.threadId, controller.signal)
 
         startTransition(() => {
+          hasLoadedPostDetailRef.current = true
           setPostState({
             status: 'ready',
             data: {
@@ -1216,6 +1247,44 @@ export function PostDetailScreen({ postId }: { postId: string }) {
           error instanceof Error
             ? error.message
             : 'Unable to publish the reply.',
+      })
+    }
+  }
+
+  const handleGifReplySelect = async (gif: GifSearchResult) => {
+    if (postState.status !== 'ready' || viewer?.status !== 'active' || !viewer.handle) {
+      return
+    }
+
+    setReplyState({ status: 'submitting' })
+    setDeleteState({ status: 'idle' })
+
+    try {
+      await createReply(postState.data.post.id, {
+        media: [
+          {
+            id: gif.id,
+            kind: 'gif',
+            url: gif.gifUrl,
+            thumbUrl: gif.previewUrl,
+            width: gif.width,
+            height: gif.height,
+          },
+        ],
+      })
+
+      setReplyDraft('')
+      setReplyMediaFiles([])
+      setReplyState({
+        status: 'success',
+        message: 'GIF reply published and thread refreshed.',
+      })
+      setRefreshToken((current) => current + 1)
+    } catch (error) {
+      setReplyState({
+        status: 'error',
+        message:
+          error instanceof Error ? error.message : 'Unable to publish the GIF reply.',
       })
     }
   }
@@ -1315,6 +1384,9 @@ export function PostDetailScreen({ postId }: { postId: string }) {
                 if (deleteState.status !== 'deleting') {
                   setDeleteState({ status: 'idle' })
                 }
+              }}
+              onGifReplySelect={(gif) => {
+                void handleGifReplySelect(gif)
               }}
               onReplyMediaFilesChange={(nextFiles) => {
                 setReplyMediaFiles(nextFiles)

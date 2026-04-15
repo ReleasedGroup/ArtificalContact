@@ -13,7 +13,7 @@ import {
 import { CosmosPostStore } from '../lib/cosmos-post-store.js'
 import { withHttpAuth } from '../lib/http-auth.js'
 import {
-  buildCreatePostRequestSchema,
+  buildCreateReplyRequestSchema,
   createUserReplyDocument,
   isPubliclyVisiblePost,
   mapCreatePostValidationIssues,
@@ -81,11 +81,11 @@ export function buildCreateReplyHandler(
       })
     }
 
-    let requestSchema: ReturnType<typeof buildCreatePostRequestSchema>
+    let requestSchema: ReturnType<typeof buildCreateReplyRequestSchema>
 
     try {
       const maxTextLength = dependencies.maxTextLength ?? resolvePostMaxLength()
-      requestSchema = buildCreatePostRequestSchema(maxTextLength)
+      requestSchema = buildCreateReplyRequestSchema(maxTextLength)
     } catch (error) {
       context.log('Failed to configure the reply validation rules.', {
         error:
