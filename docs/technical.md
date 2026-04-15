@@ -139,6 +139,7 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 | `listFollowing` | GET `/api/users/{handle}/following` | Paginated |
 | `createPost` | POST `/api/posts` | Validates, writes to `posts` |
 | `getPost` | GET `/api/posts/{id}` | |
+| `listPostReactions` | GET `/api/posts/{id}/reactions` | Paginated; `?type=all\|like\|dislike\|emoji\|gif&limit=&continuationToken=` |
 | `getThread` | GET `/api/threads/{threadId}` | Cross-partition-free; `threadId` is the partition key |
 | `replyToPost` | POST `/api/posts/{id}/replies` | |
 | `deletePost` | DELETE `/api/posts/{id}` | Soft delete for the author or a moderator; sets `deletedAt` and clears the stored body text |

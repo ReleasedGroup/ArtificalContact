@@ -9,6 +9,7 @@ import {
   type CreateReactionRequest,
   type ReactionPolicy,
   type ReactionSentiment,
+  type ReactionType,
 } from './reaction-rules.js'
 import { readOptionalValue } from './strings.js'
 
@@ -33,8 +34,9 @@ export const DEFAULT_REACTIONS_CONTAINER_NAME = 'reactions'
 export const DEFAULT_REACTION_VALUE_MAX_LENGTH = 2048
 export const DEFAULT_EMOJI_VALUE_MAX_LENGTH = 128
 
-let cachedReactionRepository: ReactionRepository | undefined
+let cachedReactionRepository: MutableReactionRepository | undefined
 
+export type ReactionListType = ReactionType | 'all'
 export interface ReactionDocument {
   id: string
   type: 'reaction'
@@ -69,6 +71,23 @@ export interface ReactionRepository {
   upsert(reaction: ReactionDocument): Promise<ReactionDocument>
   deleteByPostAndUser(postId: string, userId: string): Promise<void>
 }
+
+export interface ReactionListRepository {
+  listByPostId(
+    postId: string,
+    options: {
+      limit: number
+      continuationToken?: string
+      type?: ReactionListType
+    },
+  ): Promise<{
+    reactions: ReactionDocument[]
+    continuationToken?: string
+  }>
+}
+
+export type MutableReactionRepository = ReactionRepository &
+  ReactionListRepository
 
 function normalizeOptionalString(value: unknown): unknown {
   if (typeof value !== 'string') {
@@ -168,7 +187,44 @@ export function buildReactionDocumentId(
 
 function createReactionRepositoryForContainer(
   container: Container,
-): ReactionRepository {
+): MutableReactionRepository {
+  function buildListQuery(type: ReactionListType) {
+    const parameters: Array<{ name: string; value: string }> = [
+      { name: '@type', value: 'reaction' },
+    ]
+
+    let filterClause = ''
+
+    switch (type) {
+      case 'like':
+      case 'dislike':
+        filterClause = ' AND c.sentiment = @reactionSentiment'
+        parameters.push({
+          name: '@reactionSentiment',
+          value: type,
+        })
+        break
+      case 'emoji':
+        filterClause = ' AND ARRAY_LENGTH(c.emojiValues) > 0'
+        break
+      case 'gif':
+        filterClause = ' AND IS_DEFINED(c.gifValue) AND NOT IS_NULL(c.gifValue)'
+        break
+      case 'all':
+      default:
+        break
+    }
+
+    return {
+      query: `
+        SELECT * FROM c
+        WHERE c.type = @type${filterClause}
+        ORDER BY c.updatedAt DESC, c.id DESC
+      `,
+      parameters,
+    }
+  }
+
   return {
     async getByPostAndUser(postId, userId) {
       const id = buildReactionDocumentId(postId, userId)
@@ -194,6 +250,26 @@ function createReactionRepositoryForContainer(
       const response = await container.items.upsert<ReactionDocument>(reaction)
       return response.resource ?? reaction
     },
+    async listByPostId(postId, options) {
+      const queryIterator = container.items.query<ReactionDocument>(
+        buildListQuery(options.type ?? 'all'),
+        {
+          partitionKey: postId,
+          maxItemCount: options.limit,
+          enableQueryControl: true,
+          ...(options.continuationToken === undefined
+            ? {}
+            : { continuationToken: options.continuationToken }),
+        },
+      )
+
+      const { resources, continuationToken } = await queryIterator.fetchNext()
+
+      return {
+        reactions: resources ?? [],
+        ...(continuationToken === undefined ? {} : { continuationToken }),
+      }
+    },
     async deleteByPostAndUser(postId, userId) {
       const id = buildReactionDocumentId(postId, userId)
 
@@ -213,7 +289,7 @@ function createReactionRepositoryForContainer(
 export function createReactionRepositoryFromConfig(
   config: EnvironmentConfig,
   env: NodeJS.ProcessEnv = process.env,
-): ReactionRepository {
+): MutableReactionRepository {
   if (!config.cosmosDatabaseName) {
     throw new Error('COSMOS_DATABASE_NAME is required to resolve reactions.')
   }
@@ -229,7 +305,7 @@ export function createReactionRepositoryFromConfig(
   return createReactionRepositoryForContainer(container)
 }
 
-export function createReactionRepository(): ReactionRepository {
+export function createReactionRepository(): MutableReactionRepository {
   cachedReactionRepository ??= createReactionRepositoryFromConfig(
     getEnvironmentConfig(),
   )

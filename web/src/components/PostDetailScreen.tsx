@@ -23,6 +23,7 @@ import {
   type ThreadPost,
   type ThreadPostMedia,
 } from '../lib/thread'
+import { ReactionSummaryChip } from './ReactionSummaryChip'
 
 type PostDetailState =
   | { status: 'loading' }
@@ -200,7 +201,10 @@ function formatTimestamp(value: string | null): string | null {
   }).format(parsed)
 }
 
-function buildInitialBadge(source: string | null | undefined, fallback: string): string {
+function buildInitialBadge(
+  source: string | null | undefined,
+  fallback: string,
+): string {
   const resolvedSource = source?.trim() || fallback
   const words = resolvedSource.split(/\s+/).filter(Boolean)
 
@@ -219,7 +223,10 @@ function buildAuthorMonogram(post: RenderablePost): string {
 }
 
 function buildViewerBadge(viewer: MeProfile): string {
-  return buildInitialBadge(viewer.displayName.trim() || viewer.handle?.trim(), 'ME')
+  return buildInitialBadge(
+    viewer.displayName.trim() || viewer.handle?.trim(),
+    'ME',
+  )
 }
 
 function getAuthorName(post: RenderablePost): string {
@@ -572,15 +579,40 @@ function PostCard({
             <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
               {formatCount(post.counters.replies)} replies
             </span>
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-              {formatCount(post.counters.likes)} likes
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-              {formatCount(post.counters.dislikes)} dislikes
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-              {formatCount(post.counters.emoji)} emoji
-            </span>
+            <ReactionSummaryChip
+              buttonLabel={`${formatCount(post.counters.likes)} ${
+                post.counters.likes === 1 ? 'like' : 'likes'
+              }`}
+              count={post.counters.likes}
+              emptyMessage="No public likes are available yet."
+              loadMoreLabel="Load more likes"
+              popoverTitle="Like reactions"
+              postId={post.id}
+              reactionType="like"
+              tone="like"
+            />
+            <ReactionSummaryChip
+              buttonLabel={`${formatCount(post.counters.dislikes)} ${
+                post.counters.dislikes === 1 ? 'dislike' : 'dislikes'
+              }`}
+              count={post.counters.dislikes}
+              emptyMessage="No public dislikes are available yet."
+              loadMoreLabel="Load more dislikes"
+              popoverTitle="Dislike reactions"
+              postId={post.id}
+              reactionType="dislike"
+              tone="dislike"
+            />
+            <ReactionSummaryChip
+              buttonLabel={`${formatCount(post.counters.emoji)} emoji`}
+              count={post.counters.emoji}
+              emptyMessage="No public emoji reactions are available yet."
+              loadMoreLabel="Load more emoji reactions"
+              popoverTitle="Emoji reactions"
+              postId={post.id}
+              reactionType="emoji"
+              tone="emoji"
+            />
             {timestamp && <span className="ml-auto">{timestamp}</span>}
           </div>
 
@@ -662,7 +694,9 @@ function ThreadConversationSection({
               data-thread-entry=""
               data-thread-depth={entry.actualDepth}
               data-thread-visual-depth={entry.visualDepth}
-              style={indentRem > 0 ? { marginLeft: `${indentRem}rem` } : undefined}
+              style={
+                indentRem > 0 ? { marginLeft: `${indentRem}rem` } : undefined
+              }
               className={
                 entry.visualDepth > 0
                   ? 'border-l border-white/8 pl-4'
@@ -743,7 +777,9 @@ function ReadyPostDetail({
   const selectedVisualDepth = selectedThreadEntry?.visualDepth ?? null
   const selectedFlattened = selectedThreadEntry?.isFlattened ?? false
   const selectedStandaloneRoot =
-    !selectedInThread && data.post.id === data.post.threadId && data.post.parentId === null
+    !selectedInThread &&
+    data.post.id === data.post.threadId &&
+    data.post.parentId === null
   const canReply = viewer?.status === 'active' && Boolean(viewer.handle)
   const replyTargetLabel = authorHandle ? `@${authorHandle}` : 'this thread'
 
@@ -880,7 +916,9 @@ function ReadyPostDetail({
                     github: toRenderableGitHubMetadata(data.post.github),
                   })}
                   contextLabel={
-                    selectedStandaloneRoot ? 'Root post in the thread' : selectedContextLabel
+                    selectedStandaloneRoot
+                      ? 'Root post in the thread'
+                      : selectedContextLabel
                   }
                   emphasis="selected"
                   post={{
@@ -906,8 +944,8 @@ function ReadyPostDetail({
                 This post currently stands alone.
               </h2>
               <p className="mt-3 text-sm leading-7 text-slate-300">
-                No additional public posts were returned for this thread, so
-                the detail page only needs to render the selected post.
+                No additional public posts were returned for this thread, so the
+                detail page only needs to render the selected post.
               </p>
             </article>
           )}
@@ -1148,7 +1186,11 @@ export function PostDetailScreen({ postId }: { postId: string }) {
   }, [postId, refreshToken])
 
   const handleReplySubmit = async ({ value }: PostComposerSubmission) => {
-    if (postState.status !== 'ready' || viewer?.status !== 'active' || !viewer.handle) {
+    if (
+      postState.status !== 'ready' ||
+      viewer?.status !== 'active' ||
+      !viewer.handle
+    ) {
       return
     }
 
@@ -1171,7 +1213,9 @@ export function PostDetailScreen({ postId }: { postId: string }) {
       setReplyState({
         status: 'error',
         message:
-          error instanceof Error ? error.message : 'Unable to publish the reply.',
+          error instanceof Error
+            ? error.message
+            : 'Unable to publish the reply.',
       })
     }
   }
@@ -1215,11 +1259,12 @@ export function PostDetailScreen({ postId }: { postId: string }) {
           void handleDeletePost(post)
         }}
         className="rounded-full border border-rose-300/20 bg-rose-300/10 px-4 py-2 text-rose-100 transition hover:border-rose-300/35 hover:bg-rose-300/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-slate-400"
-        disabled={replyState.status === 'submitting' || deleteState.status === 'deleting'}
+        disabled={
+          replyState.status === 'submitting' ||
+          deleteState.status === 'deleting'
+        }
       >
-        {isDeleting
-          ? `Deleting ${post.type}...`
-          : `Delete ${post.type}`}
+        {isDeleting ? `Deleting ${post.type}...` : `Delete ${post.type}`}
       </button>
     )
   }

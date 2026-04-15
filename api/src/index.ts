@@ -11,6 +11,7 @@ import { registerGetFeedFunction } from './functions/get-feed.js'
 import { registerGetPostFunction } from './functions/get-post.js'
 import { registerGetThreadFunction } from './functions/get-thread.js'
 import { registerListFollowersFunction } from './functions/list-followers.js'
+import { registerListPostReactionsFunction } from './functions/list-post-reactions.js'
 import { registerCreatePostFunction } from './functions/create-post.js'
 import { registerListFollowingFunction } from './functions/list-following.js'
 import { registerGetUserFunction } from './functions/get-user.js'
@@ -35,6 +36,7 @@ registerGetFeedFunction()
 registerGetPostFunction()
 registerGetThreadFunction()
 registerListFollowersFunction()
+registerListPostReactionsFunction()
 registerCreatePostFunction()
 registerListFollowingFunction()
 registerGetUserFunction()

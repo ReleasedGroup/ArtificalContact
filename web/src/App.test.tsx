@@ -1,5 +1,12 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { createQueryClient } from './lib/query-client'
@@ -43,8 +50,10 @@ class MockXMLHttpRequest {
   private readonly responseHeaders = new Map<string, string>()
 
   upload = {
-    addEventListener: (type: string, listener: (event: ProgressEvent) => void) =>
-      this.uploadListeners.set(type, listener),
+    addEventListener: (
+      type: string,
+      listener: (event: ProgressEvent) => void,
+    ) => this.uploadListeners.set(type, listener),
   }
 
   constructor() {
@@ -172,6 +181,22 @@ function createResolvedMeProfile(overrides?: Record<string, unknown>) {
       updatedAt: '2026-04-15T02:00:00.000Z',
       ...overrides,
     },
+  }
+}
+
+function createReactionSummaryEntry(overrides?: Record<string, unknown>) {
+  return {
+    actor: {
+      id: 'user-1',
+      handle: 'grace',
+      displayName: 'Grace Hopper',
+      avatarUrl: 'https://cdn.example.com/grace.png',
+    },
+    sentiment: 'like',
+    emojiValues: [],
+    gifValue: null,
+    reactedAt: '2026-04-15T03:00:00.000Z',
+    ...overrides,
   }
 }
 
@@ -981,9 +1006,9 @@ describe('App', () => {
       screen.getByText('Follow-up reply with more context.'),
     ).toBeInTheDocument()
     expect(
-      screen.getByText('Follow-up reply with more context.').closest(
-        '[data-thread-entry]',
-      ),
+      screen
+        .getByText('Follow-up reply with more context.')
+        .closest('[data-thread-entry]'),
     ).toHaveAttribute('data-thread-depth', '1')
     expect(mockFetch).toHaveBeenCalledTimes(3)
     expect(mockFetch).toHaveBeenNthCalledWith(
@@ -1003,6 +1028,127 @@ describe('App', () => {
     expect(mockFetch).toHaveBeenNthCalledWith(
       3,
       '/api/threads/post-1',
+      expect.objectContaining({
+        headers: { Accept: 'application/json' },
+      }),
+    )
+  })
+
+  it('opens a paginated reaction summary popover from the post detail route', async () => {
+    window.history.replaceState({}, '', '/p/post-1')
+
+    mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(403, {
+          data: null,
+          errors: [
+            {
+              code: 'auth.forbidden',
+              message: 'The authenticated user context was not available.',
+            },
+          ],
+        })
+      }
+
+      if (String(input) === '/api/posts/post-1') {
+        return createJsonResponse(200, {
+          data: createPublicPost(),
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/threads/post-1') {
+        return createJsonResponse(200, {
+          data: {
+            threadId: 'post-1',
+            posts: [createThreadPost()],
+            continuationToken: null,
+          },
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/posts/post-1/reactions?limit=8&type=like') {
+        return createJsonResponse(200, {
+          data: {
+            reactions: [
+              createReactionSummaryEntry(),
+              createReactionSummaryEntry({
+                actor: {
+                  id: 'user-2',
+                  handle: 'ada',
+                  displayName: 'Ada Lovelace',
+                  avatarUrl: 'https://cdn.example.com/ada.png',
+                },
+                reactedAt: '2026-04-15T02:30:00.000Z',
+              }),
+            ],
+            continuationToken: 'next-like-page',
+          },
+          errors: [],
+        })
+      }
+
+      if (
+        String(input) ===
+        '/api/posts/post-1/reactions?limit=8&type=like&continuationToken=next-like-page'
+      ) {
+        return createJsonResponse(200, {
+          data: {
+            reactions: [
+              createReactionSummaryEntry({
+                actor: {
+                  id: 'user-3',
+                  handle: 'linus',
+                  displayName: 'Linus Torvalds',
+                  avatarUrl: 'https://cdn.example.com/linus.png',
+                },
+                reactedAt: '2026-04-15T02:00:00.000Z',
+              }),
+            ],
+            continuationToken: null,
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    renderApp()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Standalone post detail' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getAllByRole('button', { name: '12 likes' })[0])
+
+    const likeDialog = await screen.findByRole('dialog', {
+      name: 'Like reactions',
+    })
+    expect(likeDialog).toBeInTheDocument()
+    const graceLink = (
+      await within(likeDialog).findByText('Grace Hopper')
+    ).closest('a')
+    expect(graceLink).toHaveAttribute('href', '/u/grace')
+    expect(await within(likeDialog).findByText('@ada')).toBeInTheDocument()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Load more likes' }))
+    })
+
+    const linusLink = (
+      await within(likeDialog).findByText('Linus Torvalds')
+    ).closest('a')
+    expect(linusLink).toHaveAttribute('href', '/u/linus')
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/posts/post-1/reactions?limit=8&type=like',
+      expect.objectContaining({
+        headers: { Accept: 'application/json' },
+      }),
+    )
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/posts/post-1/reactions?limit=8&type=like&continuationToken=next-like-page',
       expect.objectContaining({
         headers: { Accept: 'application/json' },
       }),
@@ -1314,7 +1460,9 @@ describe('App', () => {
       await screen.findByText('Reply published and thread refreshed.'),
     ).toBeInTheDocument()
     expect(
-      await screen.findByText('Owned reply that should disappear after soft delete.'),
+      await screen.findByText(
+        'Owned reply that should disappear after soft delete.',
+      ),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Delete reply' }),
@@ -1328,7 +1476,9 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(
-        screen.queryByText('Owned reply that should disappear after soft delete.'),
+        screen.queryByText(
+          'Owned reply that should disappear after soft delete.',
+        ),
       ).not.toBeInTheDocument()
     })
 
