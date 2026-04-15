@@ -382,6 +382,56 @@ describe('App', () => {
     ).toBeInTheDocument()
   })
 
+  it('renders the /notifications route with the in-app notification list view', async () => {
+    window.history.replaceState({}, '', '/notifications')
+
+    mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(200, {
+          data: createResolvedMeProfile(),
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/notifications') {
+        return createJsonResponse(200, {
+          data: [
+            {
+              id: 'notif-1',
+              eventType: 'reply',
+              text: 'replied to your post in #evals.',
+              read: false,
+              createdAt: '2026-04-15T08:00:00.000Z',
+              postId: 'post-1',
+              actor: {
+                handle: 'grace',
+                displayName: 'Grace Hopper',
+              },
+            },
+          ],
+          cursor: null,
+          unreadCount: 1,
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    renderApp()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Notifications' }),
+    ).toBeInTheDocument()
+    expect(
+      await screen.findByRole('link', { name: 'Grace Hopper' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('tab', { name: 'Replies' }),
+    ).toHaveAttribute('aria-selected', 'false')
+    expect(screen.getByText(/1 unread/i)).toBeInTheDocument()
+  })
+
   it('renders the /me error state when the profile request fails', async () => {
     window.history.replaceState({}, '', '/me')
 

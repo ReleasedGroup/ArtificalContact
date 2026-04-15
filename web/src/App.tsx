@@ -9,6 +9,7 @@ import {
 import { ComposerPreviewPanel } from './components/ComposerPreviewPanel'
 import { DirectBlobUploadCard } from './components/DirectBlobUploadCard'
 import { HomeFeedScreen } from './components/HomeFeedScreen'
+import { NotificationsScreen } from './components/NotificationsScreen'
 import { PostDetailScreen } from './components/PostDetailScreen'
 import { SearchResultsScreen } from './components/SearchResultsScreen'
 import { ThreadWorkspacePanel } from './components/ThreadWorkspacePanel'
@@ -35,6 +36,7 @@ import { initializeTelemetry } from './lib/telemetry'
 type AppRoute =
   | { kind: 'home' }
   | { kind: 'me' }
+  | { kind: 'notifications' }
   | { kind: 'post'; postId: string }
   | { kind: 'profile'; handle: string }
   | { kind: 'search'; query: string; type: SearchType }
@@ -137,6 +139,10 @@ function getCurrentRoute(
 
   if (/^\/me\/?$/.test(pathname)) {
     return { kind: 'me' }
+  }
+
+  if (/^\/notifications\/?$/.test(pathname)) {
+    return { kind: 'notifications' }
   }
 
   const postDetailMatch = /^\/p\/([^/]+)\/?$/.exec(pathname)
@@ -328,7 +334,77 @@ function App() {
     return <ProfileEditorScreen />
   }
 
+  if (route.kind === 'notifications') {
+    return <NotificationsRouteScreen />
+  }
+
   return <HomeRouteScreen />
+}
+
+function NotificationsRouteScreen() {
+  const viewerQuery = useQuery<ResolvedMeProfile | null>({
+    queryKey: ['optional-me'],
+    queryFn: ({ signal }) => getOptionalMe(signal),
+    retry: false,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  })
+
+  if (viewerQuery.isPending) {
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center px-6 py-8 sm:px-8 lg:px-12">
+        <section className="w-full rounded-[2rem] border border-white/10 bg-slate-950/85 px-8 py-16 text-center shadow-2xl shadow-cyan-950/30 backdrop-blur">
+          <p className="text-sm font-medium uppercase tracking-[0.24em] text-cyan-100/80">
+            Notifications
+          </p>
+          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+            Loading your notification feed
+          </h1>
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
+            Checking the current Static Web Apps session before loading the
+            authenticated in-app notification view.
+          </p>
+        </section>
+      </main>
+    )
+  }
+
+  if (viewerQuery.isError) {
+    const errorMessage =
+      viewerQuery.error instanceof Error
+        ? viewerQuery.error.message
+        : 'Unable to verify the authenticated profile session.'
+
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center px-6 py-8 sm:px-8 lg:px-12">
+        <section className="w-full rounded-[2rem] border border-rose-400/20 bg-slate-950/85 px-8 py-16 text-center shadow-2xl shadow-rose-950/20 backdrop-blur">
+          <p className="text-sm font-medium uppercase tracking-[0.24em] text-rose-100/80">
+            Notification feed unavailable
+          </p>
+          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+            The session check failed
+          </h1>
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
+            {errorMessage}
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-8 rounded-full border border-white/12 px-5 py-3 text-sm font-medium text-white transition hover:border-white/25 hover:bg-white/6 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/80"
+          >
+            Retry session check
+          </button>
+        </section>
+      </main>
+    )
+  }
+
+  if (viewerQuery.data === null) {
+    return <SignInScreen />
+  }
+
+  return <NotificationsScreen viewer={viewerQuery.data.user} />
 }
 
 function HomeRouteScreen() {
