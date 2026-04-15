@@ -85,6 +85,7 @@ resource immutableAssetsCacheRule 'Microsoft.Cdn/profiles/ruleSets/rules@2020-09
       {
         name: 'UrlPath'
         parameters: {
+          '@odata.type': '#Microsoft.Azure.Cdn.Models.DeliveryRuleUrlPathMatchConditionParameters'
           operator: 'BeginsWith'
           negateCondition: false
           matchValues: [
@@ -96,7 +97,6 @@ resource immutableAssetsCacheRule 'Microsoft.Cdn/profiles/ruleSets/rules@2020-09
           transforms: [
             'Lowercase'
           ]
-          typeName: 'DeliveryRuleUrlPathMatchConditionParameters'
         }
       }
     ]
@@ -104,10 +104,10 @@ resource immutableAssetsCacheRule 'Microsoft.Cdn/profiles/ruleSets/rules@2020-09
       {
         name: 'CacheExpiration'
         parameters: {
+          '@odata.type': '#Microsoft.Azure.Cdn.Models.DeliveryRuleCacheExpirationActionParameters'
           cacheBehavior: 'Override'
           cacheDuration: '7.00:00:00'
           cacheType: 'All'
-          typeName: 'DeliveryRuleCacheExpirationActionParameters'
         }
       }
     ]
@@ -124,6 +124,7 @@ resource mutableAssetsCacheRule 'Microsoft.Cdn/profiles/ruleSets/rules@2020-09-0
       {
         name: 'UrlPath'
         parameters: {
+          '@odata.type': '#Microsoft.Azure.Cdn.Models.DeliveryRuleUrlPathMatchConditionParameters'
           operator: 'BeginsWith'
           negateCondition: false
           matchValues: [
@@ -132,7 +133,6 @@ resource mutableAssetsCacheRule 'Microsoft.Cdn/profiles/ruleSets/rules@2020-09-0
           transforms: [
             'Lowercase'
           ]
-          typeName: 'DeliveryRuleUrlPathMatchConditionParameters'
         }
       }
     ]
@@ -140,10 +140,10 @@ resource mutableAssetsCacheRule 'Microsoft.Cdn/profiles/ruleSets/rules@2020-09-0
       {
         name: 'CacheExpiration'
         parameters: {
+          '@odata.type': '#Microsoft.Azure.Cdn.Models.DeliveryRuleCacheExpirationActionParameters'
           cacheBehavior: 'Override'
           cacheDuration: '00:05:00'
           cacheType: 'All'
-          typeName: 'DeliveryRuleCacheExpirationActionParameters'
         }
       }
     ]
@@ -185,7 +185,7 @@ resource route 'Microsoft.Cdn/profiles/afdEndpoints/routes@2020-09-01' = {
 }
 
 output customDomainHostName string = customDomainHostName
-output customDomainValidationDnsTxtRecordName string = shouldCreateCustomDomain ? '_dnsauth.${customDomain.properties.hostName}' : ''
-output customDomainValidationDnsTxtRecordValue string = shouldCreateCustomDomain ? customDomain.properties.validationProperties.validationToken : ''
-output customDomainValidationExpiry string = shouldCreateCustomDomain ? customDomain.properties.validationProperties.expirationDate : ''
+output customDomainValidationDnsTxtRecordName string = shouldCreateCustomDomain ? '_dnsauth.${customDomain!.properties.hostName}' : ''
+output customDomainValidationDnsTxtRecordValue string = shouldCreateCustomDomain ? customDomain!.properties.validationProperties.validationToken : ''
+output customDomainValidationExpiry string = shouldCreateCustomDomain ? customDomain!.properties.validationProperties.expirationDate : ''
 output endpointHostName string = frontDoorEndpoint.properties.hostName

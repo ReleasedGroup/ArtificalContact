@@ -23,10 +23,12 @@ resource searchService 'Microsoft.Search/searchServices@2023-11-01' = {
   }
 }
 
+#disable-next-line BCP081
 resource postsV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = {
   name: postsV1IndexName
   parent: searchService
   properties: {
+    defaultScoringProfile: 'recencyAndEngagement'
     fields: [
       {
         name: 'id'
@@ -158,9 +160,49 @@ resource postsV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = {
         retrievable: true
       }
     ]
+    scoringProfiles: [
+      {
+        name: 'recencyAndEngagement'
+        functionAggregation: 'sum'
+        functions: [
+          {
+            type: 'freshness'
+            boost: 12
+            fieldName: 'createdAt'
+            freshness: {
+              boostingDuration: 'P7D'
+              interpolation: 'exponential'
+            }
+          }
+          {
+            type: 'magnitude'
+            boost: 3
+            fieldName: 'likeCount'
+            magnitude: {
+              boostingRangeStart: 0
+              boostingRangeEnd: 250
+              interpolation: 'linear'
+              constantBoostBeyondRange: true
+            }
+          }
+          {
+            type: 'magnitude'
+            boost: 2
+            fieldName: 'replyCount'
+            magnitude: {
+              boostingRangeStart: 0
+              boostingRangeEnd: 100
+              interpolation: 'linear'
+              constantBoostBeyondRange: true
+            }
+          }
+        ]
+      }
+    ]
   }
 }
 
+#disable-next-line BCP081
 resource usersV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = {
   name: usersV1IndexName
   parent: searchService
