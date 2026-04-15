@@ -118,6 +118,7 @@ module frontDoor './modules/frontdoor.bicep' = {
 
 output applicationInsightsConnectionString string = observability.outputs.applicationInsightsConnectionString
 output cosmosEndpoint string = cosmos.outputs.endpoint
+output cosmosFeedsContainerName string = cosmos.outputs.feedsContainerName
 output cosmosFollowersContainerName string = cosmos.outputs.followersContainerName
 output cosmosFollowsContainerName string = cosmos.outputs.followsContainerName
 output cosmosMediaContainerName string = cosmos.outputs.mediaContainerName
