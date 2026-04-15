@@ -1,15 +1,74 @@
 import type { HttpRequest, InvocationContext } from '@azure/functions'
 import { describe, expect, it, vi } from 'vitest'
 import { buildSearchHandler } from '../src/functions/search.js'
-import {
-  SearchConfigurationError,
-  SearchUpstreamError,
-} from '../src/lib/search.js'
+import type { SearchFilters, SearchStore } from '../src/lib/search.js'
 
-function createContext() {
-  return {
-    log: vi.fn(),
-  } as unknown as InvocationContext
+class InMemorySearchStore implements SearchStore {
+  async searchPosts(input: {
+    query: string
+    filters: SearchFilters
+    limit: number
+  }) {
+    return {
+      totalCount: 1,
+      facets: {
+        hashtags: [{ value: 'evals', count: 3 }],
+        mediaKinds: [{ value: 'image', count: 2 }],
+      },
+      results: [
+        {
+          type: 'post' as const,
+          id: 'post-1',
+          kind: 'user' as const,
+          authorHandle: input.filters.hashtag ? 'filtered' : 'ada',
+          text: `Search results for ${input.query || 'everything'}`,
+          hashtags: input.filters.hashtag ? [input.filters.hashtag] : ['evals'],
+          mediaKinds: input.filters.mediaKind
+            ? [input.filters.mediaKind]
+            : ['image'],
+          createdAt: '2026-04-15T10:00:00.000Z',
+          likeCount: 8,
+          replyCount: 2,
+          githubEventType: null,
+          githubRepo: null,
+        },
+      ],
+    }
+  }
+
+  async searchUsers(input: { query: string; limit: number }) {
+    return {
+      totalCount: 1,
+      results: [
+        {
+          type: 'user' as const,
+          id: 'user-1',
+          handle: 'ada',
+          displayName: 'Ada Lovelace',
+          bio: `Results for ${input.query}`,
+          expertise: ['evals'],
+          followerCount: 42,
+        },
+      ],
+    }
+  }
+
+  async searchHashtags(input: {
+    query: string
+    filters: SearchFilters
+    limit: number
+  }) {
+    return {
+      totalCount: 1,
+      results: [
+        {
+          type: 'hashtag' as const,
+          hashtag: input.query.length > 0 ? input.query.toLowerCase() : 'evals',
+          count: input.filters.mediaKind ? 1 : 4,
+        },
+      ],
+    }
+  }
 }
 
 function createRequest(query: Record<string, string> = {}): HttpRequest {
@@ -17,92 +76,117 @@ function createRequest(query: Record<string, string> = {}): HttpRequest {
 
   return {
     query: {
-      get: (name: string) => searchParams.get(name),
+      get(name: string) {
+        return searchParams.get(name)
+      },
     },
   } as unknown as HttpRequest
 }
 
+function createContext(): InvocationContext {
+  return {
+    log: vi.fn(),
+  } as unknown as InvocationContext
+}
+
 describe('searchHandler', () => {
-  it('proxies GET /api/search requests to posts search with enforced defaults', async () => {
-    const search = vi.fn(async () => ({ value: [{ id: 'post-1' }] }))
-    const handler = buildSearchHandler({ search })
+  it('returns post results with parsed facet filters', async () => {
+    const handler = buildSearchHandler({
+      storeFactory: () => new InMemorySearchStore(),
+    })
 
     const response = await handler(
-      createRequest({ q: 'azure', type: 'posts' }),
+      createRequest({
+        q: 'evals',
+        type: 'posts',
+        filter: 'hashtag:evals,mediaKind:image',
+      }),
       createContext(),
     )
 
-    expect(search).toHaveBeenCalledWith({
-      q: 'azure',
-      type: 'posts',
-      filter: "visibility eq 'public' and moderationState eq 'ok'",
-    })
     expect(response.status).toBe(200)
     expect(response.jsonBody).toEqual({
-      data: { value: [{ id: 'post-1' }] },
+      data: {
+        type: 'posts',
+        query: 'evals',
+        filters: {
+          hashtag: 'evals',
+          mediaKind: 'image',
+        },
+        totalCount: 1,
+        facets: {
+          hashtags: [{ value: 'evals', count: 3 }],
+          mediaKinds: [{ value: 'image', count: 2 }],
+        },
+        results: [
+          {
+            type: 'post',
+            id: 'post-1',
+            kind: 'user',
+            authorHandle: 'filtered',
+            text: 'Search results for evals',
+            hashtags: ['evals'],
+            mediaKinds: ['image'],
+            createdAt: '2026-04-15T10:00:00.000Z',
+            likeCount: 8,
+            replyCount: 2,
+            githubEventType: null,
+            githubRepo: null,
+          },
+        ],
+      },
       errors: [],
     })
   })
 
-  it('combines user-provided filters with permission filters for posts', async () => {
-    const search = vi.fn(async () => ({ value: [] }))
-    const handler = buildSearchHandler({ search })
-
-    await handler(
-      createRequest({
-        q: 'open source',
-        type: 'posts',
-        filter: "authorHandle eq 'ada' and githubRepo eq 'ReleasedGroup/ArtificalContact'",
-      }),
-      createContext(),
-    )
-
-    expect(search).toHaveBeenCalledWith({
-      q: 'open source',
-      type: 'posts',
-      filter:
-        "visibility eq 'public' and moderationState eq 'ok' and (authorHandle eq 'ada' and githubRepo eq 'ReleasedGroup/ArtificalContact')",
+  it('returns user results for the people tab', async () => {
+    const handler = buildSearchHandler({
+      storeFactory: () => new InMemorySearchStore(),
     })
-  })
-
-  it('passes through user-provided filters for non-post types', async () => {
-    const search = vi.fn(async () => ({ value: [] }))
-    const handler = buildSearchHandler({ search })
-
-    await handler(
-      createRequest({
-        q: 'release',
-        type: 'users',
-        filter: "handle eq 'ada'",
-      }),
-      createContext(),
-    )
-
-    expect(search).toHaveBeenCalledWith({
-      q: 'release',
-      type: 'users',
-      filter: "handle eq 'ada'",
-    })
-  })
-
-  it('defaults to posts search when type is omitted', async () => {
-    const search = vi.fn(async () => ({ value: [] }))
-    const handler = buildSearchHandler({ search })
-
-    await handler(createRequest({ q: 'default-type' }), createContext())
-
-    expect(search).toHaveBeenCalledWith({
-      q: 'default-type',
-      type: 'posts',
-      filter: "visibility eq 'public' and moderationState eq 'ok'",
-    })
-  })
-
-  it('rejects unsupported search types', async () => {
-    const handler = buildSearchHandler({ search: vi.fn() })
 
     const response = await handler(
-      createRequest({ type: 'invalid' }),
+      createRequest({
+        q: 'ada',
+        type: 'users',
+      }),
+      createContext(),
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.jsonBody).toEqual({
+      data: {
+        type: 'users',
+        query: 'ada',
+        filters: {
+          hashtag: null,
+          mediaKind: null,
+        },
+        totalCount: 1,
+        results: [
+          {
+            type: 'user',
+            id: 'user-1',
+            handle: 'ada',
+            displayName: 'Ada Lovelace',
+            bio: 'Results for ada',
+            expertise: ['evals'],
+            followerCount: 42,
+          },
+        ],
+      },
+      errors: [],
+    })
+  })
+
+  it('rejects invalid search types', async () => {
+    const handler = buildSearchHandler({
+      storeFactory: () => new InMemorySearchStore(),
+    })
+
+    const response = await handler(
+      createRequest({
+        type: 'threads',
+      }),
       createContext(),
     )
 
@@ -112,77 +196,33 @@ describe('searchHandler', () => {
       errors: [
         {
           code: 'invalid_search_type',
-          message: 'The type query parameter must be one of: posts, users, hashtags.',
+          message: 'The search type must be posts, users, or hashtags.',
           field: 'type',
         },
       ],
     })
   })
 
-  it('rejects unsupported search filters before querying the index', async () => {
-    const search = vi.fn()
-    const handler = buildSearchHandler({ search })
+  it('rejects malformed facet filters', async () => {
+    const handler = buildSearchHandler({
+      storeFactory: () => new InMemorySearchStore(),
+    })
 
     const response = await handler(
       createRequest({
-        type: 'posts',
-        filter: "authorHandle eq 'ada') or visibility eq 'private'",
+        filter: 'hashtag',
       }),
       createContext(),
     )
 
-    expect(search).not.toHaveBeenCalled()
     expect(response.status).toBe(400)
     expect(response.jsonBody).toEqual({
       data: null,
       errors: [
         {
           code: 'invalid_search_filter',
-          message:
-            'The filter query parameter only supports flat expressions without grouping characters.',
+          message: 'The search filter query parameter is malformed.',
           field: 'filter',
-        },
-      ],
-    })
-  })
-
-  it('returns 503 when search infrastructure is not configured', async () => {
-    const handler = buildSearchHandler({
-      search: vi.fn(async () => {
-        throw new SearchConfigurationError('Search endpoint missing')
-      }),
-    })
-
-    const response = await handler(createRequest({}), createContext())
-
-    expect(response.status).toBe(503)
-    expect(response.jsonBody).toEqual({
-      data: null,
-      errors: [
-        {
-          code: 'search_unconfigured',
-          message: 'Search endpoint missing',
-        },
-      ],
-    })
-  })
-
-  it('returns a sanitized 502 when AI Search responds with an upstream error', async () => {
-    const handler = buildSearchHandler({
-      search: vi.fn(async () => {
-        throw new SearchUpstreamError('Search index query failed with status 502.', 502)
-      }),
-    })
-
-    const response = await handler(createRequest({}), createContext())
-
-    expect(response.status).toBe(502)
-    expect(response.jsonBody).toEqual({
-      data: null,
-      errors: [
-        {
-          code: 'search_upstream_failed',
-          message: 'Search index query failed with status 502.',
         },
       ],
     })

@@ -109,7 +109,7 @@ function SearchResultPostRow({ result }: { result: SearchPostResult }) {
       </div>
 
       <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-200">
-        {createExcerpt(result.text)}
+        {createExcerpt(result.text ?? '')}
       </p>
     </a>
   )
