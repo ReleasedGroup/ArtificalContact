@@ -6,7 +6,7 @@ import {
   type AdminMetricsData,
   type AdminMetricsRange,
 } from '../lib/admin-metrics'
-import type { MeProfile } from '../lib/me'
+import { hasRole, type MeProfile } from '../lib/me'
 
 interface AdminMetricsScreenProps {
   viewer: MeProfile
@@ -102,16 +102,12 @@ function formatDelta(changePercent: number | null): string {
   return `${Math.abs(changePercent).toFixed(1)}% ${direction} versus the previous window`
 }
 
-function isAdmin(viewer: MeProfile): boolean {
-  return viewer.roles.some((role) => role.trim().toLowerCase() === 'admin')
-}
-
 export function AdminMetricsScreen({ viewer }: AdminMetricsScreenProps) {
   const queryClient = useQueryClient()
   const [selectedRange, setSelectedRange] = useState<AdminMetricsRange>('7d')
   const [selectedMetric, setSelectedMetric] = useState<MetricKey>('queueDepth')
   const deferredRange = useDeferredValue(selectedRange)
-  const viewerIsAdmin = isAdmin(viewer)
+  const viewerIsAdmin = hasRole(viewer.roles, 'admin')
 
   const metricsQuery = useQuery<AdminMetricsData>({
     queryKey: ['admin-metrics', deferredRange],
@@ -430,7 +426,7 @@ export function AdminMetricsScreen({ viewer }: AdminMetricsScreenProps) {
                         Starts {formatGeneratedAt(metricsQuery.data.filters.startAt)}
                       </li>
                       <li className="rounded-[1.3rem] border border-white/8 bg-white/5 px-4 py-3">
-                        Ends {formatGeneratedAt(metricsQuery.data.filters.generatedAt)}
+                        Ends {formatGeneratedAt(metricsQuery.data.filters.endAt)}
                       </li>
                       <li className="rounded-[1.3rem] border border-white/8 bg-white/5 px-4 py-3">
                         Bucketed by {metricsQuery.data.filters.bucket}

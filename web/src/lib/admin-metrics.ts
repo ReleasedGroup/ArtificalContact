@@ -48,7 +48,8 @@ export interface AdminMetricsData {
 
 function readErrorMessage(payload: ApiEnvelope<AdminMetricsData> | null): string | null {
   const firstError = payload?.errors?.[0]
-  return firstError?.message?.trim() ? firstError.message : null
+  const message = firstError?.message?.trim()
+  return message ? message : null
 }
 
 export async function getAdminMetrics(

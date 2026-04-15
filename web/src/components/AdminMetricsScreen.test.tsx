@@ -71,7 +71,7 @@ describe('AdminMetricsScreen', () => {
         data: {
           filters: {
             range,
-            bucket: range === '30d' ? 'day' : 'day',
+            bucket: 'day',
             startAt: '2026-03-17T00:00:00.000Z',
             endAt: '2026-04-16T00:00:00.000Z',
             generatedAt: '2026-04-15T12:00:00.000Z',

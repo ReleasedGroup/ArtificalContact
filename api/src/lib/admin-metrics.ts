@@ -6,8 +6,13 @@ const oneDayMs = 24 * oneHourMs
 export type AdminMetricsRange = '24h' | '7d' | '30d'
 export type AdminMetricsBucket = 'hour' | 'day'
 
-export interface AdminMetricsActorRecord {
-  occurredAt: string | null
+export interface AdminMetricsCountBucketRecord {
+  bucketKey: string | null
+  count: number
+}
+
+export interface AdminMetricsActiveUserBucketRecord {
+  bucketKey: string | null
   userId: string | null
 }
 
@@ -19,13 +24,24 @@ export interface AdminMetricsReportRecord {
 }
 
 export interface AdminMetricsReadStore {
-  listRegistrations(
+  countRegistrations(start: Date, end: Date): Promise<number>
+  countPosts(start: Date, end: Date): Promise<number>
+  listActiveUsers(start: Date, end: Date): Promise<string[]>
+  listRegistrationBuckets(
     start: Date,
     end: Date,
-  ): Promise<AdminMetricsActorRecord[]>
-  listPosts(start: Date, end: Date): Promise<AdminMetricsActorRecord[]>
-  listReactions(start: Date, end: Date): Promise<AdminMetricsActorRecord[]>
-  listFollows(start: Date, end: Date): Promise<AdminMetricsActorRecord[]>
+    bucket: AdminMetricsBucket,
+  ): Promise<AdminMetricsCountBucketRecord[]>
+  listPostBuckets(
+    start: Date,
+    end: Date,
+    bucket: AdminMetricsBucket,
+  ): Promise<AdminMetricsCountBucketRecord[]>
+  listActiveUserBuckets(
+    start: Date,
+    end: Date,
+    bucket: AdminMetricsBucket,
+  ): Promise<AdminMetricsActiveUserBucketRecord[]>
   listReportTimeline(
     previousStart: Date,
     end: Date,
@@ -86,6 +102,7 @@ interface ResolvedWindow {
 }
 
 interface BucketAccumulator {
+  key: string
   startMs: number
   endMs: number
   registrations: number
@@ -214,7 +231,20 @@ function createSummaryValue(
   }
 }
 
-function createCurrentBuckets(window: ResolvedWindow, bucketMs: number) {
+function toBucketKey(
+  value: Date | string | null,
+  bucket: AdminMetricsBucket,
+): string | null {
+  const isoValue =
+    value instanceof Date ? value.toISOString() : toNullableString(value)
+  if (isoValue === null) {
+    return null
+  }
+
+  return bucket === 'hour' ? isoValue.slice(0, 13) : isoValue.slice(0, 10)
+}
+
+function createCurrentBuckets(window: ResolvedWindow, bucket: AdminMetricsBucket, bucketMs: number) {
   const buckets: BucketAccumulator[] = []
   const currentStartMs = window.currentStart.getTime()
 
@@ -223,7 +253,14 @@ function createCurrentBuckets(window: ResolvedWindow, bucketMs: number) {
     bucketStartMs < window.currentEnd.getTime();
     bucketStartMs += bucketMs
   ) {
+    const bucketStart = new Date(bucketStartMs)
+    const key = toBucketKey(bucketStart, bucket)
+    if (key === null) {
+      continue
+    }
+
     buckets.push({
+      key,
       startMs: bucketStartMs,
       endMs: bucketStartMs + bucketMs,
       registrations: 0,
@@ -304,164 +341,92 @@ export async function lookupAdminMetrics(
   const config = rangeConfigurations[range]
   const generatedAt = now()
   const window = resolveWindow(config, generatedAt)
-  const currentBuckets = createCurrentBuckets(window, config.bucketMs)
+  const currentBuckets = createCurrentBuckets(
+    window,
+    config.bucket,
+    config.bucketMs,
+  )
+  const bucketLookup = new Map(
+    currentBuckets.map((bucket) => [bucket.key, bucket] as const),
+  )
 
-  const [registrations, posts, reactions, follows, reportTimeline] =
-    await Promise.all([
-      store.listRegistrations(window.previousStart, window.generatedAt),
-      store.listPosts(window.previousStart, window.generatedAt),
-      store.listReactions(window.previousStart, window.generatedAt),
-      store.listFollows(window.previousStart, window.generatedAt),
-      store.listReportTimeline(window.previousStart, window.generatedAt),
-    ])
+  const [
+    currentRegistrations,
+    previousRegistrations,
+    currentPosts,
+    previousPosts,
+    currentActiveUsers,
+    previousActiveUsers,
+    registrationBuckets,
+    postBuckets,
+    activeUserBuckets,
+    reportTimeline,
+  ] = await Promise.all([
+    store.countRegistrations(window.currentStart, window.generatedAt),
+    store.countRegistrations(window.previousStart, window.currentStart),
+    store.countPosts(window.currentStart, window.generatedAt),
+    store.countPosts(window.previousStart, window.currentStart),
+    store.listActiveUsers(window.currentStart, window.generatedAt),
+    store.listActiveUsers(window.previousStart, window.currentStart),
+    store.listRegistrationBuckets(
+      window.currentStart,
+      window.generatedAt,
+      config.bucket,
+    ),
+    store.listPostBuckets(window.currentStart, window.generatedAt, config.bucket),
+    store.listActiveUserBuckets(
+      window.currentStart,
+      window.generatedAt,
+      config.bucket,
+    ),
+    store.listReportTimeline(window.previousStart, window.generatedAt),
+  ])
 
-  let currentRegistrations = 0
-  let previousRegistrations = 0
-  let currentPosts = 0
-  let previousPosts = 0
+  for (const bucketRecord of registrationBuckets) {
+    const bucketKey = toNullableString(bucketRecord.bucketKey)
+    if (bucketKey === null) {
+      continue
+    }
+
+    const bucket = bucketLookup.get(bucketKey)
+    if (bucket !== undefined) {
+      bucket.registrations += bucketRecord.count
+    }
+  }
+
+  for (const bucketRecord of postBuckets) {
+    const bucketKey = toNullableString(bucketRecord.bucketKey)
+    if (bucketKey === null) {
+      continue
+    }
+
+    const bucket = bucketLookup.get(bucketKey)
+    if (bucket !== undefined) {
+      bucket.posts += bucketRecord.count
+    }
+  }
+
+  for (const bucketRecord of activeUserBuckets) {
+    const bucketKey = toNullableString(bucketRecord.bucketKey)
+    const userId = toNullableString(bucketRecord.userId)
+    if (bucketKey === null || userId === null) {
+      continue
+    }
+
+    const bucket = bucketLookup.get(bucketKey)
+    if (bucket !== undefined) {
+      bucket.activeUsers.add(userId)
+    }
+  }
+
   let currentReports = 0
   let previousReports = 0
-  const activeUserCurrent = new Set<string>()
-  const activeUserPrevious = new Set<string>()
-
-  for (const record of registrations) {
-    const timestamp = toTimestamp(record.occurredAt)
-    const userId = toNullableString(record.userId)
-
-    if (isWithinWindow(timestamp, window.currentStart, window.generatedAt)) {
-      currentRegistrations += 1
-
-      if (userId !== null) {
-        activeUserCurrent.add(userId)
-      }
-
-      const bucketIndex = resolveBucketIndex(
-        timestamp,
-        currentBuckets,
-        config.bucketMs,
-      )
-      if (bucketIndex !== null) {
-        const bucket = currentBuckets[bucketIndex]
-        if (bucket !== undefined) {
-          bucket.registrations += 1
-          if (userId !== null) {
-            bucket.activeUsers.add(userId)
-          }
-        }
-      }
-
-      continue
-    }
-
-    if (isWithinWindow(timestamp, window.previousStart, window.currentStart)) {
-      previousRegistrations += 1
-
-      if (userId !== null) {
-        activeUserPrevious.add(userId)
-      }
-    }
-  }
-
-  for (const record of posts) {
-    const timestamp = toTimestamp(record.occurredAt)
-    const userId = toNullableString(record.userId)
-
-    if (isWithinWindow(timestamp, window.currentStart, window.generatedAt)) {
-      currentPosts += 1
-
-      if (userId !== null) {
-        activeUserCurrent.add(userId)
-      }
-
-      const bucketIndex = resolveBucketIndex(
-        timestamp,
-        currentBuckets,
-        config.bucketMs,
-      )
-      if (bucketIndex !== null) {
-        const bucket = currentBuckets[bucketIndex]
-        if (bucket !== undefined) {
-          bucket.posts += 1
-          if (userId !== null) {
-            bucket.activeUsers.add(userId)
-          }
-        }
-      }
-
-      continue
-    }
-
-    if (isWithinWindow(timestamp, window.previousStart, window.currentStart)) {
-      previousPosts += 1
-
-      if (userId !== null) {
-        activeUserPrevious.add(userId)
-      }
-    }
-  }
-
-  for (const record of reactions) {
-    const timestamp = toTimestamp(record.occurredAt)
-    const userId = toNullableString(record.userId)
-    if (userId === null) {
-      continue
-    }
-
-    if (isWithinWindow(timestamp, window.currentStart, window.generatedAt)) {
-      activeUserCurrent.add(userId)
-
-      const bucketIndex = resolveBucketIndex(
-        timestamp,
-        currentBuckets,
-        config.bucketMs,
-      )
-      if (bucketIndex !== null) {
-        currentBuckets[bucketIndex]?.activeUsers.add(userId)
-      }
-      continue
-    }
-
-    if (isWithinWindow(timestamp, window.previousStart, window.currentStart)) {
-      activeUserPrevious.add(userId)
-    }
-  }
-
-  for (const record of follows) {
-    const timestamp = toTimestamp(record.occurredAt)
-    const userId = toNullableString(record.userId)
-    if (userId === null) {
-      continue
-    }
-
-    if (isWithinWindow(timestamp, window.currentStart, window.generatedAt)) {
-      activeUserCurrent.add(userId)
-
-      const bucketIndex = resolveBucketIndex(
-        timestamp,
-        currentBuckets,
-        config.bucketMs,
-      )
-      if (bucketIndex !== null) {
-        currentBuckets[bucketIndex]?.activeUsers.add(userId)
-      }
-      continue
-    }
-
-    if (isWithinWindow(timestamp, window.previousStart, window.currentStart)) {
-      activeUserPrevious.add(userId)
-    }
-  }
 
   for (const report of reportTimeline) {
     const createdAt = toTimestamp(report.createdAt)
-    const reporterId = toNullableString(report.reporterId)
 
     if (isWithinWindow(createdAt, window.currentStart, window.generatedAt)) {
       currentReports += 1
-
-      if (reporterId !== null) {
-        activeUserCurrent.add(reporterId)
-      }
 
       const bucketIndex = resolveBucketIndex(
         createdAt,
@@ -472,9 +437,6 @@ export async function lookupAdminMetrics(
         const bucket = currentBuckets[bucketIndex]
         if (bucket !== undefined) {
           bucket.reports += 1
-          if (reporterId !== null) {
-            bucket.activeUsers.add(reporterId)
-          }
         }
       }
       continue
@@ -482,10 +444,6 @@ export async function lookupAdminMetrics(
 
     if (isWithinWindow(createdAt, window.previousStart, window.currentStart)) {
       previousReports += 1
-
-      if (reporterId !== null) {
-        activeUserPrevious.add(reporterId)
-      }
     }
   }
 
@@ -515,8 +473,16 @@ export async function lookupAdminMetrics(
             previousRegistrations,
           ),
           activeUsers: createSummaryValue(
-            activeUserCurrent.size,
-            activeUserPrevious.size,
+            new Set(
+              currentActiveUsers
+                .map((userId) => toNullableString(userId))
+                .filter((userId): userId is string => userId !== null),
+            ).size,
+            new Set(
+              previousActiveUsers
+                .map((userId) => toNullableString(userId))
+                .filter((userId): userId is string => userId !== null),
+            ).size,
           ),
           posts: createSummaryValue(currentPosts, previousPosts),
           reports: createSummaryValue(currentReports, previousReports),

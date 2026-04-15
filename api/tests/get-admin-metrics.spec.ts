@@ -4,7 +4,8 @@ import { buildGetAdminMetricsHandler } from '../src/functions/get-admin-metrics.
 import { CLIENT_PRINCIPAL_HEADER } from '../src/lib/auth.js'
 import {
   lookupAdminMetrics,
-  type AdminMetricsActorRecord,
+  type AdminMetricsActiveUserBucketRecord,
+  type AdminMetricsCountBucketRecord,
   type AdminMetricsReadStore,
   type AdminMetricsReportRecord,
 } from '../src/lib/admin-metrics.js'
@@ -85,12 +86,22 @@ function createContext(): InvocationContext {
   } as unknown as InvocationContext
 }
 
-function createActorRecord(
-  occurredAt: string,
-  userId: string,
-): AdminMetricsActorRecord {
+function createCountBucket(
+  bucketKey: string,
+  count: number,
+): AdminMetricsCountBucketRecord {
   return {
-    occurredAt,
+    bucketKey,
+    count,
+  }
+}
+
+function createActiveUserBucket(
+  bucketKey: string,
+  userId: string,
+): AdminMetricsActiveUserBucketRecord {
+  return {
+    bucketKey,
     userId,
   }
 }
@@ -110,20 +121,25 @@ function createReportRecord(
 describe('lookupAdminMetrics', () => {
   it('aggregates summaries and series for the selected range', async () => {
     const store = {
-      listRegistrations: vi.fn(async () => [
-        createActorRecord('2026-04-15T04:15:00.000Z', 'github:user-1'),
-        createActorRecord('2026-04-08T10:00:00.000Z', 'github:user-2'),
+      countRegistrations: vi.fn(async (start: Date) =>
+        start.toISOString() === '2026-04-09T00:00:00.000Z' ? 1 : 1,
+      ),
+      countPosts: vi.fn(async (start: Date) =>
+        start.toISOString() === '2026-04-09T00:00:00.000Z' ? 1 : 1,
+      ),
+      listActiveUsers: vi.fn(async (start: Date) =>
+        start.toISOString() === '2026-04-09T00:00:00.000Z'
+          ? ['github:user-1', 'github:user-4', 'github:user-6']
+          : ['github:user-2', 'github:user-3', 'github:user-5'],
+      ),
+      listRegistrationBuckets: vi.fn(async () => [
+        createCountBucket('2026-04-15', 1),
       ]),
-      listPosts: vi.fn(async () => [
-        createActorRecord('2026-04-15T09:20:00.000Z', 'github:user-1'),
-        createActorRecord('2026-04-09T08:00:00.000Z', 'github:user-3'),
-      ]),
-      listReactions: vi.fn(async () => [
-        createActorRecord('2026-04-15T11:40:00.000Z', 'github:user-4'),
-        createActorRecord('2026-04-10T01:00:00.000Z', 'github:user-5'),
-      ]),
-      listFollows: vi.fn(async () => [
-        createActorRecord('2026-04-14T16:30:00.000Z', 'github:user-6'),
+      listPostBuckets: vi.fn(async () => [createCountBucket('2026-04-15', 1)]),
+      listActiveUserBuckets: vi.fn(async () => [
+        createActiveUserBucket('2026-04-15', 'github:user-1'),
+        createActiveUserBucket('2026-04-15', 'github:user-4'),
+        createActiveUserBucket('2026-04-15', 'github:user-6'),
       ]),
       listReportTimeline: vi.fn(async () => [
         createReportRecord(),
@@ -162,6 +178,16 @@ describe('lookupAdminMetrics', () => {
         previousValue: 1,
         changePercent: 0,
       },
+      activeUsers: {
+        value: 3,
+        previousValue: 3,
+        changePercent: 0,
+      },
+      posts: {
+        value: 1,
+        previousValue: 1,
+        changePercent: 0,
+      },
       reports: {
         value: 2,
         previousValue: 1,
@@ -169,10 +195,10 @@ describe('lookupAdminMetrics', () => {
       },
       queueDepth: {
         value: 1,
+        previousValue: 0,
+        changePercent: null,
       },
     })
-    expect(result.body.data?.summary.activeUsers.value).toBeGreaterThan(0)
-    expect(result.body.data?.summary.posts.value).toBeGreaterThan(0)
     expect(result.body.data?.series.at(-1)).toEqual({
       bucketStart: '2026-04-15T00:00:00.000Z',
       bucketEnd: '2026-04-16T00:00:00.000Z',
@@ -192,14 +218,16 @@ describe('getAdminMetricsHandler', () => {
       repositoryFactory: () => createRepository(createStoredUser()),
       storeFactory: () =>
         ({
-          listRegistrations: async () => [
-            createActorRecord('2026-04-15T01:00:00.000Z', 'github:user-1'),
+          countRegistrations: async () => 1,
+          countPosts: async () => 1,
+          listActiveUsers: async () => ['github:user-1'],
+          listRegistrationBuckets: async () => [
+            createCountBucket('2026-04-15', 1),
           ],
-          listPosts: async () => [
-            createActorRecord('2026-04-15T02:00:00.000Z', 'github:user-1'),
+          listPostBuckets: async () => [createCountBucket('2026-04-15', 1)],
+          listActiveUserBuckets: async () => [
+            createActiveUserBucket('2026-04-15', 'github:user-1'),
           ],
-          listReactions: async () => [],
-          listFollows: async () => [],
           listReportTimeline: async () => [createReportRecord()],
         }) satisfies AdminMetricsReadStore,
     })
@@ -236,10 +264,12 @@ describe('getAdminMetricsHandler', () => {
       repositoryFactory: () => createRepository(createStoredUser()),
       storeFactory: () =>
         ({
-          listRegistrations: async () => [],
-          listPosts: async () => [],
-          listReactions: async () => [],
-          listFollows: async () => [],
+          countRegistrations: async () => 0,
+          countPosts: async () => 0,
+          listActiveUsers: async () => [],
+          listRegistrationBuckets: async () => [],
+          listPostBuckets: async () => [],
+          listActiveUserBuckets: async () => [],
           listReportTimeline: async () => [],
         }) satisfies AdminMetricsReadStore,
     })
@@ -301,10 +331,12 @@ describe('getAdminMetricsHandler', () => {
         ),
       storeFactory: () =>
         ({
-          listRegistrations: async () => [],
-          listPosts: async () => [],
-          listReactions: async () => [],
-          listFollows: async () => [],
+          countRegistrations: async () => 0,
+          countPosts: async () => 0,
+          listActiveUsers: async () => [],
+          listRegistrationBuckets: async () => [],
+          listPostBuckets: async () => [],
+          listActiveUserBuckets: async () => [],
           listReportTimeline: async () => [],
         }) satisfies AdminMetricsReadStore,
     })

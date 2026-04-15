@@ -8,7 +8,7 @@ import {
   type TouchEvent,
 } from 'react'
 import { NotificationBell } from './NotificationBell'
-import type { MeProfile } from '../lib/me'
+import { hasRole, type MeProfile } from '../lib/me'
 import { getFeedPage, type FeedEntry } from '../lib/feed'
 import { signOut } from '../lib/auth'
 import { HeaderSearchBox } from './HeaderSearchBox'
@@ -47,10 +47,6 @@ function formatTimestamp(value: string | null): string | null {
 
 function getProfileHref(handle: string): string {
   return `/u/${encodeURIComponent(handle)}`
-}
-
-function isAdmin(viewer: MeProfile): boolean {
-  return viewer.roles.some((role) => role.trim().toLowerCase() === 'admin')
 }
 
 function getPostHref(postId: string): string {
@@ -384,7 +380,7 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
     'ME',
   )
   const refreshMessage = getRefreshMessage(pullRefreshState)
-  const viewerIsAdmin = isAdmin(viewer)
+  const viewerIsAdmin = hasRole(viewer.roles, 'admin')
 
   function handleSignOut() {
     signOut({ queryClient })
