@@ -3,6 +3,7 @@ param names object
 param tags object = {}
 
 var postsV1IndexName = 'posts-v1'
+var usersV1IndexName = 'users-v1'
 
 resource searchService 'Microsoft.Search/searchServices@2023-11-01' = {
   name: names.search
@@ -152,6 +153,90 @@ resource postsV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = {
         type: 'Edm.String'
         searchable: true
         filterable: true
+        sortable: false
+        facetable: false
+        retrievable: true
+      }
+    ]
+  }
+}
+
+resource usersV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = {
+  name: usersV1IndexName
+  parent: searchService
+  properties: {
+    fields: [
+      {
+        name: 'id'
+        type: 'Edm.String'
+        key: true
+        filterable: true
+        searchable: false
+        sortable: true
+        facetable: false
+        retrievable: true
+      }
+      {
+        name: 'handle'
+        type: 'Edm.String'
+        analyzer: 'keyword'
+        filterable: true
+        searchable: true
+        sortable: false
+        facetable: false
+        retrievable: true
+      }
+      {
+        name: 'handleLower'
+        type: 'Edm.String'
+        analyzer: 'keyword'
+        filterable: true
+        searchable: true
+        sortable: false
+        facetable: false
+        retrievable: true
+      }
+      {
+        name: 'displayName'
+        type: 'Edm.String'
+        filterable: false
+        searchable: true
+        sortable: false
+        facetable: false
+        retrievable: true
+      }
+      {
+        name: 'bio'
+        type: 'Edm.String'
+        filterable: false
+        searchable: true
+        sortable: false
+        facetable: false
+        retrievable: true
+      }
+      {
+        name: 'expertise'
+        type: 'Collection(Edm.String)'
+        filterable: true
+        searchable: true
+        sortable: false
+        facetable: true
+        retrievable: true
+      }
+      {
+        name: 'followerCount'
+        type: 'Edm.Int32'
+        filterable: true
+        searchable: false
+        sortable: true
+        facetable: false
+        retrievable: true
+      }
+      {
+        name: 'status'
+        type: 'Edm.String'
+        filterable: true
+        searchable: false
         sortable: false
         facetable: false
         retrievable: true
