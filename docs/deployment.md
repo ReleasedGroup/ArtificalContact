@@ -6,7 +6,7 @@ Sprint 0 provisions the Azure and GitHub scaffolding required to start feature d
 
 - Azure Static Web Apps (Standard)
 - Azure Functions (Flex Consumption)
-- Azure Cosmos DB for NoSQL + `acn` database with `users`, `usersByHandle`, `posts`, `follows`, `followers`, `reactions`, `feeds`, `notifications`, `notificationPrefs`, `media`, `reports`, `modActions`, and `rateLimits` containers
+- Azure Cosmos DB for NoSQL + `acn` database with `users`, `usersByHandle`, `posts`, `follows`, `followers`, `reactions`, `feeds`, `notifications`, `notificationPrefs`, `media`, `reports`, `modActions`, `rateLimits`, and `githubRepos` containers
 - Azure Storage account + placeholder blob containers
 - Azure AI Search (Basic)
 - Azure Front Door (Standard) with cache rules for blob delivery
@@ -24,10 +24,13 @@ workers can safely upsert follow, reply, reaction, and mention notifications
 without duplication.
 
 The Cosmos `acn` SQL database provisions 400 RU/s of shared throughput. The
-`rateLimits` container participates in that shared pool, is partitioned on
-`/userId`, and enables per-item TTL values (`defaultTtl: -1`) so each
-token-bucket document can expire independently once its refill window closes.
-Rate-limit documents use ids of the form `${userId}:${endpointClass}`.
+`rateLimits` and `githubRepos` containers participate in that shared pool. The
+`rateLimits` container is partitioned on `/userId` and enables per-item TTL
+values (`defaultTtl: -1`) so each token-bucket document can expire
+independently once its refill window closes. Rate-limit documents use ids of
+the form `${userId}:${endpointClass}`. The `githubRepos` container is
+partitioned on `/id` and stores the curated GitHub repository sync
+configuration plus polling cursors and status.
 
 ## Local prerequisites
 
@@ -66,6 +69,7 @@ The following repository secrets are required:
 - `AZURE_TENANT_ID`
 - `AZURE_SUBSCRIPTION_ID`
 - `AZURE_STATIC_WEB_APPS_API_TOKEN`
+- `PAGERDUTY_AZURE_INTEGRATION_URL` (optional, but required to provision the PagerDuty-backed action group and alert rules)
 
 The following repository variables are required:
 
@@ -75,6 +79,15 @@ The following repository variables are required:
 - `AZURE_RESOURCE_GROUP`
 - `AZURE_FUNCTION_APP_NAME`
 - `FRONTDOOR_CUSTOM_DOMAIN` (set to a real delegated host name such as `cdn.yourdomain.com` to enable the managed-cert custom domain; `.example.com` placeholders keep Front Door on the default hostname only)
+
+When `PAGERDUTY_AZURE_INTEGRATION_URL` is set, the infra deployment provisions one Azure Monitor action group and four Application Insights log alerts from `technical.md` §11:
+
+- 5xx request rate over 1% in 5 minutes
+- Cosmos DB dependency 429 rate over 0.5% in 5 minutes
+- `search.sync.lag_seconds` over 60 seconds
+- Azure AI Search dependency latency p95 over 500 ms in 5 minutes
+
+Use the PagerDuty Microsoft Azure integration URL (or an Event Orchestration integration URL if you route through Event Orchestration). If the secret is omitted, the deployment skips the PagerDuty action group and alert rules entirely so non-production environments can still deploy cleanly.
 
 ## Deployment workflows
 

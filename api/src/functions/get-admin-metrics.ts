@@ -4,38 +4,48 @@ import {
   type HttpResponseInit,
   type InvocationContext,
 } from '@azure/functions'
-import { createErrorResponse, createSuccessResponse } from '../lib/api-envelope.js'
 import {
-  loadAdminMetricsSnapshot,
-  type AdminMetricsStore,
+  createErrorResponse,
+  createJsonEnvelopeResponse,
+} from '../lib/api-envelope.js'
+import {
+  lookupAdminMetrics,
+  parseAdminMetricsRange,
+  type AdminMetricsReadStore,
 } from '../lib/admin-metrics.js'
 import { createAdminMetricsStore } from '../lib/cosmos-admin-metrics-store.js'
 import { withHttpAuth } from '../lib/http-auth.js'
+import { createUserRepository, type UserRepository } from '../lib/users.js'
 
 export interface GetAdminMetricsHandlerDependencies {
   now?: () => Date
-  storeFactory?: () => AdminMetricsStore
+  repositoryFactory?: () => UserRepository
+  storeFactory?: () => AdminMetricsReadStore
 }
 
 export function buildGetAdminMetricsHandler(
   dependencies: GetAdminMetricsHandlerDependencies = {},
 ) {
   const now = dependencies.now ?? (() => new Date())
-  const storeFactory = dependencies.storeFactory ?? createAdminMetricsStore
+  const repositoryFactory =
+    dependencies.repositoryFactory ?? (() => createUserRepository())
+  const storeFactory =
+    dependencies.storeFactory ?? (() => createAdminMetricsStore())
 
-  return async function getAdminMetricsHandler(
-    _request: HttpRequest,
+  async function getAdminMetricsHandler(
+    request: HttpRequest,
     context: InvocationContext,
   ): Promise<HttpResponseInit> {
-    if (!context.auth?.user) {
-      return createErrorResponse(403, {
-        code: 'auth.forbidden',
-        message:
-          'The authenticated user must have a provisioned admin profile before reading admin metrics.',
+    const range = parseAdminMetricsRange(request.query.get('range') ?? undefined)
+    if (range === null) {
+      return createErrorResponse(400, {
+        code: 'invalid_range',
+        message: "The range query parameter must be one of '24h', '7d', or '30d'.",
+        field: 'range',
       })
     }
 
-    let store: AdminMetricsStore
+    let store: AdminMetricsReadStore
 
     try {
       store = storeFactory()
@@ -44,7 +54,7 @@ export function buildGetAdminMetricsHandler(
         error:
           error instanceof Error
             ? error.message
-            : 'Unknown admin metrics store configuration error.',
+            : 'Unknown admin metrics configuration error.',
       })
 
       return createErrorResponse(500, {
@@ -53,38 +63,52 @@ export function buildGetAdminMetricsHandler(
       })
     }
 
-    try {
-      const metrics = await loadAdminMetricsSnapshot(store, now())
+    const authenticatedUser = context.auth?.user
+    if (!authenticatedUser) {
+      return createErrorResponse(403, {
+        code: 'auth.forbidden',
+        message:
+          'The authenticated user must have a provisioned admin profile before reading admin metrics.',
+      })
+    }
 
-      context.log('Loaded admin metrics.', {
-        dailyActiveUsers: metrics.dailyActiveUsers,
-        queueDepth: metrics.queueDepth.openReports,
-        registrations: metrics.registrations.total,
+    try {
+      const result = await lookupAdminMetrics(range, store, now)
+
+      context.log('Admin metrics lookup completed.', {
+        adminUserId: authenticatedUser.id,
+        posts: result.body.data?.summary.posts.value ?? 0,
+        range,
+        registrations: result.body.data?.summary.registrations.value ?? 0,
+        reports: result.body.data?.summary.reports.value ?? 0,
+        status: result.status,
       })
 
-      return createSuccessResponse(metrics)
+      return createJsonEnvelopeResponse(result.status, result.body)
     } catch (error) {
       context.log('Failed to load admin metrics.', {
+        adminUserId: authenticatedUser.id,
         error:
           error instanceof Error
             ? error.message
             : 'Unknown admin metrics lookup error.',
+        range,
       })
 
       return createErrorResponse(500, {
         code: 'server.admin_metrics_lookup_failed',
-        message: 'Unable to load the admin metrics.',
+        message: 'Unable to load admin metrics.',
       })
     }
   }
+
+  return withHttpAuth(getAdminMetricsHandler, {
+    requiredRoles: ['admin'],
+    repositoryFactory,
+  })
 }
 
-export const getAdminMetricsHandler = withHttpAuth(
-  buildGetAdminMetricsHandler(),
-  {
-    requiredRoles: ['admin'],
-  },
-)
+export const getAdminMetricsHandler = buildGetAdminMetricsHandler()
 
 export function registerGetAdminMetricsFunction() {
   app.http('getAdminMetrics', {

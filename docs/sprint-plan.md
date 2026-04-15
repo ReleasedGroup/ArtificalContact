@@ -175,7 +175,7 @@
 - Security pass: CSP review, Key Vault references audit, no shared keys in app settings, dependency scan
 - Synthetic load test: 500 concurrent virtual users, 30 min, success criteria from §11 of `technical.md`
 - Application Insights alerts wired to PagerDuty (or equivalent)
-- Public beta launch checklist signed off
+- Public beta launch checklist signed off (tracked in [public-beta-launch-checklist.md](public-beta-launch-checklist.md))
 
 **Definition of done**
 - All §19 acceptance criteria in `requirements.md` are met

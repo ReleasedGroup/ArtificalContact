@@ -138,6 +138,17 @@ export async function getOptionalMe(
   }
 }
 
+export function hasRole(roles: readonly string[], role: string): boolean {
+  const normalizedRole = role.trim().toLowerCase()
+  if (normalizedRole.length === 0) {
+    return false
+  }
+
+  return roles.some(
+    (candidateRole) => candidateRole.trim().toLowerCase() === normalizedRole,
+  )
+}
+
 export async function updateMe(
   input: UpdateMeInput,
   signal?: AbortSignal,
