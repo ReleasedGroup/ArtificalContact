@@ -1,4 +1,5 @@
 import { registerCreateReplyFunction } from './functions/create-reply.js'
+import { registerCreateReactionFunction } from './functions/create-reaction.js'
 import { registerCounterFunction } from './functions/counter.js'
 import { registerDeleteFollowFunction } from './functions/delete-follow.js'
 import { registerDeletePostFunction } from './functions/delete-post.js'
@@ -19,6 +20,7 @@ import { registerUsersByHandleMirrorFunction } from './functions/users-by-handle
 import { registerAuthMeFunction } from './functions/me.js'
 
 registerCreateReplyFunction()
+registerCreateReactionFunction()
 registerCounterFunction()
 registerDeleteFollowFunction()
 registerDeletePostFunction()
