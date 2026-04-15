@@ -1,3 +1,4 @@
+import type { ApiEnvelope } from './api-envelope.js'
 import type { FollowDocument } from './follows.js'
 import {
   isPubliclyVisiblePost,
@@ -13,6 +14,8 @@ import type { StoredUserDocument, UserProfileStore } from './user-profile.js'
 
 export const DEFAULT_NOTIFICATIONS_CONTAINER_NAME = 'notifications'
 export const NOTIFICATION_TTL_SECONDS = 60 * 60 * 24 * 90
+export const DEFAULT_NOTIFICATIONS_PAGE_SIZE = 20
+export const MAX_NOTIFICATIONS_PAGE_SIZE = 100
 
 export type NotificationEventType = 'follow' | 'reply' | 'reaction' | 'mention'
 
@@ -38,8 +41,24 @@ export interface NotificationDocument {
   ttl: number
 }
 
+export type StoredNotificationDocument = NotificationDocument
+
 export interface NotificationStore {
   upsertNotification(document: NotificationDocument): Promise<void>
+}
+
+export interface NotificationReadStore {
+  listNotifications(
+    targetUserId: string,
+    options: {
+      limit: number
+      cursor?: string
+    },
+  ): Promise<{
+    notifications: StoredNotificationDocument[]
+    cursor?: string
+  }>
+  countUnreadNotifications(targetUserId: string): Promise<number>
 }
 
 export type NotificationProfileStore = Pick<
@@ -63,6 +82,44 @@ export interface NotificationActor {
 export type NotificationPostSourceDocument = StoredPostDocument
 export type NotificationReactionSourceDocument = ReactionDocument
 export type NotificationFollowSourceDocument = FollowDocument
+
+export interface NotificationEntry {
+  id: string
+  eventType: NotificationEventType
+  actorUserId: string
+  actorHandle: string | null
+  actorDisplayName: string | null
+  actorAvatarUrl: string | null
+  relatedEntityId: string
+  postId: string | null
+  threadId: string | null
+  parentId: string | null
+  reactionType: ReactionType | null
+  reactionValues: string[]
+  excerpt: string | null
+  read: boolean
+  readAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface NotificationPage {
+  notifications: NotificationEntry[]
+  unreadCount: number
+}
+
+export interface NotificationsPageRequest {
+  targetUserId: string | undefined
+  limit?: string | undefined
+  cursor?: string | undefined
+}
+
+export interface NotificationsLookupResult {
+  status: 200 | 400
+  body: ApiEnvelope<NotificationPage | null> & {
+    cursor: string | null
+  }
+}
 
 const noop = (): void => undefined
 
@@ -93,6 +150,12 @@ function toStringArray(value: unknown): string[] {
         .filter((entry): entry is string => entry !== null),
     ),
   ]
+}
+
+function toNonNegativeInteger(value: unknown): number {
+  return Number.isSafeInteger(value) && typeof value === 'number' && value >= 0
+    ? value
+    : 0
 }
 
 function collapseDocumentsToLatest<T extends { id?: string | null }>(
@@ -254,12 +317,150 @@ function buildActorFromPost(
   }
 }
 
+function buildInvalidTargetUserIdResult(): NotificationsLookupResult {
+  return {
+    status: 400,
+    body: {
+      data: null,
+      cursor: null,
+      errors: [
+        {
+          code: 'invalid_target_user_id',
+          message:
+            'The authenticated user id is required to load notifications.',
+          field: 'targetUserId',
+        },
+      ],
+    },
+  }
+}
+
+function buildInvalidLimitResult(): NotificationsLookupResult {
+  return {
+    status: 400,
+    body: {
+      data: null,
+      cursor: null,
+      errors: [
+        {
+          code: 'invalid_limit',
+          message: `The limit query parameter must be an integer between 1 and ${MAX_NOTIFICATIONS_PAGE_SIZE}.`,
+          field: 'limit',
+        },
+      ],
+    },
+  }
+}
+
+function normalizeNotificationsPageLimit(limit: string | undefined): number | null {
+  const normalizedLimit = toNonEmptyString(limit)
+  if (normalizedLimit === null) {
+    return DEFAULT_NOTIFICATIONS_PAGE_SIZE
+  }
+
+  if (!/^\d+$/.test(normalizedLimit)) {
+    return null
+  }
+
+  const parsedLimit = Number.parseInt(normalizedLimit, 10)
+  if (
+    !Number.isSafeInteger(parsedLimit) ||
+    parsedLimit < 1 ||
+    parsedLimit > MAX_NOTIFICATIONS_PAGE_SIZE
+  ) {
+    return null
+  }
+
+  return parsedLimit
+}
+
 export function buildNotificationId(
   targetUserId: string,
   eventType: NotificationEventType,
   relatedEntityId: string,
 ): string {
   return `${targetUserId}:${eventType}:${relatedEntityId}`
+}
+
+export function buildNotificationEntry(
+  document: StoredNotificationDocument,
+): NotificationEntry | null {
+  const id = toNonEmptyString(document.id)
+  const actorUserId = toNonEmptyString(document.actorUserId)
+  const relatedEntityId = toNonEmptyString(document.relatedEntityId)
+  const createdAt = toNonEmptyString(document.createdAt)
+  const updatedAt = toNonEmptyString(document.updatedAt)
+
+  if (
+    id === null ||
+    actorUserId === null ||
+    relatedEntityId === null ||
+    createdAt === null ||
+    updatedAt === null
+  ) {
+    return null
+  }
+
+  return {
+    id,
+    eventType: document.eventType,
+    actorUserId,
+    actorHandle: toNonEmptyString(document.actorHandle),
+    actorDisplayName: toNonEmptyString(document.actorDisplayName),
+    actorAvatarUrl: toNonEmptyString(document.actorAvatarUrl),
+    relatedEntityId,
+    postId: toNonEmptyString(document.postId),
+    threadId: toNonEmptyString(document.threadId),
+    parentId: toNonEmptyString(document.parentId),
+    reactionType: document.reactionType ?? null,
+    reactionValues: toStringArray(document.reactionValues),
+    excerpt: toNonEmptyString(document.excerpt),
+    read: toNonEmptyString(document.readAt) !== null,
+    readAt: toNonEmptyString(document.readAt),
+    createdAt,
+    updatedAt,
+  }
+}
+
+export async function lookupNotifications(
+  request: NotificationsPageRequest,
+  store: NotificationReadStore,
+): Promise<NotificationsLookupResult> {
+  const targetUserId = toNonEmptyString(request.targetUserId)
+  if (targetUserId === null) {
+    return buildInvalidTargetUserIdResult()
+  }
+
+  const limit = normalizeNotificationsPageLimit(request.limit)
+  if (limit === null) {
+    return buildInvalidLimitResult()
+  }
+
+  const cursor = toNonEmptyString(request.cursor) ?? undefined
+  const [page, unreadCount] = await Promise.all([
+    store.listNotifications(targetUserId, {
+      limit,
+      ...(cursor === undefined ? {} : { cursor }),
+    }),
+    store.countUnreadNotifications(targetUserId),
+  ])
+
+  return {
+    status: 200,
+    body: {
+      data: {
+        notifications: page.notifications
+          .map((notification) => buildNotificationEntry(notification))
+          .filter(
+            (notification): notification is NotificationEntry =>
+              notification !== null,
+          ),
+        unreadCount: toNonNegativeInteger(unreadCount),
+      },
+      cursor: page.cursor ?? null,
+      errors: [],
+    },
+  }
 }
 
 export async function syncFollowNotificationsBatch(
@@ -291,7 +492,10 @@ export async function syncFollowNotificationsBatch(
       continue
     }
 
-    if (toNonEmptyString(document.deletedAt) !== null || followerId === followedId) {
+    if (
+      toNonEmptyString(document.deletedAt) !== null ||
+      followerId === followedId
+    ) {
       continue
     }
 
@@ -445,9 +649,11 @@ export async function syncReactionNotificationsBatch(
     const postId = toNonEmptyString(document.postId)
     const actorUserId = toNonEmptyString(document.userId)
     const createdAt =
-      toNonEmptyString(document.createdAt) ?? toNonEmptyString(document.updatedAt)
+      toNonEmptyString(document.createdAt) ??
+      toNonEmptyString(document.updatedAt)
     const updatedAt =
-      toNonEmptyString(document.updatedAt) ?? toNonEmptyString(document.createdAt)
+      toNonEmptyString(document.updatedAt) ??
+      toNonEmptyString(document.createdAt)
 
     if (
       reactionId === null ||
