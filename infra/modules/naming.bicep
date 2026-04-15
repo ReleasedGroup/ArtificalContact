@@ -11,6 +11,7 @@ output names object = {
   applicationInsights: take('${hyphenBase}-appi', 260)
   cosmosAccount: take('${hyphenBase}-cosmos', 44)
   cosmosDatabase: 'acn'
+  usersContainer: 'users'
   deploymentContainer: take('${hyphenBase}-packages', 63)
   frontDoorEndpoint: take('${hyphenBase}-edge', 50)
   frontDoorOrigin: 'storage-origin'
