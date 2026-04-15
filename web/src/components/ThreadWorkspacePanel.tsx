@@ -1,7 +1,11 @@
 import { useState } from 'react'
 import type { MeProfile } from '../lib/me'
 import { createPost } from '../lib/post-write'
-import { PostComposer } from './PostComposer'
+import {
+  PostComposer,
+  type PostComposerMediaFile,
+  type PostComposerSubmission,
+} from './PostComposer'
 
 interface ThreadWorkspacePanelProps {
   authorBadge: string
@@ -31,6 +35,9 @@ export function ThreadWorkspacePanel({
   const [postDraft, setPostDraft] = useState(
     'Shipping a real thread workflow from /me so Playwright can exercise post, reply, and delete end to end.',
   )
+  const [postMediaFiles, setPostMediaFiles] = useState<PostComposerMediaFile[]>(
+    [],
+  )
   const [publishState, setPublishState] = useState<PublishState>({
     status: 'idle',
   })
@@ -38,7 +45,7 @@ export function ThreadWorkspacePanel({
 
   const canPublish = user.status === 'active' && Boolean(user.handle)
 
-  const handleSubmit = async (value: string) => {
+  const handleSubmit = async ({ value }: PostComposerSubmission) => {
     setPublishState({ status: 'publishing' })
 
     try {
@@ -48,6 +55,7 @@ export function ThreadWorkspacePanel({
 
       setPublishedPost(response.post)
       setPostDraft('')
+      setPostMediaFiles([])
       setPublishState({
         status: 'success',
         message: `Post published to /p/${response.post.id}.`,
@@ -102,7 +110,9 @@ export function ThreadWorkspacePanel({
           <p className="text-sm font-medium text-white">Publish root post</p>
           <p className="mt-2 text-sm leading-7 text-slate-400">
             The created post stays public at <code>/p/{'{id}'}</code>, where
-            authenticated users can continue the thread with replies.
+            authenticated users can continue the thread with replies. Attached
+            image previews stay local until the upload pipeline is wired into
+            this live mutation path.
           </p>
           <div className="mt-4">
             <PostComposer
@@ -111,8 +121,15 @@ export function ThreadWorkspacePanel({
               authorName={authorName}
               disabled={!canPublish}
               label="Thread post body"
+              mediaFiles={postMediaFiles}
               onChange={(nextValue) => {
                 setPostDraft(nextValue)
+                if (publishState.status !== 'publishing') {
+                  setPublishState({ status: 'idle' })
+                }
+              }}
+              onMediaFilesChange={(nextFiles) => {
+                setPostMediaFiles(nextFiles)
                 if (publishState.status !== 'publishing') {
                   setPublishState({ status: 'idle' })
                 }
