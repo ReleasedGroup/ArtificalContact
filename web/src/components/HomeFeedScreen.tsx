@@ -49,6 +49,10 @@ function getProfileHref(handle: string): string {
   return `/u/${encodeURIComponent(handle)}`
 }
 
+function isAdmin(viewer: MeProfile): boolean {
+  return viewer.roles.some((role) => role.trim().toLowerCase() === 'admin')
+}
+
 function getPostHref(postId: string): string {
   return `/p/${encodeURIComponent(postId)}`
 }
@@ -380,6 +384,7 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
     'ME',
   )
   const refreshMessage = getRefreshMessage(pullRefreshState)
+  const viewerIsAdmin = isAdmin(viewer)
 
   function handleSignOut() {
     signOut({ queryClient })
@@ -432,6 +437,14 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                     className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
                   >
                     View public profile
+                  </a>
+                )}
+                {viewerIsAdmin && (
+                  <a
+                    href="/admin/metrics"
+                    className="rounded-full border border-amber-300/20 bg-amber-300/10 px-4 py-2 text-sm font-medium text-amber-50 transition hover:border-amber-300/35 hover:bg-amber-300/15"
+                  >
+                    Admin metrics
                   </a>
                 )}
                 <button

@@ -455,6 +455,86 @@ describe('App', () => {
     expect(screen.getByText(/1 unread/i)).toBeInTheDocument()
   })
 
+  it('renders the /admin/metrics route for authenticated admins', async () => {
+    window.history.replaceState({}, '', '/admin/metrics')
+
+    mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(200, {
+          data: createResolvedMeProfile({
+            roles: ['admin', 'user'],
+          }),
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/admin/metrics?range=7d') {
+        return createJsonResponse(200, {
+          data: {
+            filters: {
+              range: '7d',
+              bucket: 'day',
+              startAt: '2026-04-09T00:00:00.000Z',
+              endAt: '2026-04-16T00:00:00.000Z',
+              generatedAt: '2026-04-15T12:00:00.000Z',
+            },
+            summary: {
+              registrations: {
+                value: 4,
+                previousValue: 2,
+                changePercent: 100,
+              },
+              activeUsers: {
+                value: 11,
+                previousValue: 8,
+                changePercent: 37.5,
+              },
+              posts: {
+                value: 14,
+                previousValue: 10,
+                changePercent: 40,
+              },
+              reports: {
+                value: 2,
+                previousValue: 3,
+                changePercent: -33.3,
+              },
+              queueDepth: {
+                value: 3,
+                previousValue: 4,
+                changePercent: -25,
+              },
+            },
+            series: [
+              {
+                bucketStart: '2026-04-15T00:00:00.000Z',
+                bucketEnd: '2026-04-16T00:00:00.000Z',
+                registrations: 1,
+                activeUsers: 4,
+                posts: 3,
+                reports: 1,
+                queueDepth: 3,
+              },
+            ],
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    renderApp()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Platform metrics' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Last 7 days' }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('/api/admin/metrics')).toBeInTheDocument()
+  })
+
   it('renders the /me error state when the profile request fails', async () => {
     window.history.replaceState({}, '', '/me')
 
