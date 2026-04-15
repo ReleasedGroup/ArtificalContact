@@ -20,6 +20,10 @@ export interface FollowRepository {
     followerId: string,
     followedId: string,
   ): Promise<FollowDocument | null>
+  deleteByFollowerAndFollowed(
+    followerId: string,
+    followedId: string,
+  ): Promise<void>
 }
 
 export type MutableFollowRepository = FollowRepository
@@ -81,6 +85,22 @@ function createCosmosFollowRepository(
       } catch (error) {
         if (isExpectedCosmosStatusCode(error, 404)) {
           return null
+        }
+
+        throw error
+      }
+    },
+    async deleteByFollowerAndFollowed(
+      followerId: string,
+      followedId: string,
+    ): Promise<void> {
+      const id = buildFollowDocumentId(followerId, followedId)
+
+      try {
+        await container.item(id, followerId).delete()
+      } catch (error) {
+        if (isExpectedCosmosStatusCode(error, 404)) {
+          return
         }
 
         throw error

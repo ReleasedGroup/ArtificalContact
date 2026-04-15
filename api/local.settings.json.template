@@ -7,6 +7,7 @@
     "AZURE_REGION": "local",
     "BLOB_SERVICE_URL": "https://yourstorageaccount.blob.core.windows.net",
     "COSMOS_DATABASE_NAME": "acn",
+    "FOLLOWS_CONTAINER_NAME": "follows",
     "MEDIA_AUDIO_CONTAINER_NAME": "audio",
     "MEDIA_BASE_URL": "https://cdn.example.com",
     "MEDIA_GIF_CONTAINER_NAME": "gif",

@@ -1,6 +1,6 @@
 import type { HttpRequest, InvocationContext } from '@azure/functions'
 import { describe, expect, it, vi } from 'vitest'
-import { buildFollowUserHandler } from '../src/functions/follow-user.js'
+import { buildDeleteFollowHandler } from '../src/functions/delete-follow.js'
 import type { FollowDocument, FollowRepository } from '../src/lib/follows.js'
 import type {
   StoredUserDocument,
@@ -32,6 +32,22 @@ function createStore(options?: {
     new Map((options?.mirrors ?? []).map((record) => [record.handle, record])),
     new Map((options?.users ?? []).map((record) => [record.id, record])),
   )
+}
+
+function createStoredFollow(
+  overrides: Partial<FollowDocument> = {},
+): FollowDocument {
+  const followerId = overrides.followerId ?? 'github:abc123'
+  const followedId = overrides.followedId ?? 'github:def456'
+
+  return {
+    id: `${followerId}:${followedId}`,
+    type: 'follow',
+    followerId,
+    followedId,
+    createdAt: '2026-04-15T05:00:00.000Z',
+    ...overrides,
+  }
 }
 
 function createRequest(handle?: string): HttpRequest {
@@ -82,140 +98,94 @@ function createContext(user: UserDocument | null = createStoredUser()) {
   } as unknown as InvocationContext
 }
 
-function createRepository(
-  overrides: Partial<FollowRepository> = {},
-): FollowRepository {
-  return {
-    create: async (follow) => follow,
-    getByFollowerAndFollowed: async () => null,
-    deleteByFollowerAndFollowed: async () => undefined,
-    ...overrides,
-  }
-}
-
-describe('followUserHandler', () => {
-  it('creates a follow relationship for an existing public target', async () => {
-    const repository = createRepository({
+describe('deleteFollowHandler', () => {
+  it('deletes an existing follow relationship and returns the post-delete state', async () => {
+    const repository: FollowRepository = {
       create: vi.fn(async (follow) => follow),
-      getByFollowerAndFollowed: vi.fn(async () => null),
-    })
+      getByFollowerAndFollowed: vi.fn(async () => createStoredFollow()),
+      deleteByFollowerAndFollowed: vi.fn(async () => undefined),
+    }
     const store = createStore({
       mirrors: [{ id: 'ada', handle: 'ada', userId: 'u2' }],
       users: [
         { id: 'u2', handle: 'Ada', handleLower: 'ada', status: 'active' },
       ],
     })
-    const handler = buildFollowUserHandler({
-      now: () => new Date('2026-04-15T05:00:00.000Z'),
+    const handler = buildDeleteFollowHandler({
+      repositoryFactory: () => repository,
+      targetStoreFactory: () => store,
+    })
+    const context = createContext()
+
+    const response = await handler(createRequest('Ada'), context)
+
+    expect(response.status).toBe(200)
+    expect(repository.deleteByFollowerAndFollowed).toHaveBeenCalledWith(
+      'github:abc123',
+      'u2',
+    )
+    expect(response.jsonBody).toEqual({
+      data: {
+        unfollow: {
+          id: 'github:abc123:u2',
+          followerId: 'github:abc123',
+          followedId: 'u2',
+          handle: 'Ada',
+          following: false,
+          relationshipExisted: true,
+        },
+      },
+      errors: [],
+    })
+    expect(context.log).toHaveBeenCalledWith('Processed unfollow request.', {
+      followerId: 'github:abc123',
+      followedId: 'u2',
+      relationshipExisted: true,
+    })
+  })
+
+  it('treats repeated unfollows as a successful no-op', async () => {
+    const repository: FollowRepository = {
+      create: vi.fn(async (follow) => follow),
+      getByFollowerAndFollowed: vi.fn(async () => null),
+      deleteByFollowerAndFollowed: vi.fn(async () => undefined),
+    }
+    const store = createStore({
+      mirrors: [{ id: 'ada', handle: 'ada', userId: 'u2' }],
+      users: [
+        { id: 'u2', handle: 'Ada', handleLower: 'ada', status: 'active' },
+      ],
+    })
+    const handler = buildDeleteFollowHandler({
       repositoryFactory: () => repository,
       targetStoreFactory: () => store,
     })
 
     const response = await handler(createRequest('Ada'), createContext())
 
-    expect(response.status).toBe(201)
-    expect(repository.create).toHaveBeenCalledWith({
-      id: 'github:abc123:u2',
-      type: 'follow',
-      followerId: 'github:abc123',
-      followedId: 'u2',
-      createdAt: '2026-04-15T05:00:00.000Z',
-    } satisfies FollowDocument)
+    expect(response.status).toBe(200)
+    expect(repository.deleteByFollowerAndFollowed).not.toHaveBeenCalled()
     expect(response.jsonBody).toEqual({
       data: {
-        follow: {
+        unfollow: {
           id: 'github:abc123:u2',
-          type: 'follow',
           followerId: 'github:abc123',
           followedId: 'u2',
-          createdAt: '2026-04-15T05:00:00.000Z',
+          handle: 'Ada',
+          following: false,
+          relationshipExisted: false,
         },
       },
       errors: [],
     })
   })
 
-  it('returns the existing relationship when the follow already exists', async () => {
-    const existingFollow: FollowDocument = {
-      id: 'github:abc123:u2',
-      type: 'follow',
-      followerId: 'github:abc123',
-      followedId: 'u2',
-      createdAt: '2026-04-15T05:00:00.000Z',
-    }
-    const repository = createRepository({
-      create: vi.fn(async (follow) => follow),
-      getByFollowerAndFollowed: vi.fn(async () => existingFollow),
-    })
-    const store = createStore({
-      mirrors: [{ id: 'ada', handle: 'ada', userId: 'u2' }],
-      users: [
-        { id: 'u2', handle: 'Ada', handleLower: 'ada', status: 'active' },
-      ],
-    })
-    const handler = buildFollowUserHandler({
-      repositoryFactory: () => repository,
-      targetStoreFactory: () => store,
-    })
-
-    const response = await handler(createRequest('Ada'), createContext())
-
-    expect(response.status).toBe(200)
-    expect(repository.create).not.toHaveBeenCalled()
-    expect(response.jsonBody).toEqual({
-      data: {
-        follow: existingFollow,
-      },
-      errors: [],
-    })
-  })
-
-  it('treats a create conflict as an idempotent success when a concurrent request wins', async () => {
-    const existingFollow: FollowDocument = {
-      id: 'github:abc123:u2',
-      type: 'follow',
-      followerId: 'github:abc123',
-      followedId: 'u2',
-      createdAt: '2026-04-15T05:00:00.000Z',
-    }
-    const repository = createRepository({
-      create: vi.fn(async () => {
-        const error = new Error('Conflict')
-        ;(error as Error & { statusCode: number }).statusCode = 409
-        throw error
-      }),
-      getByFollowerAndFollowed: vi
-        .fn()
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(existingFollow),
-    })
-    const store = createStore({
-      mirrors: [{ id: 'ada', handle: 'ada', userId: 'u2' }],
-      users: [
-        { id: 'u2', handle: 'Ada', handleLower: 'ada', status: 'active' },
-      ],
-    })
-    const handler = buildFollowUserHandler({
-      repositoryFactory: () => repository,
-      targetStoreFactory: () => store,
-    })
-
-    const response = await handler(createRequest('Ada'), createContext())
-
-    expect(response.status).toBe(200)
-    expect(response.jsonBody).toEqual({
-      data: {
-        follow: existingFollow,
-      },
-      errors: [],
-    })
-  })
-
   it('rejects users who do not have an active profile with a handle', async () => {
-    const repository = createRepository({
+    const repository: FollowRepository = {
       create: vi.fn(async (follow) => follow),
       getByFollowerAndFollowed: vi.fn(async () => null),
-    })
+      deleteByFollowerAndFollowed: vi.fn(async () => undefined),
+    }
     const store = createStore({
       mirrors: [{ id: 'ada', handle: 'ada', userId: 'u2' }],
       users: [
@@ -228,7 +198,7 @@ describe('followUserHandler', () => {
     delete pendingUser.handle
     delete pendingUser.handleLower
 
-    const handler = buildFollowUserHandler({
+    const handler = buildDeleteFollowHandler({
       repositoryFactory: () => repository,
       targetStoreFactory: () => store,
     })
@@ -245,19 +215,20 @@ describe('followUserHandler', () => {
         {
           code: 'auth.forbidden',
           message:
-            'The authenticated user must have an active profile before following users.',
+            'The authenticated user must have an active profile before unfollowing users.',
         },
       ],
     })
-    expect(repository.create).not.toHaveBeenCalled()
+    expect(repository.deleteByFollowerAndFollowed).not.toHaveBeenCalled()
   })
 
   it('returns a validation error when the handle path parameter is missing', async () => {
-    const repository = createRepository({
+    const repository: FollowRepository = {
       create: vi.fn(async (follow) => follow),
       getByFollowerAndFollowed: vi.fn(async () => null),
-    })
-    const handler = buildFollowUserHandler({
+      deleteByFollowerAndFollowed: vi.fn(async () => undefined),
+    }
+    const handler = buildDeleteFollowHandler({
       repositoryFactory: () => repository,
       targetStoreFactory: () => createStore(),
     })
@@ -278,11 +249,12 @@ describe('followUserHandler', () => {
   })
 
   it('returns not found when the target profile does not exist', async () => {
-    const repository = createRepository({
+    const repository: FollowRepository = {
       create: vi.fn(async (follow) => follow),
       getByFollowerAndFollowed: vi.fn(async () => null),
-    })
-    const handler = buildFollowUserHandler({
+      deleteByFollowerAndFollowed: vi.fn(async () => undefined),
+    }
+    const handler = buildDeleteFollowHandler({
       repositoryFactory: () => repository,
       targetStoreFactory: () => createStore(),
     })
@@ -302,11 +274,12 @@ describe('followUserHandler', () => {
     })
   })
 
-  it('rejects attempts to follow the authenticated user', async () => {
-    const repository = createRepository({
+  it('rejects attempts to unfollow the authenticated user', async () => {
+    const repository: FollowRepository = {
       create: vi.fn(async (follow) => follow),
       getByFollowerAndFollowed: vi.fn(async () => null),
-    })
+      deleteByFollowerAndFollowed: vi.fn(async () => undefined),
+    }
     const currentUser = createStoredUser()
     const store = createStore({
       mirrors: [{ id: 'nick', handle: 'nick', userId: currentUser.id }],
@@ -319,7 +292,7 @@ describe('followUserHandler', () => {
         },
       ],
     })
-    const handler = buildFollowUserHandler({
+    const handler = buildDeleteFollowHandler({
       repositoryFactory: () => repository,
       targetStoreFactory: () => store,
     })
@@ -334,18 +307,18 @@ describe('followUserHandler', () => {
       data: null,
       errors: [
         {
-          code: 'cannot_follow_self',
-          message: 'Users cannot follow themselves.',
+          code: 'cannot_unfollow_self',
+          message: 'Users cannot unfollow themselves.',
           field: 'handle',
         },
       ],
     })
-    expect(repository.create).not.toHaveBeenCalled()
+    expect(repository.deleteByFollowerAndFollowed).not.toHaveBeenCalled()
   })
 
   it('returns 500 when the follow repository is not configured', async () => {
     const context = createContext()
-    const handler = buildFollowUserHandler({
+    const handler = buildDeleteFollowHandler({
       repositoryFactory: () => {
         throw new Error('missing config')
       },
@@ -374,11 +347,12 @@ describe('followUserHandler', () => {
 
   it('returns 500 when the user profile store is not configured', async () => {
     const context = createContext()
-    const repository = createRepository({
+    const repository: FollowRepository = {
       create: vi.fn(async (follow) => follow),
       getByFollowerAndFollowed: vi.fn(async () => null),
-    })
-    const handler = buildFollowUserHandler({
+      deleteByFollowerAndFollowed: vi.fn(async () => undefined),
+    }
+    const handler = buildDeleteFollowHandler({
       repositoryFactory: () => repository,
       targetStoreFactory: () => {
         throw new Error('missing profile store')
@@ -407,19 +381,20 @@ describe('followUserHandler', () => {
 
   it('returns 500 when the follow write fails', async () => {
     const context = createContext()
-    const repository = createRepository({
-      create: vi.fn(async () => {
+    const repository: FollowRepository = {
+      create: vi.fn(async (follow) => follow),
+      getByFollowerAndFollowed: vi.fn(async () => createStoredFollow()),
+      deleteByFollowerAndFollowed: vi.fn(async () => {
         throw new Error('Cosmos unavailable')
       }),
-      getByFollowerAndFollowed: vi.fn(async () => null),
-    })
+    }
     const store = createStore({
       mirrors: [{ id: 'ada', handle: 'ada', userId: 'u2' }],
       users: [
         { id: 'u2', handle: 'Ada', handleLower: 'ada', status: 'active' },
       ],
     })
-    const handler = buildFollowUserHandler({
+    const handler = buildDeleteFollowHandler({
       repositoryFactory: () => repository,
       targetStoreFactory: () => store,
     })
@@ -431,13 +406,13 @@ describe('followUserHandler', () => {
       data: null,
       errors: [
         {
-          code: 'server.follow_create_failed',
-          message: 'Unable to follow the requested user.',
+          code: 'server.follow_delete_failed',
+          message: 'Unable to delete the requested follow relationship.',
         },
       ],
     })
     expect(context.log).toHaveBeenCalledWith(
-      'Failed to create the follow relationship.',
+      'Failed to delete the follow relationship.',
       {
         error: 'Cosmos unavailable',
         followerId: 'github:abc123',
