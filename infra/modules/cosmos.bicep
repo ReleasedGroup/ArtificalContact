@@ -3,6 +3,7 @@ param names object
 param tags object = {}
 
 var ancillaryContainersSharedThroughput = 400
+var feedsContainerAutoscaleMaxThroughput = 10000
 var followersContainerAutoscaleMaxThroughput = 4000
 var followsContainerAutoscaleMaxThroughput = 4000
 var usersContainerAutoscaleMaxThroughput = 4000
@@ -160,6 +161,30 @@ resource followersContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/
   }
 }
 
+resource feedsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
+  parent: sqlDatabase
+  name: names.feedsContainer
+  properties: {
+    resource: {
+      id: names.feedsContainer
+      partitionKey: {
+        kind: 'Hash'
+        paths: [
+          '/feedOwnerId'
+        ]
+        version: 2
+      }
+      defaultTtl: 2592000
+    }
+    options: {
+      // Cosmos autoscale uses the max RU/s ceiling only, so 10000 yields an effective 1000-10000 RU/s range.
+      autoscaleSettings: {
+        maxThroughput: feedsContainerAutoscaleMaxThroughput
+      }
+    }
+  }
+}
+
 resource mediaContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
   parent: sqlDatabase
   name: names.mediaContainer
@@ -180,6 +205,7 @@ resource mediaContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/cont
 output accountName string = cosmosAccount.name
 output databaseName string = sqlDatabase.name
 output endpoint string = cosmosAccount.properties.documentEndpoint
+output feedsContainerName string = feedsContainer.name
 output followersContainerName string = followersContainer.name
 output followsContainerName string = followsContainer.name
 output mediaContainerName string = mediaContainer.name

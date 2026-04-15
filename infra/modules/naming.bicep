@@ -11,6 +11,7 @@ output names object = {
   applicationInsights: take('${hyphenBase}-appi', 260)
   cosmosAccount: take('${hyphenBase}-cosmos', 44)
   cosmosDatabase: 'acn'
+  feedsContainer: 'feeds'
   followersContainer: 'followers'
   followsContainer: 'follows'
   mediaContainer: 'media'
