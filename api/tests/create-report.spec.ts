@@ -297,7 +297,7 @@ describe('createReportHandler', () => {
       createRequest({
         targetType: 'user',
         targetId: 'github:target-user',
-        targetProfileHandle: 'grace',
+        targetProfileHandle: 'spoofed-handle',
         reasonCode: 'impersonation',
       }),
       createContext(),

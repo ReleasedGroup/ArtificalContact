@@ -25,6 +25,14 @@ function normalizeOptionalText(value: string): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
+function getFocusableElements(container: HTMLElement): HTMLElement[] {
+  return Array.from(
+    container.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((element) => !element.hasAttribute('disabled'))
+}
+
 export function ReportDialog({
   actionClassName,
   actionLabel = 'Report',
@@ -43,7 +51,10 @@ export function ReportDialog({
   const dialogId = useId()
   const titleId = useId()
   const descriptionId = useId()
+  const dialogRef = useRef<HTMLElement | null>(null)
   const detailsInputRef = useRef<HTMLTextAreaElement | null>(null)
+  const triggerButtonRef = useRef<HTMLButtonElement | null>(null)
+  const wasOpenRef = useRef(false)
 
   useEffect(() => {
     if (!isOpen) {
@@ -53,7 +64,39 @@ export function ReportDialog({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && submissionState.status !== 'submitting') {
         setIsOpen(false)
+        return
       }
+
+      if (event.key !== 'Tab') {
+        return
+      }
+
+      const dialog = dialogRef.current
+      if (!dialog) {
+        return
+      }
+
+      const focusableElements = getFocusableElements(dialog)
+      if (focusableElements.length === 0) {
+        event.preventDefault()
+        dialog.focus()
+        return
+      }
+
+      const activeElement = document.activeElement
+      const currentIndex = focusableElements.findIndex(
+        (element) => element === activeElement,
+      )
+      const nextIndex = event.shiftKey
+        ? currentIndex <= 0
+          ? focusableElements.length - 1
+          : currentIndex - 1
+        : currentIndex === -1 || currentIndex === focusableElements.length - 1
+          ? 0
+          : currentIndex + 1
+
+      event.preventDefault()
+      focusableElements[nextIndex]?.focus()
     }
 
     document.addEventListener('keydown', handleKeyDown)
@@ -68,6 +111,14 @@ export function ReportDialog({
     }
 
     detailsInputRef.current?.focus()
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen && wasOpenRef.current) {
+      triggerButtonRef.current?.focus()
+    }
+
+    wasOpenRef.current = isOpen
   }, [isOpen])
 
   const closeDialog = () => {
@@ -115,6 +166,7 @@ export function ReportDialog({
     <div className="flex flex-wrap items-center gap-3">
       <button
         type="button"
+        ref={triggerButtonRef}
         aria-controls={dialogId}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
@@ -147,10 +199,12 @@ export function ReportDialog({
         >
           <section
             id={dialogId}
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
             aria-describedby={descriptionId}
+            tabIndex={-1}
             className="w-full max-w-2xl rounded-[1.9rem] border border-white/10 bg-slate-950/96 p-6 shadow-2xl shadow-slate-950/50"
             onClick={(event) => {
               event.stopPropagation()

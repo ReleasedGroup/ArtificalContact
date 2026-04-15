@@ -93,7 +93,10 @@ function FeedCard({ entry, viewer }: { entry: FeedEntry; viewer: MeProfile }) {
   const authorName = getAuthorName(entry)
   const authorHandle = entry.authorHandle?.trim() || null
   const timestamp = formatTimestamp(entry.createdAt)
-  const canReport = entry.authorId !== null && entry.authorId !== viewer.id
+  const viewerCanReport =
+    viewer.status === 'active' && Boolean(viewer.handle?.trim())
+  const canReport =
+    viewerCanReport && entry.authorId !== null && entry.authorId !== viewer.id
 
   return (
     <article className="rounded-[1.75rem] border border-white/10 bg-slate-900/72 p-5 shadow-lg shadow-slate-950/20 transition hover:border-white/15 hover:bg-slate-900/80">

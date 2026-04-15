@@ -1353,7 +1353,15 @@ function PublicProfileScreen({ handle }: { handle: string }) {
   const [profileState, setProfileState] = useState<PublicProfileState>({
     status: 'loading',
   })
-  const [viewer, setViewer] = useState<MeProfile | null>(null)
+  const viewerQuery = useQuery<ResolvedMeProfile | null>({
+    queryKey: ['optional-me'],
+    queryFn: ({ signal }) => getOptionalMe(signal),
+    retry: false,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  })
+  const viewer = viewerQuery.data?.user ?? null
 
   useEffect(() => {
     startTransition(() => {
@@ -1394,40 +1402,6 @@ function PublicProfileScreen({ handle }: { handle: string }) {
     }
 
     void loadProfile()
-
-    return () => {
-      controller.abort()
-    }
-  }, [handle])
-
-  useEffect(() => {
-    const controller = new AbortController()
-
-    const loadViewer = async () => {
-      try {
-        const data = await getOptionalMe(controller.signal)
-        if (controller.signal.aborted) {
-          return
-        }
-
-        startTransition(() => {
-          setViewer(data?.user ?? null)
-        })
-      } catch (error) {
-        if (
-          controller.signal.aborted ||
-          (error instanceof DOMException && error.name === 'AbortError')
-        ) {
-          return
-        }
-
-        startTransition(() => {
-          setViewer(null)
-        })
-      }
-    }
-
-    void loadViewer()
 
     return () => {
       controller.abort()

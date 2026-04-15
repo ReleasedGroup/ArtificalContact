@@ -323,4 +323,40 @@ describe('HomeFeedScreen', () => {
       }),
     )
   })
+
+  it('hides the report action when the viewer cannot create reports', async () => {
+    mockFetch.mockImplementation(async (input) => {
+      const requestUrl = String(input)
+
+      if (requestUrl === '/api/feed') {
+        return createJsonResponse(200, {
+          data: [
+            createFeedEntry('one', {
+              postId: 'post-one',
+              authorId: 'github:target-1',
+              authorHandle: 'grace',
+              authorDisplayName: 'Grace Hopper',
+              excerpt: 'First page entry',
+            }),
+          ],
+          cursor: null,
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${requestUrl}`)
+    })
+
+    renderHomeFeedScreen(
+      createViewer({
+        status: 'pending',
+        handle: null,
+      }),
+    )
+
+    expect(await screen.findByText('First page entry')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Report post' }),
+    ).not.toBeInTheDocument()
+  })
 })

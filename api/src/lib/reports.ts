@@ -209,8 +209,7 @@ async function resolveReportTarget(
       targetPostId: null,
       targetAuthorId: user.id,
       targetAuthorHandle: user.handle ?? user.handleLower ?? null,
-      targetProfileHandle:
-        request.targetProfileHandle ?? user.handle ?? user.handleLower ?? null,
+      targetProfileHandle: user.handle ?? user.handleLower ?? null,
       mediaUrl: null,
     }
   }
