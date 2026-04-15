@@ -44,7 +44,7 @@ describe('resolveAuthenticatedPrincipal', () => {
         identityProvider: 'github',
         userId: 'abc123',
         userDetails: 'nickbeau',
-        userRoles: ['anonymous', 'authenticated', 'user'],
+        userRoles: [' anonymous ', 'authenticated', 'USER'],
         claims: [
           { typ: 'name', val: 'Nick Beaugeard' },
           { typ: 'emails', val: 'nick@example.com' },
@@ -98,13 +98,13 @@ describe('resolveAuthenticatedPrincipal', () => {
     })
   })
 
-  it('rejects principals that omit the authenticated role', () => {
+  it('rejects principals that do not explicitly include the authenticated role', () => {
     const result = resolveAuthenticatedPrincipal(
       createRequestWithPrincipal({
         identityProvider: 'aad',
         userId: 'abc123',
         userDetails: 'Nick',
-        userRoles: [],
+        userRoles: ['user'],
         claims: [],
       }),
     )
@@ -124,7 +124,10 @@ describe('resolveAuthenticatedPrincipal', () => {
             return null
           }
 
-          return '%%%not-base64%%%'
+          return createPrincipalHeaderValue({
+            identityProvider: 'github',
+            claims: [],
+          })
         },
       },
     })

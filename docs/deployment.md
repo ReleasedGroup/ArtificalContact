@@ -65,3 +65,7 @@ The following repository variables are required:
 - `deploy-infra`: deploys `infra/main.bicep` to the configured resource group on `main`
 - `deploy-api`: builds and deploys the Functions app on `main`
 - `deploy-web`: builds and deploys the Static Web App on `main`
+
+The Functions app's managed identity also needs Cosmos DB data-plane access to the
+`users` container because authenticated HTTP middleware resolves user profiles from
+that store.
