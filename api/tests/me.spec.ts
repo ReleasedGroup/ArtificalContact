@@ -6,7 +6,6 @@ import type { UserDocument, UserRepository } from '../src/lib/users.js'
 
 function createPrincipalRequest(
   principal: Record<string, unknown>,
-  body?: unknown,
 ): HttpRequest {
   const encodedPrincipal = Buffer.from(JSON.stringify(principal)).toString(
     'base64',
@@ -22,7 +21,6 @@ function createPrincipalRequest(
         return encodedPrincipal
       },
     },
-    json: async () => body,
   } as unknown as HttpRequest
 }
 
@@ -54,37 +52,20 @@ function createStoredUser(overrides: Partial<UserDocument> = {}): UserDocument {
   }
 }
 
-function createRepository(
-  existingUser: UserDocument | null = createStoredUser(),
-): UserRepository {
-  return {
-    getById: vi.fn(async () => existingUser),
-    create: vi.fn(async (user) => user),
-    upsert: vi.fn(async (user) => user),
-  }
-}
-
 function createContext(): InvocationContext {
   return {
     log: vi.fn(),
   } as unknown as InvocationContext
 }
 
-const authenticatedPrincipal = {
-  identityProvider: 'github',
-  userId: 'abc123',
-  userDetails: 'nickbeau',
-  userRoles: ['anonymous', 'authenticated'],
-  claims: [
-    { typ: 'name', val: 'Nick Beaugeard' },
-    { typ: 'emails', val: 'nick@example.com' },
-  ],
-}
-
 describe('authMeHandler', () => {
   it('returns the existing user profile without provisioning a new document', async () => {
     const existingUser = createStoredUser()
-    const repository = createRepository(existingUser)
+    const repository: UserRepository = {
+      getById: vi.fn(async () => existingUser),
+      create: vi.fn(async (user) => user),
+      upsert: vi.fn(async (user) => user),
+    }
 
     const handler = buildAuthMeHandler({
       repositoryFactory: () => repository,
@@ -92,7 +73,13 @@ describe('authMeHandler', () => {
     })
 
     const response = await handler(
-      createPrincipalRequest(authenticatedPrincipal),
+      createPrincipalRequest({
+        identityProvider: 'github',
+        userId: 'abc123',
+        userDetails: 'nickbeau',
+        userRoles: ['anonymous', 'authenticated'],
+        claims: [{ typ: 'emails', val: 'nick@example.com' }],
+      }),
       createContext(),
     )
 
@@ -112,7 +99,11 @@ describe('authMeHandler', () => {
   })
 
   it('jit provisions a pending user on first sign-in', async () => {
-    const repository = createRepository(null)
+    const repository: UserRepository = {
+      getById: vi.fn(async () => null),
+      create: vi.fn(async (user) => user),
+      upsert: vi.fn(async (user) => user),
+    }
 
     const handler = buildAuthMeHandler({
       repositoryFactory: () => repository,
@@ -120,7 +111,16 @@ describe('authMeHandler', () => {
     })
 
     const response = await handler(
-      createPrincipalRequest(authenticatedPrincipal),
+      createPrincipalRequest({
+        identityProvider: 'github',
+        userId: 'abc123',
+        userDetails: 'nickbeau',
+        userRoles: ['anonymous', 'authenticated'],
+        claims: [
+          { typ: 'name', val: 'Nick Beaugeard' },
+          { typ: 'emails', val: 'nick@example.com' },
+        ],
+      }),
       createContext(),
     )
 
@@ -174,7 +174,13 @@ describe('authMeHandler', () => {
     })
 
     const response = await handler(
-      createPrincipalRequest(authenticatedPrincipal),
+      createPrincipalRequest({
+        identityProvider: 'github',
+        userId: 'abc123',
+        userDetails: 'nickbeau',
+        userRoles: ['anonymous', 'authenticated'],
+        claims: [],
+      }),
       createContext(),
     )
 
@@ -193,7 +199,11 @@ describe('authMeHandler', () => {
 
   it('returns a 401 response when the request is unauthenticated', async () => {
     const handler = buildAuthMeHandler({
-      repositoryFactory: () => createRepository(null),
+      repositoryFactory: () => ({
+        getById: async () => null,
+        create: async (user) => user,
+        upsert: async (user) => user,
+      }),
     })
 
     const response = await handler(

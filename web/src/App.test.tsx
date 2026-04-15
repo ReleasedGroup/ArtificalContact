@@ -150,6 +150,7 @@ describe('App', () => {
       .mockResolvedValueOnce(
         createJsonResponse({
           data: {
+            isNewUser: false,
             user: {
               id: 'github:abc123',
               identityProvider: 'github',
@@ -179,7 +180,6 @@ describe('App', () => {
       .mockResolvedValueOnce(
         createJsonResponse({
           data: {
-            isNewUser: false,
             user: {
               id: 'github:abc123',
               identityProvider: 'github',
