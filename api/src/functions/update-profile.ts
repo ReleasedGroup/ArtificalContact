@@ -17,7 +17,7 @@ import {
 import { resolveAuthenticatedPrincipal } from '../lib/auth.js'
 import {
   createUserRepository,
-  ensureUserForPrincipal,
+  createPendingUserDocument,
   toMeProfile,
   type UserRepository,
 } from '../lib/users.js'
@@ -85,17 +85,12 @@ export function buildUpdateProfileHandler(
     }
 
     try {
-      const resolvedUser = await ensureUserForPrincipal(
+      const storedUser = await persistProfileUpdate(
         principalResult.principal,
         repository,
+        parsedBody.data,
         now,
       )
-      const updatedUser = applyProfileUpdate(
-        resolvedUser.user,
-        parsedBody.data,
-        now(),
-      )
-      const storedUser = await repository.upsert(updatedUser)
 
       context.log('Updated authenticated profile.', {
         identityProvider: storedUser.identityProvider,
@@ -131,4 +126,65 @@ export function registerUpdateProfileFunction() {
     route: 'me',
     handler: updateProfileHandler,
   })
+}
+
+function getErrorStatusCode(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null) {
+    return undefined
+  }
+
+  const record = error as Record<string, unknown>
+  const statusCode = record.statusCode
+  if (typeof statusCode === 'number') {
+    return statusCode
+  }
+
+  const code = record.code
+  if (typeof code === 'number') {
+    return code
+  }
+
+  if (typeof code === 'string') {
+    const parsedValue = Number.parseInt(code, 10)
+    return Number.isNaN(parsedValue) ? undefined : parsedValue
+  }
+
+  return undefined
+}
+
+async function persistProfileUpdate(
+  principal: Parameters<typeof createPendingUserDocument>[0],
+  repository: UserRepository,
+  profileUpdate: Parameters<typeof applyProfileUpdate>[1],
+  now: () => Date,
+) {
+  const existingUser = await repository.getById(principal.subject)
+
+  if (existingUser !== null) {
+    return repository.upsert(
+      applyProfileUpdate(existingUser, profileUpdate, now()),
+    )
+  }
+
+  const createdAt = now()
+  const pendingUser = createPendingUserDocument(principal, createdAt)
+
+  try {
+    return await repository.create(
+      applyProfileUpdate(pendingUser, profileUpdate, createdAt),
+    )
+  } catch (error) {
+    if (getErrorStatusCode(error) !== 409) {
+      throw error
+    }
+
+    const concurrentlyCreatedUser = await repository.getById(principal.subject)
+    if (concurrentlyCreatedUser === null) {
+      throw error
+    }
+
+    return repository.upsert(
+      applyProfileUpdate(concurrentlyCreatedUser, profileUpdate, now()),
+    )
+  }
 }

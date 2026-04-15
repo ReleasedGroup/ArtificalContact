@@ -37,6 +37,7 @@ const linksSchema = z
   .record(z.string(), z.string().trim().url())
   .transform((value, context) => {
     const normalizedEntries: [string, string][] = []
+    const normalizedKeys = new Set<string>()
 
     for (const [rawKey, rawUrl] of Object.entries(value)) {
       const normalizedKey = rawKey.trim().toLowerCase()
@@ -50,6 +51,16 @@ const linksSchema = z
         continue
       }
 
+      if (normalizedKeys.has(normalizedKey)) {
+        context.addIssue({
+          code: 'custom',
+          message: `Duplicate link key '${normalizedKey}' is not allowed.`,
+          path: [rawKey],
+        })
+        continue
+      }
+
+      normalizedKeys.add(normalizedKey)
       normalizedEntries.push([normalizedKey, rawUrl.trim()])
     }
 

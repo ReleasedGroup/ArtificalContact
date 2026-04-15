@@ -2,7 +2,11 @@ import type { HttpRequest, InvocationContext } from '@azure/functions'
 import { describe, expect, it, vi } from 'vitest'
 import { buildUpdateProfileHandler } from '../src/functions/update-profile.js'
 import { CLIENT_PRINCIPAL_HEADER } from '../src/lib/auth.js'
-import type { UserDocument, UserRepository } from '../src/lib/users.js'
+import type {
+  MeProfile,
+  UserDocument,
+  UserRepository,
+} from '../src/lib/users.js'
 
 function createPrincipalRequest(
   principal: Record<string, unknown>,
@@ -116,14 +120,14 @@ describe('updateProfileHandler', () => {
       }),
     )
 
-    const storedUser = response.jsonBody as {
+    const responseBody = response.jsonBody as {
       data: {
-        user: UserDocument
+        user: MeProfile
       }
       errors: unknown[]
     }
 
-    expect(storedUser).toEqual({
+    expect(responseBody).toEqual({
       data: {
         user: {
           id: 'github:abc123',
@@ -185,11 +189,61 @@ describe('updateProfileHandler', () => {
 
     expect(response.status).toBe(200)
     expect(repository.create).toHaveBeenCalledOnce()
-    expect(repository.upsert).toHaveBeenCalledWith(
+    expect(repository.upsert).not.toHaveBeenCalled()
+    expect(repository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'github:abc123',
         displayName: 'Nick Beaugeard',
         status: 'pending',
+      }),
+    )
+  })
+
+  it('retries against a concurrently provisioned user after a create conflict', async () => {
+    const existingUser = createStoredUser({
+      status: 'pending',
+    })
+
+    const repository: UserRepository = {
+      getById: vi
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(existingUser),
+      create: vi.fn(async () => {
+        const error = new Error('Conflict')
+        ;(error as Error & { statusCode: number }).statusCode = 409
+        throw error
+      }),
+      upsert: vi.fn(async (user) => user),
+    }
+
+    const handler = buildUpdateProfileHandler({
+      repositoryFactory: () => repository,
+      now: () => new Date('2026-04-15T03:15:00.000Z'),
+    })
+
+    const response = await handler(
+      createPrincipalRequest(
+        {
+          identityProvider: 'github',
+          userId: 'abc123',
+          userDetails: 'nickbeau',
+          userRoles: ['anonymous', 'authenticated'],
+          claims: [],
+        },
+        {
+          bio: 'Recovered after a race.',
+        },
+      ),
+      createContext(),
+    )
+
+    expect(response.status).toBe(200)
+    expect(repository.create).toHaveBeenCalledOnce()
+    expect(repository.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'github:abc123',
+        bio: 'Recovered after a race.',
       }),
     )
   })
@@ -243,6 +297,50 @@ describe('updateProfileHandler', () => {
           code: 'invalid_profile',
           message: 'Link keys must not be empty.',
           field: 'links.   ',
+        },
+      ],
+    })
+    expect(repository.upsert).not.toHaveBeenCalled()
+  })
+
+  it('rejects duplicate links after key normalization', async () => {
+    const repository: UserRepository = {
+      getById: vi.fn(async () => createStoredUser()),
+      create: vi.fn(async (user) => user),
+      upsert: vi.fn(async (user) => user),
+    }
+
+    const handler = buildUpdateProfileHandler({
+      repositoryFactory: () => repository,
+    })
+
+    const response = await handler(
+      createPrincipalRequest(
+        {
+          identityProvider: 'github',
+          userId: 'abc123',
+          userDetails: 'nickbeau',
+          userRoles: ['anonymous', 'authenticated'],
+          claims: [],
+        },
+        {
+          links: {
+            GitHub: 'https://github.com/nickbeau',
+            github: 'https://github.com/releasedgroup',
+          },
+        },
+      ),
+      createContext(),
+    )
+
+    expect(response.status).toBe(400)
+    expect(response.jsonBody).toEqual({
+      data: null,
+      errors: [
+        {
+          code: 'invalid_profile',
+          message: "Duplicate link key 'github' is not allowed.",
+          field: 'links.github',
         },
       ],
     })
