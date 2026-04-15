@@ -39,6 +39,10 @@ export interface NotificationDocument {
   createdAt: string
   updatedAt: string
   ttl: number
+  text?: string
+  message?: string
+  read?: boolean
+  isRead?: boolean
 }
 
 export type StoredNotificationDocument = NotificationDocument
@@ -271,7 +275,10 @@ async function loadActorFromProfileStore(
     return cachedActor
   }
 
-  const actor = buildActorFromUser(userId, await profileStore.getUserById(userId))
+  const actor = buildActorFromUser(
+    userId,
+    await profileStore.getUserById(userId),
+  )
   actorCache.set(userId, actor)
   return actor
 }
@@ -486,9 +493,7 @@ export async function syncFollowNotificationsBatch(
       followedId === null ||
       createdAt === null
     ) {
-      logger.warn(
-        'Skipping notification sync for an invalid follow document.',
-      )
+      logger.warn('Skipping notification sync for an invalid follow document.')
       continue
     }
 

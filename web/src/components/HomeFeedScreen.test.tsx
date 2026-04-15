@@ -129,12 +129,22 @@ describe('HomeFeedScreen', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
-    delete (window as Window & { IntersectionObserver?: unknown }).IntersectionObserver
+    delete (window as Window & { IntersectionObserver?: unknown })
+      .IntersectionObserver
   })
 
   it('loads additional feed pages when the infinite-scroll sentinel intersects', async () => {
     mockFetch.mockImplementation(async (input) => {
       const requestUrl = String(input)
+
+      if (requestUrl === '/api/notifications') {
+        return createJsonResponse(200, {
+          data: [],
+          unreadCount: 0,
+          cursor: null,
+          errors: [],
+        })
+      }
 
       if (requestUrl === '/api/feed') {
         return createJsonResponse(200, {
@@ -179,21 +189,39 @@ describe('HomeFeedScreen', () => {
   })
 
   it('refetches the feed when the user performs a pull-to-refresh gesture', async () => {
-    mockFetch
-      .mockResolvedValueOnce(
-        createJsonResponse(200, {
-          data: [createFeedEntry('one', { excerpt: 'Original feed entry' })],
+    let feedRequestCount = 0
+
+    mockFetch.mockImplementation(async (input) => {
+      const requestUrl = String(input)
+
+      if (requestUrl === '/api/notifications') {
+        return createJsonResponse(200, {
+          data: [],
+          unreadCount: 0,
           cursor: null,
           errors: [],
-        }),
-      )
-      .mockResolvedValueOnce(
-        createJsonResponse(200, {
-          data: [createFeedEntry('one', { excerpt: 'Refreshed feed entry' })],
+        })
+      }
+
+      if (requestUrl === '/api/feed') {
+        feedRequestCount += 1
+
+        return createJsonResponse(200, {
+          data: [
+            createFeedEntry('one', {
+              excerpt:
+                feedRequestCount === 1
+                  ? 'Original feed entry'
+                  : 'Refreshed feed entry',
+            }),
+          ],
           cursor: null,
           errors: [],
-        }),
-      )
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${requestUrl}`)
+    })
 
     renderHomeFeedScreen()
 
@@ -222,7 +250,7 @@ describe('HomeFeedScreen', () => {
     expect(await screen.findByText('Refreshed feed entry')).toBeInTheDocument()
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(2)
+      expect(mockFetch).toHaveBeenCalledTimes(3)
     })
   })
 })
