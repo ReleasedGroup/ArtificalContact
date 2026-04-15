@@ -1,4 +1,8 @@
-import { startTransition, useEffect, useState } from 'react'
+import { startTransition, useEffect, useState, type ReactNode } from 'react'
+import type { MeProfile } from '../lib/me'
+import { getOptionalMe } from '../lib/me'
+import { createReply, deletePost } from '../lib/post-write'
+import { PostComposer } from './PostComposer'
 import { getComposerSegments } from '../lib/composer'
 import {
   getPublicPost,
@@ -32,6 +36,18 @@ interface PostDetailData {
   thread: ThreadPage
 }
 
+type ReplyState =
+  | { status: 'idle' }
+  | { status: 'submitting' }
+  | { status: 'success'; message: string }
+  | { status: 'error'; message: string }
+
+type DeleteState =
+  | { status: 'idle' }
+  | { status: 'deleting'; postId: string }
+  | { status: 'success'; message: string }
+  | { status: 'error'; message: string }
+
 interface RenderableGitHubMetadata {
   owner: string | null
   name: string | null
@@ -49,6 +65,7 @@ interface RenderablePost {
   kind: 'user' | 'github'
   threadId: string
   parentId: string | null
+  authorId: string | null
   authorHandle: string | null
   authorDisplayName: string | null
   authorAvatarUrl: string | null
@@ -179,16 +196,26 @@ function formatTimestamp(value: string | null): string | null {
   }).format(parsed)
 }
 
-function buildAuthorMonogram(post: RenderablePost): string {
-  const source =
-    post.authorDisplayName?.trim() || post.authorHandle?.trim() || 'AI'
-  const words = source.split(/\s+/).filter(Boolean)
+function buildInitialBadge(source: string | null | undefined, fallback: string): string {
+  const resolvedSource = source?.trim() || fallback
+  const words = resolvedSource.split(/\s+/).filter(Boolean)
 
   if (words.length >= 2) {
     return `${words[0][0]}${words[1][0]}`.toUpperCase()
   }
 
-  return source.slice(0, 2).toUpperCase()
+  return resolvedSource.slice(0, 2).toUpperCase()
+}
+
+function buildAuthorMonogram(post: RenderablePost): string {
+  return buildInitialBadge(
+    post.authorDisplayName?.trim() || post.authorHandle?.trim(),
+    'AI',
+  )
+}
+
+function buildViewerBadge(viewer: MeProfile): string {
+  return buildInitialBadge(viewer.displayName.trim() || viewer.handle?.trim(), 'ME')
 }
 
 function getAuthorName(post: RenderablePost): string {
@@ -423,11 +450,13 @@ function PostMediaGallery({
 }
 
 function PostCard({
+  actionSlot,
   contextLabel,
   emphasis = 'context',
   post,
   showOpenLink = true,
 }: {
+  actionSlot?: ReactNode
   contextLabel?: string | null
   emphasis?: 'selected' | 'context'
   post: RenderablePost
@@ -578,6 +607,7 @@ function PostCard({
                 View on GitHub
               </a>
             )}
+            {actionSlot}
           </div>
         </div>
       </div>
@@ -587,10 +617,12 @@ function PostCard({
 
 function ThreadConversationSection({
   entries,
+  getActionSlot,
   postsById,
   selectedPostId,
 }: {
   entries: ThreadConversationEntry[]
+  getActionSlot?: (post: RenderablePost) => ReactNode
   postsById: Map<string, ThreadPost>
   selectedPostId: string
 }) {
@@ -639,6 +671,10 @@ function ThreadConversationSection({
                 </p>
               )}
               <PostCard
+                actionSlot={getActionSlot?.({
+                  ...entry.post,
+                  github: toRenderableGitHubMetadata(entry.post.github),
+                })}
                 contextLabel={entry.isFlattened ? null : contextLabel}
                 emphasis={
                   entry.post.id === selectedPostId ? 'selected' : 'context'
@@ -657,7 +693,25 @@ function ThreadConversationSection({
   )
 }
 
-function ReadyPostDetail({ data }: { data: PostDetailData }) {
+function ReadyPostDetail({
+  data,
+  deleteState,
+  getActionSlot,
+  replyDraft,
+  replyState,
+  viewer,
+  onReplyDraftChange,
+  onReplySubmit,
+}: {
+  data: PostDetailData
+  deleteState: DeleteState
+  getActionSlot: (post: RenderablePost) => ReactNode
+  replyDraft: string
+  replyState: ReplyState
+  viewer: MeProfile | null
+  onReplyDraftChange: (nextValue: string) => void
+  onReplySubmit: (value: string) => void
+}) {
   const orderedPosts = [...data.thread.posts].sort(compareThreadPosts)
   const postsById = new Map(orderedPosts.map((post) => [post.id, post]))
   const threadEntries = buildThreadConversationEntries(
@@ -682,6 +736,8 @@ function ReadyPostDetail({ data }: { data: PostDetailData }) {
   const selectedFlattened = selectedThreadEntry?.isFlattened ?? false
   const selectedStandaloneRoot =
     !selectedInThread && data.post.id === data.post.threadId && data.post.parentId === null
+  const canReply = viewer?.status === 'active' && Boolean(viewer.handle)
+  const replyTargetLabel = authorHandle ? `@${authorHandle}` : 'this thread'
 
   return (
     <div className="py-6 sm:py-8">
@@ -726,6 +782,69 @@ function ReadyPostDetail({ data }: { data: PostDetailData }) {
 
       <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(18rem,0.82fr)]">
         <section className="space-y-6">
+          {viewer && (
+            <article className="rounded-[1.75rem] border border-white/10 bg-slate-900/72 p-6">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/8 pb-4">
+                <div>
+                  <p className="text-sm font-medium uppercase tracking-[0.24em] text-emerald-100/80">
+                    Join this thread
+                  </p>
+                  <p className="mt-2 text-sm leading-7 text-slate-400">
+                    Publish a reply to the currently selected post and refresh
+                    the public thread view in place.
+                  </p>
+                </div>
+
+                {replyState.status === 'success' && (
+                  <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-sm text-emerald-100">
+                    {replyState.message}
+                  </span>
+                )}
+
+                {replyState.status === 'error' && (
+                  <span className="rounded-full border border-rose-400/20 bg-rose-400/10 px-4 py-2 text-sm text-rose-100">
+                    {replyState.message}
+                  </span>
+                )}
+
+                {deleteState.status === 'success' && (
+                  <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-sm text-emerald-100">
+                    {deleteState.message}
+                  </span>
+                )}
+
+                {deleteState.status === 'error' && (
+                  <span className="rounded-full border border-rose-400/20 bg-rose-400/10 px-4 py-2 text-sm text-rose-100">
+                    {deleteState.message}
+                  </span>
+                )}
+              </div>
+
+              {!canReply && (
+                <div className="mt-5 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+                  Activate this profile with a public handle before replying.
+                </div>
+              )}
+
+              <div className="mt-5">
+                <PostComposer
+                  authorBadge={buildViewerBadge(viewer)}
+                  authorHandle={viewer.handle}
+                  authorName={viewer.displayName}
+                  disabled={!canReply || deleteState.status === 'deleting'}
+                  label="Thread reply body"
+                  onChange={onReplyDraftChange}
+                  onSubmit={onReplySubmit}
+                  placeholder={`Reply to ${replyTargetLabel}…`}
+                  submitLabel="Reply in thread"
+                  submitting={replyState.status === 'submitting'}
+                  value={replyDraft}
+                  variant="reply"
+                />
+              </div>
+            </article>
+          )}
+
           {!selectedInThread && (
             <article className="rounded-[1.75rem] border border-white/10 bg-slate-900/72 p-6">
               <div className="flex items-center justify-between gap-3 border-b border-white/8 pb-4">
@@ -745,6 +864,10 @@ function ReadyPostDetail({ data }: { data: PostDetailData }) {
 
               <div className="mt-5">
                 <PostCard
+                  actionSlot={getActionSlot({
+                    ...data.post,
+                    github: toRenderableGitHubMetadata(data.post.github),
+                  })}
                   contextLabel={
                     selectedStandaloneRoot ? 'Root post in the thread' : selectedContextLabel
                   }
@@ -761,6 +884,7 @@ function ReadyPostDetail({ data }: { data: PostDetailData }) {
 
           <ThreadConversationSection
             entries={threadEntries}
+            getActionSlot={getActionSlot}
             postsById={postsById}
             selectedPostId={data.post.id}
           />
@@ -905,6 +1029,47 @@ export function PostDetailScreen({ postId }: { postId: string }) {
   const [postState, setPostState] = useState<PostDetailState>({
     status: 'loading',
   })
+  const [viewer, setViewer] = useState<MeProfile | null>(null)
+  const [replyDraft, setReplyDraft] = useState('')
+  const [replyState, setReplyState] = useState<ReplyState>({
+    status: 'idle',
+  })
+  const [deleteState, setDeleteState] = useState<DeleteState>({
+    status: 'idle',
+  })
+  const [refreshToken, setRefreshToken] = useState(0)
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    const loadViewer = async () => {
+      try {
+        const data = await getOptionalMe(controller.signal)
+        if (controller.signal.aborted) {
+          return
+        }
+
+        startTransition(() => {
+          setViewer(data?.user ?? null)
+        })
+      } catch (error) {
+        if (
+          controller.signal.aborted ||
+          (error instanceof DOMException && error.name === 'AbortError')
+        ) {
+          return
+        }
+
+        console.error('Unable to load the authenticated viewer context.', error)
+      }
+    }
+
+    void loadViewer()
+
+    return () => {
+      controller.abort()
+    }
+  }, [postId])
 
   useEffect(() => {
     startTransition(() => {
@@ -966,7 +1131,83 @@ export function PostDetailScreen({ postId }: { postId: string }) {
     return () => {
       controller.abort()
     }
-  }, [postId])
+  }, [postId, refreshToken])
+
+  const handleReplySubmit = async (value: string) => {
+    if (postState.status !== 'ready' || viewer?.status !== 'active' || !viewer.handle) {
+      return
+    }
+
+    setReplyState({ status: 'submitting' })
+    setDeleteState({ status: 'idle' })
+
+    try {
+      await createReply(postState.data.post.id, {
+        text: value.trim(),
+      })
+
+      setReplyDraft('')
+      setReplyState({
+        status: 'success',
+        message: 'Reply published and thread refreshed.',
+      })
+      setRefreshToken((current) => current + 1)
+    } catch (error) {
+      setReplyState({
+        status: 'error',
+        message:
+          error instanceof Error ? error.message : 'Unable to publish the reply.',
+      })
+    }
+  }
+
+  const handleDeletePost = async (targetPost: RenderablePost) => {
+    setDeleteState({
+      status: 'deleting',
+      postId: targetPost.id,
+    })
+    setReplyState({ status: 'idle' })
+
+    try {
+      await deletePost(targetPost.id)
+
+      setDeleteState({
+        status: 'success',
+        message: `${targetPost.type === 'reply' ? 'Reply' : 'Post'} removed from the public thread view.`,
+      })
+      setRefreshToken((current) => current + 1)
+    } catch (error) {
+      setDeleteState({
+        status: 'error',
+        message:
+          error instanceof Error ? error.message : 'Unable to delete the post.',
+      })
+    }
+  }
+
+  const getActionSlot = (post: RenderablePost) => {
+    if (viewer?.id !== post.authorId) {
+      return null
+    }
+
+    const isDeleting =
+      deleteState.status === 'deleting' && deleteState.postId === post.id
+
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          void handleDeletePost(post)
+        }}
+        className="rounded-full border border-rose-300/20 bg-rose-300/10 px-4 py-2 text-rose-100 transition hover:border-rose-300/35 hover:bg-rose-300/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-slate-400"
+        disabled={replyState.status === 'submitting' || deleteState.status === 'deleting'}
+      >
+        {isDeleting
+          ? `Deleting ${post.type}...`
+          : `Delete ${post.type}`}
+      </button>
+    )
+  }
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-10">
@@ -998,7 +1239,26 @@ export function PostDetailScreen({ postId }: { postId: string }) {
 
         <div className="relative px-5 pb-6 sm:px-6 sm:pb-8 lg:px-10">
           {postState.status === 'ready' ? (
-            <ReadyPostDetail data={postState.data} />
+            <ReadyPostDetail
+              data={postState.data}
+              deleteState={deleteState}
+              getActionSlot={getActionSlot}
+              replyDraft={replyDraft}
+              replyState={replyState}
+              viewer={viewer}
+              onReplyDraftChange={(nextValue) => {
+                setReplyDraft(nextValue)
+                if (replyState.status !== 'submitting') {
+                  setReplyState({ status: 'idle' })
+                }
+                if (deleteState.status !== 'deleting') {
+                  setDeleteState({ status: 'idle' })
+                }
+              }}
+              onReplySubmit={(value) => {
+                void handleReplySubmit(value)
+              }}
+            />
           ) : (
             <PostDetailStatusCard postId={postId} state={postState} />
           )}

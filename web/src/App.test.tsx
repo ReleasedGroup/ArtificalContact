@@ -146,6 +146,35 @@ function createThreadPost(overrides?: Record<string, unknown>) {
   }
 }
 
+function createResolvedMeProfile(overrides?: Record<string, unknown>) {
+  return {
+    isNewUser: false,
+    user: {
+      id: 'github:abc123',
+      identityProvider: 'github',
+      identityProviderUserId: 'abc123',
+      email: 'nick@example.com',
+      handle: 'ada',
+      displayName: 'Ada Lovelace',
+      bio: 'Designing resilient evaluation loops.',
+      avatarUrl: null,
+      bannerUrl: null,
+      expertise: ['agents', 'evals'],
+      links: {},
+      status: 'active',
+      roles: ['user'],
+      counters: {
+        posts: 1,
+        followers: 8,
+        following: 5,
+      },
+      createdAt: '2026-04-15T00:00:00.000Z',
+      updatedAt: '2026-04-15T02:00:00.000Z',
+      ...overrides,
+    },
+  }
+}
+
 function renderApp() {
   const queryClient = createQueryClient()
 
@@ -604,6 +633,63 @@ describe('App', () => {
     )
   })
 
+  it('publishes a root post from the /me thread workspace', async () => {
+    window.history.replaceState({}, '', '/me')
+
+    mockFetch.mockImplementation(async (input, init) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(200, {
+          data: createResolvedMeProfile(),
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/posts') {
+        return createJsonResponse(201, {
+          data: {
+            post: createPublicPost({
+              id: 'post-2',
+              text: JSON.parse(String(init?.body ?? '{}')).text,
+            }),
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    renderApp()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Edit your profile' }),
+    ).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Thread post body'), {
+      target: { value: 'Publishing a real workflow post from the /me route.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Publish post' }))
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/posts',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            text: 'Publishing a real workflow post from the /me route.',
+          }),
+        }),
+      )
+    })
+
+    expect(
+      await screen.findByText('Post published to /p/post-2.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Open standalone page' }),
+    ).toHaveAttribute('href', '/p/post-2')
+  })
+
   it('renders a public profile when the current route matches /u/{handle}', async () => {
     window.history.replaceState({}, '', '/u/Ada')
 
@@ -782,6 +868,18 @@ describe('App', () => {
     window.history.replaceState({}, '', '/p/post-1')
 
     mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(403, {
+          data: null,
+          errors: [
+            {
+              code: 'auth.forbidden',
+              message: 'The authenticated user context was not available.',
+            },
+          ],
+        })
+      }
+
       if (String(input) === '/api/posts/post-1') {
         return createJsonResponse(200, {
           data: createPublicPost(),
@@ -828,15 +926,23 @@ describe('App', () => {
         '[data-thread-entry]',
       ),
     ).toHaveAttribute('data-thread-depth', '1')
+    expect(mockFetch).toHaveBeenCalledTimes(3)
     expect(mockFetch).toHaveBeenNthCalledWith(
       1,
-      '/api/posts/post-1',
+      '/api/me',
       expect.objectContaining({
         headers: { Accept: 'application/json' },
       }),
     )
     expect(mockFetch).toHaveBeenNthCalledWith(
       2,
+      '/api/posts/post-1',
+      expect.objectContaining({
+        headers: { Accept: 'application/json' },
+      }),
+    )
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      3,
       '/api/threads/post-1',
       expect.objectContaining({
         headers: { Accept: 'application/json' },
@@ -848,6 +954,18 @@ describe('App', () => {
     window.history.replaceState({}, '', '/p/reply-2')
 
     mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(403, {
+          data: null,
+          errors: [
+            {
+              code: 'auth.forbidden',
+              message: 'The authenticated user context was not available.',
+            },
+          ],
+        })
+      }
+
       if (String(input) === '/api/posts/reply-2') {
         return createJsonResponse(200, {
           data: createPublicPost({
@@ -962,6 +1080,18 @@ describe('App', () => {
     ]
 
     mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(403, {
+          data: null,
+          errors: [
+            {
+              code: 'auth.forbidden',
+              message: 'The authenticated user context was not available.',
+            },
+          ],
+        })
+      }
+
       if (String(input) === '/api/posts/post-mixed-media') {
         return createJsonResponse(200, {
           data: createPublicPost({
@@ -1012,10 +1142,160 @@ describe('App', () => {
     expect(screen.getAllByRole('link', { name: 'Open media' })).toHaveLength(4)
   })
 
+  it('lets an authenticated viewer reply in-thread and soft-delete their reply', async () => {
+    window.history.replaceState({}, '', '/p/post-1')
+
+    const storedReplies: Array<Record<string, unknown>> = []
+    let deletedReply: Record<string, unknown> | null = null
+
+    mockFetch.mockImplementation(async (input, init) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(200, {
+          data: createResolvedMeProfile(),
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/posts/post-1') {
+        return createJsonResponse(200, {
+          data: createPublicPost(),
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/threads/post-1') {
+        return createJsonResponse(200, {
+          data: {
+            threadId: 'post-1',
+            posts: [
+              createThreadPost(),
+              ...storedReplies
+                .filter((reply) => reply.deletedAt === null)
+                .map((reply) => createThreadPost(reply)),
+            ],
+            continuationToken: null,
+          },
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/posts/post-1/replies') {
+        storedReplies.push({
+          id: 'reply-owned',
+          type: 'reply',
+          kind: 'user',
+          threadId: 'post-1',
+          parentId: 'post-1',
+          authorId: 'github:abc123',
+          authorHandle: 'ada',
+          authorDisplayName: 'Ada Lovelace',
+          authorAvatarUrl: null,
+          text: JSON.parse(String(init?.body ?? '{}')).text,
+          hashtags: [],
+          mentions: [],
+          media: [],
+          counters: {
+            likes: 0,
+            dislikes: 0,
+            emoji: 0,
+            replies: 0,
+          },
+          visibility: 'public',
+          createdAt: '2026-04-15T00:10:00.000Z',
+          updatedAt: '2026-04-15T00:10:00.000Z',
+          deletedAt: null,
+        })
+
+        return createJsonResponse(201, {
+          data: {
+            post: storedReplies[0],
+          },
+          errors: [],
+        })
+      }
+
+      if (
+        String(input) === '/api/posts/reply-owned' &&
+        init?.method === 'DELETE'
+      ) {
+        deletedReply = {
+          ...storedReplies[0],
+          text: null,
+          deletedAt: '2026-04-15T00:12:00.000Z',
+          updatedAt: '2026-04-15T00:12:00.000Z',
+        }
+        storedReplies[0] = deletedReply
+
+        return createJsonResponse(200, {
+          data: {
+            id: 'reply-owned',
+            threadId: 'post-1',
+            deletedAt: '2026-04-15T00:12:00.000Z',
+            alreadyDeleted: false,
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    renderApp()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Standalone post detail' }),
+    ).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Thread reply body'), {
+      target: { value: 'Owned reply that should disappear after soft delete.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Reply in thread' }))
+
+    expect(
+      await screen.findByText('Reply published and thread refreshed.'),
+    ).toBeInTheDocument()
+    expect(
+      await screen.findByText('Owned reply that should disappear after soft delete.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Delete reply' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete reply' }))
+
+    expect(
+      await screen.findByText('Reply removed from the public thread view.'),
+    ).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText('Owned reply that should disappear after soft delete.'),
+      ).not.toBeInTheDocument()
+    })
+
+    expect(deletedReply).toMatchObject({
+      id: 'reply-owned',
+      text: null,
+      deletedAt: '2026-04-15T00:12:00.000Z',
+    })
+  })
+
   it('flattens replies beyond depth 3 while preserving replying-to context', async () => {
     window.history.replaceState({}, '', '/p/reply-4')
 
     mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(403, {
+          data: null,
+          errors: [
+            {
+              code: 'auth.forbidden',
+              message: 'The authenticated user context was not available.',
+            },
+          ],
+        })
+      }
+
       if (String(input) === '/api/posts/reply-4') {
         return createJsonResponse(200, {
           data: createPublicPost({
@@ -1119,6 +1399,18 @@ describe('App', () => {
     window.history.replaceState({}, '', '/p/missing')
 
     mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(403, {
+          data: null,
+          errors: [
+            {
+              code: 'auth.forbidden',
+              message: 'The authenticated user context was not available.',
+            },
+          ],
+        })
+      }
+
       if (String(input) === '/api/posts/missing') {
         return createJsonResponse(404, {
           data: null,
