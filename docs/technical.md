@@ -194,7 +194,7 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 ### 6.1 Account and Database
 - **Account:** single account, single write region initially (Australia East). Multi-region writes considered post-launch.
 - **Consistency:** Session (default) for reads; Strong only for security-critical single-document reads (e.g. account lookup during sign-in).
-- **Database:** `acn` (single database, multiple containers; per-container throughput).
+- **Database:** `acn` (single database, multiple containers; dedicated throughput for hot-path containers plus 400 RU/s shared throughput for low-traffic ancillary containers such as `media`).
 
 ### 6.2 Containers
 
