@@ -78,10 +78,13 @@ describe('App', () => {
 
     expect(
       screen.getByRole('link', { name: /continue with microsoft/i }),
-    ).toHaveAttribute('href', '/.auth/login/aad?post_login_redirect_uri=%2F')
+    ).toHaveAttribute('href', '/.auth/login/aad?post_login_redirect_uri=%2Fme')
     expect(
       screen.getByRole('link', { name: /continue with github/i }),
-    ).toHaveAttribute('href', '/.auth/login/github?post_login_redirect_uri=%2F')
+    ).toHaveAttribute(
+      'href',
+      '/.auth/login/github?post_login_redirect_uri=%2Fme',
+    )
     expect(
       screen.getByRole('button', { name: /sign out/i }),
     ).toBeInTheDocument()
@@ -134,6 +137,7 @@ describe('App', () => {
     expect(
       await screen.findByRole('heading', { name: 'Edit your profile' }),
     ).toBeInTheDocument()
+    expect(screen.getByDisplayValue('nick')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Nick Beaugeard')).toBeInTheDocument()
     expect(
       screen.getByDisplayValue('Building agent-first systems.'),
@@ -173,7 +177,7 @@ describe('App', () => {
     ).toBeInTheDocument()
   })
 
-  it('saves profile edits from the /me editor', async () => {
+  it('claims a handle and saves profile edits from the /me editor', async () => {
     window.history.replaceState({}, '', '/me')
     let requestCount = 0
 
@@ -187,25 +191,25 @@ describe('App', () => {
       if (requestCount === 1) {
         return createJsonResponse(200, {
           data: {
-            isNewUser: false,
+            isNewUser: true,
             user: {
               id: 'github:abc123',
               identityProvider: 'github',
               identityProviderUserId: 'abc123',
               email: 'nick@example.com',
-              handle: 'nick',
-              displayName: 'Nick Beaugeard',
-              bio: 'Building agent-first systems.',
+              handle: null,
+              displayName: 'Nick',
+              bio: null,
               avatarUrl: null,
               bannerUrl: null,
               expertise: ['agents'],
               links: {},
-              status: 'active',
+              status: 'pending',
               roles: ['user'],
               counters: {
-                posts: 3,
-                followers: 8,
-                following: 5,
+                posts: 0,
+                followers: 0,
+                following: 0,
               },
               createdAt: '2026-04-15T00:00:00.000Z',
               updatedAt: '2026-04-15T01:00:00.000Z',
@@ -217,27 +221,27 @@ describe('App', () => {
 
       return createJsonResponse(200, {
         data: {
-          user: {
-            id: 'github:abc123',
-            identityProvider: 'github',
-            identityProviderUserId: 'abc123',
-            email: 'nick@example.com',
-            handle: 'nick',
-            displayName: 'Ada Lovelace',
-            bio: 'Designing resilient evaluation loops.',
-            avatarUrl: null,
-            bannerUrl: null,
-            expertise: ['agents', 'evals'],
-            links: {},
-            status: 'active',
-            roles: ['user'],
-            counters: {
-              posts: 3,
-              followers: 8,
-              following: 5,
-            },
-            createdAt: '2026-04-15T00:00:00.000Z',
-            updatedAt: '2026-04-15T02:00:00.000Z',
+            user: {
+              id: 'github:abc123',
+              identityProvider: 'github',
+              identityProviderUserId: 'abc123',
+              email: 'nick@example.com',
+              handle: 'ada',
+              displayName: 'Ada Lovelace',
+              bio: 'Designing resilient evaluation loops.',
+              avatarUrl: null,
+              bannerUrl: null,
+              expertise: ['agents', 'evals'],
+              links: {},
+              status: 'active',
+              roles: ['user'],
+              counters: {
+                posts: 0,
+                followers: 0,
+                following: 0,
+              },
+              createdAt: '2026-04-15T00:00:00.000Z',
+              updatedAt: '2026-04-15T02:00:00.000Z',
           },
         },
         errors: [],
@@ -250,6 +254,9 @@ describe('App', () => {
       await screen.findByRole('heading', { name: 'Edit your profile' }),
     ).toBeInTheDocument()
 
+    fireEvent.change(screen.getByLabelText('Public handle'), {
+      target: { value: 'ada' },
+    })
     fireEvent.change(screen.getByLabelText('Display name'), {
       target: { value: 'Ada Lovelace' },
     })
@@ -272,6 +279,7 @@ describe('App', () => {
       expect.objectContaining({
         method: 'PUT',
         body: JSON.stringify({
+          handle: 'ada',
           displayName: 'Ada Lovelace',
           bio: 'Designing resilient evaluation loops.',
           avatarUrl: null,
@@ -281,7 +289,13 @@ describe('App', () => {
       }),
     )
 
-    expect(await screen.findByText('Profile saved.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Profile created. Your public profile is live.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'View public profile' })).toHaveAttribute(
+      'href',
+      '/u/ada',
+    )
   })
 
   it('renders a public profile when the current route matches /u/{handle}', async () => {

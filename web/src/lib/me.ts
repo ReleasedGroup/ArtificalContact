@@ -44,6 +44,7 @@ export interface UpdateMeResponse {
 }
 
 export interface UpdateMeInput {
+  handle?: string
   displayName: string
   bio: string | null
   avatarUrl: string | null

@@ -17,4 +17,5 @@ npm run dev --workspace @artificialcontact/web
 npm run build --workspace @artificialcontact/web
 npm run lint --workspace @artificialcontact/web
 npm run test --workspace @artificialcontact/web
+npm run test:e2e --workspace @artificialcontact/web
 ```

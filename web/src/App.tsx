@@ -51,6 +51,7 @@ type SaveState =
   | { status: 'error'; message: string }
 
 interface ProfileDraft {
+  handle: string
   displayName: string
   bio: string
   avatarUrl: string | null
@@ -58,7 +59,7 @@ interface ProfileDraft {
   expertise: string[]
 }
 
-const postLoginRedirectUri = encodeURIComponent('/')
+const postLoginRedirectUri = encodeURIComponent('/me')
 const maxExpertiseTags = 12
 const compactCountFormatter = new Intl.NumberFormat(undefined, {
   notation: 'compact',
@@ -77,7 +78,7 @@ const authProviders = [
       'Use Microsoft Entra ID through Static Web Apps built-in authentication.',
     gradientClass: 'from-cyan-300/30 via-sky-300/15 to-transparent',
     badge: 'MS',
-    helperText: 'Returns to the root route after Microsoft authentication.',
+    helperText: 'Returns to the /me editor after Microsoft authentication.',
   },
   {
     label: 'Continue with GitHub',
@@ -86,14 +87,14 @@ const authProviders = [
       'Use GitHub sign-in for the practitioner identity and repository-connected workflows.',
     gradientClass: 'from-amber-300/30 via-orange-300/15 to-transparent',
     badge: 'GH',
-    helperText: 'Returns to the root route after GitHub authentication.',
+    helperText: 'Returns to the /me editor after GitHub authentication.',
   },
 ]
 
 const profileMilestones = [
   'Claim a unique handle for your public profile.',
   'Set a display name, bio, and avatar once profile editing is live.',
-  'Return to the app shell after provider authentication completes.',
+  'Return to the /me profile editor after provider authentication completes.',
 ]
 
 function decodePathSegment(segment: string): string {
@@ -158,12 +159,18 @@ function formatTimestamp(value: string | null): string | null {
 
 function createDraft(user: MeProfile): ProfileDraft {
   return {
+    handle: user.handle ?? '',
     displayName: user.displayName,
     bio: user.bio ?? '',
     avatarUrl: user.avatarUrl,
     bannerUrl: user.bannerUrl,
     expertise: [...user.expertise],
   }
+}
+
+function normalizeHandleInput(value: string): string | null {
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
 }
 
 function normalizeTag(value: string): string | null {
@@ -182,6 +189,7 @@ function normalizeOptionalText(value: string | null): string | null {
 
 function draftsMatchProfile(draft: ProfileDraft, user: MeProfile): boolean {
   return (
+    normalizeHandleInput(draft.handle) === user.handle &&
     draft.displayName.trim() === user.displayName &&
     normalizeOptionalText(draft.bio) === user.bio &&
     draft.avatarUrl === user.avatarUrl &&
@@ -214,6 +222,10 @@ function buildProfileMonogram(profile: PublicUserProfile): string {
   }
 
   return source.slice(0, 2).toUpperCase()
+}
+
+function getPublicProfileHref(handle: string): string {
+  return `/u/${encodeURIComponent(handle)}`
 }
 
 function App() {
@@ -364,9 +376,9 @@ function SignInScreen() {
                   screens land.
                 </p>
                 <p>
-                  Both providers return to the root route after successful
-                  authentication so the sign-in handoff is predictable in every
-                  preview environment.
+                  Both providers return to the authenticated profile editor
+                  after successful authentication so the sign-in handoff is
+                  predictable in every preview environment.
                 </p>
               </div>
             </article>
@@ -487,6 +499,10 @@ function ProfileEditorScreen() {
   }
 
   const currentUser = profileState.status === 'ready' ? profileState.data.user : null
+  const normalizedDraftHandle = draft ? normalizeHandleInput(draft.handle) : null
+  const previewHandle = normalizedDraftHandle ?? currentUser?.handle ?? null
+  const publicProfileHref =
+    currentUser?.handle ? getPublicProfileHref(currentUser.handle) : null
 
   const addExpertiseTag = () => {
     if (draft === null) {
@@ -548,8 +564,18 @@ function ProfileEditorScreen() {
       return
     }
 
+    const normalizedHandle = normalizeHandleInput(draft.handle)
+    if (normalizedHandle === null) {
+      setSaveState({
+        status: 'error',
+        message: 'Choose a public handle before saving your profile.',
+      })
+      return
+    }
+
     const wasNewUser = profileState.data.isNewUser
     const payload: UpdateMeInput = {
+      handle: normalizedHandle,
       displayName: draft.displayName,
       bio: normalizeOptionalText(draft.bio),
       avatarUrl: draft.avatarUrl,
@@ -574,7 +600,7 @@ function ProfileEditorScreen() {
         setSaveState({
           status: 'saved',
           message: wasNewUser
-            ? 'Profile created. You can keep refining it here.'
+            ? 'Profile created. Your public profile is live.'
             : 'Profile saved.',
         })
       })
@@ -642,7 +668,9 @@ function ProfileEditorScreen() {
   }
 
   const canSave =
-    saveState.status !== 'saving' && !draftsMatchProfile(draft, currentUser)
+    saveState.status !== 'saving' &&
+    normalizedDraftHandle !== null &&
+    !draftsMatchProfile(draft, currentUser)
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-10">
@@ -738,8 +766,9 @@ function ProfileEditorScreen() {
 
           {(currentUser.status === 'pending' || profileState.data.isNewUser) && (
             <div className="mt-6 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-              Finish the public-facing parts of your profile here. Avatar and
-              banner uploads stay in placeholder mode until Sprint 3.
+              Choose a public handle and finish the rest of the public-facing
+              profile fields here. Avatar and banner uploads stay in placeholder
+              mode until Sprint 3.
             </div>
           )}
 
@@ -754,8 +783,10 @@ function ProfileEditorScreen() {
                     Profile fields
                   </p>
                   <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-400">
-                    Update your display name, public bio, and expertise tags.
-                    The save action writes to <code>/api/me</code>.
+                    Claim the handle visitors will use at{' '}
+                    <code>/u/{'{handle}'}</code>, then update your display
+                    name, public bio, and expertise tags. The save action
+                    writes to <code>/api/me</code>.
                   </p>
                 </div>
                 <button
@@ -768,6 +799,33 @@ function ProfileEditorScreen() {
               </div>
 
               <div className="mt-8 grid gap-5">
+                <label className="grid gap-2" htmlFor="handle">
+                  <span className="text-sm font-medium text-slate-200">
+                    Public handle
+                  </span>
+                  <input
+                    aria-label="Public handle"
+                    className="rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-base text-white outline-none transition focus:border-sky-300/60 focus:ring-2 focus:ring-sky-300/30"
+                    id="handle"
+                    maxLength={80}
+                    name="handle"
+                    onChange={(event) => {
+                      setDraft({
+                        ...draft,
+                        handle: event.target.value,
+                      })
+                      setSaveState({ status: 'idle' })
+                    }}
+                    placeholder="ada"
+                    value={draft.handle}
+                  />
+                  <span className="text-sm leading-7 text-slate-400">
+                    Choose the handle people will use to open your public
+                    profile. Saving a handle promotes pending profiles to
+                    active.
+                  </span>
+                </label>
+
                 <label className="grid gap-2">
                   <span className="text-sm font-medium text-slate-200">
                     Display name
@@ -891,8 +949,16 @@ function ProfileEditorScreen() {
                   <span className="text-slate-500">
                     {draftsMatchProfile(draft, currentUser)
                       ? 'No unsaved changes.'
-                      : 'Complete the form to save your profile.'}
+                      : 'Choose a handle and complete the form to save your profile.'}
                   </span>
+                )}
+                {publicProfileHref && (
+                  <a
+                    href={publicProfileHref}
+                    className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-cyan-100 transition hover:border-cyan-300/35 hover:bg-cyan-300/15"
+                  >
+                    View public profile
+                  </a>
                 )}
               </div>
             </form>
@@ -936,9 +1002,7 @@ function ProfileEditorScreen() {
                         {draft.displayName.trim() || 'Display name'}
                       </p>
                       <p className="text-sm text-slate-400">
-                        {currentUser.handle
-                          ? `@${currentUser.handle}`
-                          : 'Handle pending'}
+                        {previewHandle ? `@${previewHandle}` : 'Handle pending'}
                       </p>
                     </div>
                   </div>
