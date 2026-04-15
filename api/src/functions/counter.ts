@@ -1,4 +1,5 @@
 import { app, type InvocationContext } from '@azure/functions'
+import { CosmosFollowersMirrorStore } from '../lib/cosmos-followers-mirror-store.js'
 import { CosmosUserFollowCounterStore } from '../lib/cosmos-user-follow-counter-store.js'
 import { CosmosPostStore } from '../lib/cosmos-post-store.js'
 import {
@@ -6,6 +7,10 @@ import {
   type FollowCounterSourceDocument,
   type FollowCounterStore,
 } from '../lib/follow-counter.js'
+import {
+  syncFollowersMirrorBatch,
+  type FollowersMirrorStore,
+} from '../lib/followers-mirror.js'
 import { DEFAULT_FOLLOWS_CONTAINER_NAME } from '../lib/follows.js'
 import { DEFAULT_POSTS_CONTAINER_NAME } from '../lib/posts.js'
 import {
@@ -22,6 +27,7 @@ const cosmosConnectionName = 'COSMOS_CONNECTION'
 
 let cachedReplyCounterStore: CosmosPostStore | undefined
 let cachedFollowCounterStore: CosmosUserFollowCounterStore | undefined
+let cachedFollowersMirrorStore: CosmosFollowersMirrorStore | undefined
 
 function readOptionalValue(value?: string): string | undefined {
   const trimmed = value?.trim()
@@ -38,10 +44,16 @@ function getFollowStore(): CosmosUserFollowCounterStore {
   return cachedFollowCounterStore
 }
 
+function getFollowersMirrorStore(): CosmosFollowersMirrorStore {
+  cachedFollowersMirrorStore ??= CosmosFollowersMirrorStore.fromEnvironment()
+  return cachedFollowersMirrorStore
+}
+
 export interface CounterFunctionDependencies {
   storeFactory?: () => ReplyCounterStore
   replyStoreFactory?: () => ReplyCounterStore
   followStoreFactory?: () => FollowCounterStore
+  followersMirrorStoreFactory?: () => FollowersMirrorStore
 }
 
 export function buildCounterFn(dependencies: CounterFunctionDependencies = {}) {
@@ -60,11 +72,18 @@ export function buildFollowCounterFn(
   dependencies: CounterFunctionDependencies = {},
 ) {
   const storeFactory = dependencies.followStoreFactory ?? getFollowStore
+  const followersMirrorStoreFactory =
+    dependencies.followersMirrorStoreFactory ?? getFollowersMirrorStore
 
   return async function followCounterFn(
     documents: FollowCounterSourceDocument[],
     context: InvocationContext,
   ): Promise<void> {
+    await syncFollowersMirrorBatch(
+      documents,
+      followersMirrorStoreFactory(),
+      context,
+    )
     await syncFollowCountersBatch(documents, storeFactory(), context)
   }
 }

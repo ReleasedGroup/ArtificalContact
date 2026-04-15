@@ -6,15 +6,27 @@ import {
   type FollowCounterSourceDocument,
   type FollowCounterStore,
 } from '../src/lib/follow-counter.js'
+import type {
+  ExistingFollowersMirrorRecord,
+  FollowersMirrorDocument,
+  FollowersMirrorStore,
+} from '../src/lib/followers-mirror.js'
+import { buildFollowDocumentId } from '../src/lib/follows.js'
 import type { StoredUserDocument } from '../src/lib/user-profile.js'
 
-class InMemoryFollowCounterStore implements FollowCounterStore {
+class InMemoryFollowCounterStore
+  implements FollowCounterStore, FollowersMirrorStore
+{
   public readonly followCountUpdates: Array<{
     followers: number
     following: number
     posts: number
     userId: string
   }> = []
+  public readonly upsertedMirrors: FollowersMirrorDocument[] = []
+  public readonly deletedMirrors: string[] = []
+
+  private readonly mirrors = new Map<string, ExistingFollowersMirrorRecord>()
 
   constructor(
     private readonly users: Map<string, StoredUserDocument> = new Map(),
@@ -26,15 +38,29 @@ class InMemoryFollowCounterStore implements FollowCounterStore {
         deletedAt?: string | null
       }
     > = new Map(),
-  ) {}
+  ) {
+    for (const [id, follow] of this.follows.entries()) {
+      if (follow.deletedAt != null) {
+        continue
+      }
+
+      this.mirrors.set(id, {
+        id,
+        type: 'follow',
+        followerId: follow.followerId,
+        followedId: follow.followedId,
+        createdAt: '2026-04-15T05:00:00.000Z',
+      })
+    }
+  }
 
   async getUserById(userId: string): Promise<StoredUserDocument | null> {
     return this.users.get(userId) ?? null
   }
 
   async countActiveFollowers(userId: string): Promise<number> {
-    return [...this.follows.values()].filter((follow) => {
-      return follow.followedId === userId && follow.deletedAt == null
+    return [...this.mirrors.values()].filter((follow) => {
+      return follow.followedId === userId
     }).length
   }
 
@@ -74,6 +100,24 @@ class InMemoryFollowCounterStore implements FollowCounterStore {
   snapshotUser(userId: string): StoredUserDocument | null {
     return this.users.get(userId) ?? null
   }
+
+  async getByFollowerAndFollowed(
+    followerId: string,
+    followedId: string,
+  ): Promise<ExistingFollowersMirrorRecord | null> {
+    return this.mirrors.get(buildFollowDocumentId(followerId, followedId)) ?? null
+  }
+
+  async upsertMirror(document: FollowersMirrorDocument): Promise<void> {
+    this.mirrors.set(document.id, { ...document })
+    this.upsertedMirrors.push(document)
+  }
+
+  async deleteMirror(followerId: string, followedId: string): Promise<void> {
+    const id = buildFollowDocumentId(followerId, followedId)
+    this.mirrors.delete(id)
+    this.deletedMirrors.push(id)
+  }
 }
 
 function createStoredUser(
@@ -103,6 +147,7 @@ function createFollowChange(
     type: 'follow',
     followerId: 'u_follower',
     followedId: 'u_followed',
+    createdAt: '2026-04-15T05:00:00.000Z',
     ...overrides,
   }
 }
@@ -177,18 +222,22 @@ describe('syncFollowCountersBatch', () => {
 
     await syncFollowCountersBatch([createFollowChange()], store, logger)
 
-    expect(store.followCountUpdates).toEqual([
-      {
-        userId: 'u_follower',
-        posts: 3,
-        followers: 2,
-        following: 1,
-      },
+    expect(
+      [...store.followCountUpdates].sort((left, right) =>
+        left.userId.localeCompare(right.userId),
+      ),
+    ).toEqual([
       {
         userId: 'u_followed',
         posts: 5,
         followers: 1,
         following: 7,
+      },
+      {
+        userId: 'u_follower',
+        posts: 3,
+        followers: 2,
+        following: 1,
       },
     ])
     expect(logger.info).toHaveBeenCalledWith(
@@ -263,18 +312,22 @@ describe('syncFollowCountersBatch', () => {
       store,
     )
 
-    expect(store.followCountUpdates).toEqual([
-      {
-        userId: 'u_follower',
-        posts: 3,
-        followers: 2,
-        following: 0,
-      },
+    expect(
+      [...store.followCountUpdates].sort((left, right) =>
+        left.userId.localeCompare(right.userId),
+      ),
+    ).toEqual([
       {
         userId: 'u_followed',
         posts: 5,
         followers: 0,
         following: 7,
+      },
+      {
+        userId: 'u_follower',
+        posts: 3,
+        followers: 2,
+        following: 0,
       },
     ])
     expect(store.snapshotUser('u_follower')?.counters).toEqual({
@@ -337,8 +390,10 @@ describe('syncFollowCountersBatch', () => {
     await syncFollowCountersBatch([createFollowChange()], store)
 
     expect(store.followCountUpdates).toHaveLength(2)
-    expect(store.followCountUpdates[0]?.userId).toBe('u_follower')
-    expect(store.followCountUpdates[1]?.userId).toBe('u_followed')
+    expect(store.followCountUpdates.map((update) => update.userId).sort()).toEqual([
+      'u_followed',
+      'u_follower',
+    ])
   })
 
   it('warns when a follow references a user that cannot be loaded', async () => {
@@ -463,6 +518,7 @@ describe('followCounterFn', () => {
     )
     const handler = buildFollowCounterFn({
       followStoreFactory: () => store,
+      followersMirrorStoreFactory: () => store,
     })
     const context = createContext()
 

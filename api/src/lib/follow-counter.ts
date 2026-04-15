@@ -26,6 +26,7 @@ export interface FollowCounterSourceDocument {
   type?: string | null
   followerId?: string | null
   followedId?: string | null
+  createdAt?: string | null
   deletedAt?: string | null
 }
 
@@ -34,6 +35,8 @@ interface FollowCounterWorkItem {
   followedId: string
   id: string
 }
+
+export const FOLLOW_COUNTER_BATCH_CONCURRENCY = 8
 
 const noop = (): void => undefined
 
@@ -94,6 +97,56 @@ function collapseFollowChangesToLatest(
   return [...latestById.values()]
 }
 
+function chunkArray<T>(items: readonly T[], size: number): T[][] {
+  const chunks: T[][] = []
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size))
+  }
+
+  return chunks
+}
+
+async function syncUserFollowCounts(
+  userId: string,
+  store: FollowCounterStore,
+  logger: LoggerLike,
+): Promise<void> {
+  const user = await store.getUserById(userId)
+
+  if (user === null) {
+    logger.warn(
+      "Skipping follow counter sync because user '%s' was not found.",
+      userId,
+    )
+    return
+  }
+
+  const followers = await store.countActiveFollowers(userId)
+  const following = await store.countActiveFollowing(userId)
+  const currentFollowers = toNonNegativeInteger(user.counters?.followers)
+  const currentFollowing = toNonNegativeInteger(user.counters?.following)
+
+  if (currentFollowers === followers && currentFollowing === following) {
+    return
+  }
+
+  await store.setFollowCounts(userId, {
+    followers,
+    following,
+    posts: toNonNegativeInteger(user.counters?.posts),
+  })
+
+  logger.info(
+    "Updated follow counters for user '%s' from followers=%d/following=%d to followers=%d/following=%d.",
+    userId,
+    currentFollowers,
+    currentFollowing,
+    followers,
+    following,
+  )
+}
+
 export async function syncFollowCountersBatch(
   documents: readonly FollowCounterSourceDocument[],
   store: FollowCounterStore,
@@ -106,39 +159,12 @@ export async function syncFollowCountersBatch(
     impactedUserIds.add(workItem.followedId)
   }
 
-  for (const userId of impactedUserIds) {
-    const user = await store.getUserById(userId)
-
-    if (user === null) {
-      logger.warn(
-        "Skipping follow counter sync because user '%s' was not found.",
-        userId,
-      )
-      continue
-    }
-
-    const followers = await store.countActiveFollowers(userId)
-    const following = await store.countActiveFollowing(userId)
-    const currentFollowers = toNonNegativeInteger(user.counters?.followers)
-    const currentFollowing = toNonNegativeInteger(user.counters?.following)
-
-    if (currentFollowers === followers && currentFollowing === following) {
-      continue
-    }
-
-    await store.setFollowCounts(userId, {
-      followers,
-      following,
-      posts: toNonNegativeInteger(user.counters?.posts),
-    })
-
-    logger.info(
-      "Updated follow counters for user '%s' from followers=%d/following=%d to followers=%d/following=%d.",
-      userId,
-      currentFollowers,
-      currentFollowing,
-      followers,
-      following,
+  for (const userBatch of chunkArray(
+    [...impactedUserIds],
+    FOLLOW_COUNTER_BATCH_CONCURRENCY,
+  )) {
+    await Promise.all(
+      userBatch.map((userId) => syncUserFollowCounts(userId, store, logger)),
     )
   }
 }

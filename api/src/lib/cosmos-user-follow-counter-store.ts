@@ -3,6 +3,7 @@ import { getEnvironmentConfig } from './config.js'
 import { createCosmosClient } from './cosmos-client.js'
 import { type FollowCounterStore } from './follow-counter.js'
 import { DEFAULT_FOLLOWS_CONTAINER_NAME } from './follows.js'
+import { DEFAULT_FOLLOWERS_CONTAINER_NAME } from './followers-mirror.js'
 import { readOptionalValue } from './strings.js'
 import type { StoredUserDocument } from './user-profile.js'
 import {
@@ -37,6 +38,7 @@ export class CosmosUserFollowCounterStore implements FollowCounterStore {
   constructor(
     private readonly usersContainer: Container,
     private readonly followsContainer: Container,
+    private readonly followersContainer: Container,
   ) {}
 
   static fromEnvironment(client?: CosmosClient): CosmosUserFollowCounterStore {
@@ -50,11 +52,15 @@ export class CosmosUserFollowCounterStore implements FollowCounterStore {
     const followsContainerName =
       readOptionalValue(process.env.FOLLOWS_CONTAINER_NAME) ??
       DEFAULT_FOLLOWS_CONTAINER_NAME
+    const followersContainerName =
+      readOptionalValue(process.env.FOLLOWERS_CONTAINER_NAME) ??
+      DEFAULT_FOLLOWERS_CONTAINER_NAME
     const database = resolvedClient.database(databaseName)
 
     return new CosmosUserFollowCounterStore(
       database.container(usersContainerName),
       database.container(followsContainerName),
+      database.container(followersContainerName),
     )
   }
 
@@ -76,14 +82,17 @@ export class CosmosUserFollowCounterStore implements FollowCounterStore {
   async countActiveFollowers(userId: string): Promise<number> {
     const querySpec: SqlQuerySpec = {
       query:
-        'SELECT VALUE COUNT(1) FROM c WHERE c.followedId = @userId AND c.type = @type AND (NOT IS_DEFINED(c.deletedAt) OR IS_NULL(c.deletedAt))',
+        'SELECT VALUE COUNT(1) FROM c WHERE c.followedId = @userId AND c.type = @type',
       parameters: [
         { name: '@userId', value: userId },
         { name: '@type', value: 'follow' },
       ],
     }
-    const { resources } = await this.followsContainer.items
-      .query<number>(querySpec, { maxItemCount: 1 })
+    const { resources } = await this.followersContainer.items
+      .query<number>(querySpec, {
+        maxItemCount: 1,
+        partitionKey: userId,
+      })
       .fetchAll()
 
     return resources[0] ?? 0
