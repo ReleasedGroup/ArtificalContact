@@ -1,12 +1,18 @@
-import { z } from 'zod'
-import type { ApiEnvelope } from './api-envelope.js'
+import type { Container } from '@azure/cosmos'
+import { z, type ZodIssue } from 'zod'
+import type { ApiEnvelope, ApiError } from './api-envelope.js'
+import { getEnvironmentConfig, type EnvironmentConfig } from './config.js'
+import { createCosmosClient } from './cosmos-client.js'
 import { readOptionalValue } from './strings.js'
+import type { UserDocument } from './users.js'
 
 export const DEFAULT_POSTS_CONTAINER_NAME = 'posts'
 export const DEFAULT_POST_MAX_LENGTH = 280
 
 const hashtagPattern = /(?<![A-Za-z0-9_])#([A-Za-z0-9_]+)/g
 const mentionPattern = /(?<![A-Za-z0-9_])@([A-Za-z0-9._/-]+)/g
+
+let cachedPostRepository: MutablePostRepository | undefined
 
 export interface StoredPostMediaDocument {
   id?: string | null
@@ -122,6 +128,34 @@ export interface PublicPost {
   github: PublicGitHubPostMetadata | null
 }
 
+export interface PostCounters {
+  likes: number
+  dislikes: number
+  emoji: number
+  replies: number
+}
+
+export interface PostDocument {
+  id: string
+  type: 'post'
+  kind: 'user'
+  threadId: string
+  parentId: null
+  authorId: string
+  authorHandle: string
+  authorDisplayName: string
+  authorAvatarUrl?: string
+  text: string
+  hashtags: string[]
+  mentions: string[]
+  counters: PostCounters
+  visibility: 'public'
+  moderationState: 'ok'
+  createdAt: string
+  updatedAt: string
+  deletedAt: null
+}
+
 export interface PostStore {
   getPostById(
     postId: string,
@@ -132,6 +166,12 @@ export interface PostStore {
 export interface MutablePostStore extends PostStore {
   upsertPost(post: StoredPostDocument): Promise<StoredPostDocument>
 }
+
+export interface PostRepository {
+  create(post: PostDocument): Promise<PostDocument>
+}
+
+export type MutablePostRepository = PostRepository
 
 export interface PostLookupResult {
   status: 200 | 400 | 404
@@ -323,6 +363,17 @@ function isPubliclyVisiblePost(post: StoredPostDocument): boolean {
   return moderationState !== 'hidden' && moderationState !== 'removed'
 }
 
+function createPostRepositoryForContainer(
+  container: Container,
+): MutablePostRepository {
+  return {
+    async create(post: PostDocument) {
+      await container.items.create<PostDocument>(post)
+      return post
+    },
+  }
+}
+
 export function resolvePostMaxLength(
   env: NodeJS.ProcessEnv = process.env,
 ): number {
@@ -369,6 +420,22 @@ export function buildPostContentSchema(
         mentions: extractMentions(value.text),
       }),
     )
+}
+
+export function buildCreatePostRequestSchema(maxTextLength: number) {
+  return buildPostContentSchema(maxTextLength)
+}
+
+export type CreatePostRequest = PostContent
+
+export function mapCreatePostValidationIssues(
+  issues: readonly ZodIssue[],
+): ApiError[] {
+  return issues.map((issue) => ({
+    code: 'invalid_post',
+    message: issue.message,
+    ...(issue.path.length > 0 ? { field: issue.path.join('.') } : {}),
+  }))
 }
 
 export function buildPublicPost(post: StoredPostDocument): PublicPost {
@@ -541,4 +608,63 @@ export async function lookupPublicPost(
       errors: [],
     },
   }
+}
+
+export function createUserPostDocument(
+  user: UserDocument,
+  request: CreatePostRequest,
+  createdAt: Date,
+  idFactory: () => string,
+): PostDocument {
+  const id = idFactory()
+  const timestamp = createdAt.toISOString()
+
+  return {
+    id,
+    type: 'post',
+    kind: 'user',
+    threadId: id,
+    parentId: null,
+    authorId: user.id,
+    authorHandle: user.handle ?? user.handleLower ?? '',
+    authorDisplayName: user.displayName,
+    ...(user.avatarUrl ? { authorAvatarUrl: user.avatarUrl } : {}),
+    text: request.text,
+    hashtags: request.hashtags,
+    mentions: request.mentions,
+    counters: {
+      likes: 0,
+      dislikes: 0,
+      emoji: 0,
+      replies: 0,
+    },
+    visibility: 'public',
+    moderationState: 'ok',
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    deletedAt: null,
+  }
+}
+
+export function createPostRepositoryFromConfig(
+  config: EnvironmentConfig,
+  env: NodeJS.ProcessEnv = process.env,
+): MutablePostRepository {
+  if (!config.cosmosDatabaseName) {
+    throw new Error('COSMOS_DATABASE_NAME is required to resolve posts.')
+  }
+
+  const postsContainerName =
+    readOptionalValue(env.POSTS_CONTAINER_NAME) ?? DEFAULT_POSTS_CONTAINER_NAME
+  const client = createCosmosClient(config)
+  const container = client
+    .database(config.cosmosDatabaseName)
+    .container(postsContainerName)
+
+  return createPostRepositoryForContainer(container)
+}
+
+export function createPostRepository(): MutablePostRepository {
+  cachedPostRepository ??= createPostRepositoryFromConfig(getEnvironmentConfig())
+  return cachedPostRepository
 }
