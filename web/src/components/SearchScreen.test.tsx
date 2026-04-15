@@ -232,6 +232,42 @@ describe('SearchScreen', () => {
     expect(screen.getByText('@ada')).toBeInTheDocument()
   })
 
+  it('normalizes unsupported filters out of the route on load', async () => {
+    mockFetch.mockImplementation(async (input) => {
+      const requestUrl = new URL(String(input), 'https://example.com')
+
+      expect(requestUrl.searchParams.get('type')).toBe('hashtags')
+      expect(requestUrl.searchParams.get('filter')).toBe('mediaKind:image')
+
+      return createJsonResponse(200, {
+        data: {
+          type: 'hashtags',
+          query: 'evals',
+          filters: {
+            hashtag: null,
+            mediaKind: 'image',
+          },
+          totalCount: 1,
+          results: [{ type: 'hashtag', hashtag: 'evals', count: 1 }],
+        },
+        errors: [],
+      })
+    })
+
+    window.history.replaceState(
+      {},
+      '',
+      '/search?q=evals&type=hashtags&hashtag=evals&mediaKind=image',
+    )
+    renderSearchScreen()
+
+    expect(await screen.findByText('#evals')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(window.location.search).toBe('?q=evals&type=hashtags&mediaKind=image')
+    })
+  })
+
   it('scopes facet filters to tabs when switching result types', async () => {
     mockFetch.mockImplementation(async (input) => {
       const requestUrl = new URL(String(input), 'https://example.com')

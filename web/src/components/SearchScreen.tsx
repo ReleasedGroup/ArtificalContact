@@ -490,6 +490,21 @@ export function SearchScreen() {
     })
   }, [deferredQuery, routeState])
 
+  useEffect(() => {
+    const normalizedUrl = buildSearchHref(routeState)
+    const currentUrl = `${window.location.pathname}${window.location.search}`
+
+    if (currentUrl !== normalizedUrl) {
+      replaceBrowserRoute(routeState)
+    }
+  }, [
+    routeState,
+    routeState.query,
+    routeState.type,
+    scopedFilters.hashtag,
+    scopedFilters.mediaKind,
+  ])
+
   const searchQuery = useQuery({
     queryKey: [
       'search',
