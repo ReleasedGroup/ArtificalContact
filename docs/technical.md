@@ -132,8 +132,8 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 | `authMe` | GET `/api/me` | Returns the resolved profile for the authenticated principal; lazily provisions a user document on first call |
 | `updateProfile` | PUT `/api/me` | Updates display name, bio, avatar, banner, expertise tags |
 | `getUser` | GET `/api/users/{handle}` | Public profile lookup |
-| `followUser` | POST `/api/users/{handle}/follow` | Creates follow + mirror |
-| `unfollowUser` | DELETE `/api/users/{handle}/follow` | |
+| `followUser` | POST `/api/users/{handle}/follow` | Creates or reactivates a follow relationship |
+| `unfollowUser` | DELETE `/api/users/{handle}/follow` | Soft deletes the existing follow so change-feed workers can update mirrors and counters asynchronously |
 | `listFollowers` | GET `/api/users/{handle}/followers` | Paginated |
 | `listFollowing` | GET `/api/users/{handle}/following` | Paginated |
 | `createPost` | POST `/api/posts` | Validates, writes to `posts` |

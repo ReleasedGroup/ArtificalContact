@@ -40,7 +40,8 @@ npm run test
 - Vitest covers Static Web Apps principal decoding and HTTP auth role attachment for anonymous, user, moderator, admin, and malformed-principal request paths
 - Vitest covers `PUT /api/me`, including duplicate-handle rejection via `usersByHandle`
 - Vitest covers the `usersByHandle` change-feed mirror logic, including stale-handle cleanup and non-fatal collision handling
-- Vitest covers the `followersMirrorFn` change-feed mirror logic, including deterministic ids, duplicate deliveries, and invalid-document skips
+- Vitest covers the `followersMirrorFn` change-feed mirror logic, including deterministic ids, soft-delete cleanup, duplicate deliveries, and invalid-document skips
+- Vitest covers the follow-counter change-feed logic, including inserts, soft deletes, duplicate deliveries, and missing-user safety
 - Vitest covers the `counterFn` reply-counter change-feed logic, including inserts, soft deletes, duplicate deliveries, and missing-parent safety
 - TypeScript compilation validates the Azure Functions source and module graph
 - ESLint checks the Node/TypeScript implementation

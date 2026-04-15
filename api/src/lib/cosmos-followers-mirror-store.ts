@@ -56,6 +56,20 @@ export class CosmosFollowersMirrorStore implements FollowersMirrorStore {
     await this.container.items.upsert(document)
   }
 
+  async deleteMirror(followerId: string, followedId: string): Promise<void> {
+    try {
+      await this.container
+        .item(buildFollowDocumentId(followerId, followedId), followedId)
+        .delete()
+    } catch (error) {
+      if (isNotFound(error)) {
+        return
+      }
+
+      throw error
+    }
+  }
+
   private async readItem<T extends ItemDefinition>(
     id: string,
     partitionKey: string,
