@@ -513,6 +513,7 @@ Fields:
   - `feed.fanout.duration_ms`
   - `search.sync.lag_seconds`
   - `cosmos.ru.consumed` (per operation class)
+  - `search.query.duration_ms`
   - `media.upload.bytes`
 - **Alerts:**
   - 5xx rate > 1% over 5 min

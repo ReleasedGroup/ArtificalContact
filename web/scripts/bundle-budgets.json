@@ -1,0 +1,14 @@
+{
+  "entryJavaScript": {
+    "maxGzipBytes": 210000
+  },
+  "entryCss": {
+    "maxGzipBytes": 15000
+  },
+  "asyncChunkJavaScript": {
+    "maxGzipBytes": 120000
+  },
+  "totalJavaScript": {
+    "maxGzipBytes": 210000
+  }
+}

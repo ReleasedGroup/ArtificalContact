@@ -1,6 +1,7 @@
 import { DefaultAzureCredential } from '@azure/identity'
 import { SearchClient, type FacetResult } from '@azure/search-documents'
 import { getEnvironmentConfig } from './config.js'
+import { getRequestMetricsEndpoint } from './request-metrics-context.js'
 import type {
   SearchFacetValue,
   SearchFilters,
@@ -13,6 +14,7 @@ import type {
   SearchPostIndexDocument,
   SearchUserIndexDocument,
 } from './search-sync.js'
+import { trackSearchQueryDuration } from './telemetry.js'
 
 interface SearchPostQueryDocument extends Partial<SearchPostIndexDocument> {
   id: string
@@ -193,6 +195,7 @@ export class AzureSearchQueryStore implements SearchStore {
     filters: SearchFilters
     limit: number
   }) {
+    const startedAt = performance.now()
     const searchResponse = await this.postsClient.search(
       createSearchText(input.query),
       {
@@ -214,6 +217,11 @@ export class AzureSearchQueryStore implements SearchStore {
       mapPostResult(item),
     )
 
+    trackSearchQueryDuration(performance.now() - startedAt, {
+      endpoint: getRequestMetricsEndpoint() ?? 'background',
+      searchType: 'posts',
+    })
+
     return {
       totalCount:
         typeof searchResponse.count === 'number'
@@ -228,6 +236,7 @@ export class AzureSearchQueryStore implements SearchStore {
   }
 
   async searchUsers(input: { query: string; limit: number }) {
+    const startedAt = performance.now()
     const searchResponse = await this.usersClient.search(
       createSearchText(input.query),
       {
@@ -245,6 +254,11 @@ export class AzureSearchQueryStore implements SearchStore {
       .map((item) => mapUserResult(item))
       .filter((item) => item.handle.length > 0)
 
+    trackSearchQueryDuration(performance.now() - startedAt, {
+      endpoint: getRequestMetricsEndpoint() ?? 'background',
+      searchType: 'users',
+    })
+
     return {
       totalCount:
         typeof searchResponse.count === 'number'
@@ -259,6 +273,7 @@ export class AzureSearchQueryStore implements SearchStore {
     filters: SearchFilters
     limit: number
   }) {
+    const startedAt = performance.now()
     const searchResponse = await this.postsClient.search(
       createSearchText(input.query),
       {
@@ -288,6 +303,11 @@ export class AzureSearchQueryStore implements SearchStore {
         hashtag: item.value,
         count: item.count,
       }))
+
+    trackSearchQueryDuration(performance.now() - startedAt, {
+      endpoint: getRequestMetricsEndpoint() ?? 'background',
+      searchType: 'hashtags',
+    })
 
     return {
       totalCount: results.length,

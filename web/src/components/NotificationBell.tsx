@@ -4,6 +4,7 @@ import {
   getNotificationsPage,
   type NotificationItem,
 } from '../lib/notifications'
+import { AppImage } from './AppImage'
 
 export const NOTIFICATION_POLL_INTERVAL_MS = 30_000
 const relativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, {
@@ -133,7 +134,7 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
       <div className="flex items-start gap-3">
         <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-fuchsia-500 to-sky-500 text-xs font-semibold tracking-[0.08em] text-white shadow-lg shadow-slate-950/30">
           {notification.actor?.avatarUrl ? (
-            <img
+            <AppImage
               src={notification.actor.avatarUrl}
               alt={`${actorLabel} avatar`}
               className="h-full w-full object-cover"

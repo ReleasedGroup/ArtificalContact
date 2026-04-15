@@ -7,6 +7,7 @@ import {
   useState,
   type TouchEvent,
 } from 'react'
+import { AppImage } from './AppImage'
 import { NotificationBell } from './NotificationBell'
 import { hasRole, type MeProfile } from '../lib/me'
 import { getFeedPage, type FeedEntry } from '../lib/feed'
@@ -102,7 +103,7 @@ function FeedCard({ entry, viewer }: { entry: FeedEntry; viewer: MeProfile }) {
     <article className="rounded-[1.75rem] border border-white/10 bg-slate-900/72 p-5 shadow-lg shadow-slate-950/20 transition hover:border-white/15 hover:bg-slate-900/80">
       <div className="flex items-start gap-4">
         {entry.authorAvatarUrl ? (
-          <img
+          <AppImage
             src={entry.authorAvatarUrl}
             alt={`${authorName} avatar`}
             className="h-12 w-12 rounded-[1.2rem] object-cover ring-1 ring-white/10"
@@ -162,7 +163,7 @@ function FeedCard({ entry, viewer }: { entry: FeedEntry; viewer: MeProfile }) {
                       href={getPostHref(entry.postId)}
                       className="overflow-hidden rounded-[1.4rem] border border-white/10 bg-slate-950/60"
                     >
-                      <img
+                      <AppImage
                         src={media.thumbUrl}
                         alt={
                           media.kind ? `${media.kind} preview` : 'Media preview'

@@ -4,6 +4,7 @@ import {
   type PublicReactionSummaryEntry,
   type PublicReactionSummaryType,
 } from '../lib/post-reactions'
+import { AppImage } from './AppImage'
 
 type SupportedReactionSummaryType = Exclude<
   PublicReactionSummaryType,
@@ -433,7 +434,7 @@ export function ReactionSummaryChip({
                     className="flex items-start gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-3"
                   >
                     {entry.actor.avatarUrl ? (
-                      <img
+                      <AppImage
                         src={entry.actor.avatarUrl}
                         alt={`${actorName} avatar`}
                         className="h-10 w-10 rounded-2xl border border-white/10 bg-slate-900 object-cover"

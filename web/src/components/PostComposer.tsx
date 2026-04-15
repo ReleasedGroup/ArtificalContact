@@ -13,6 +13,7 @@ import {
   isComposerTextEmpty,
   type ComposerSegment,
 } from '../lib/composer'
+import { AppImage } from './AppImage'
 
 type ComposerVariant = 'post' | 'reply'
 
@@ -537,9 +538,10 @@ export function PostComposer({
                     className="overflow-hidden rounded-[1.25rem] border border-white/10 bg-slate-900/80 shadow-lg shadow-slate-950/30"
                   >
                     {item.previewUrl ? (
-                      <img
+                      <AppImage
                         alt={buildImagePreviewAltText(item)}
                         className="h-40 w-full object-cover"
+                        loading="eager"
                         src={item.previewUrl}
                       />
                     ) : (

@@ -30,6 +30,9 @@ jobs:
           BUILD_SHA: ${{ github.sha }}
           VITE_BUILD_SHA: ${{ github.sha }}
 
+      - name: Check web bundle budget
+        run: npm run bundle:check -w web
+
       - name: Lint workspaces
         run: npm run lint
 
