@@ -7,6 +7,7 @@ import { registerDeletePostFunction } from './functions/delete-post.js'
 import { registerDeleteReactionFunction } from './functions/delete-reaction.js'
 import { registerFeedFanOutFunction } from './functions/feed-fanout.js'
 import { registerFollowUserFunction } from './functions/follow-user.js'
+import { registerGetAdminMetricsFunction } from './functions/get-admin-metrics.js'
 import { registerFollowersMirrorFunction } from './functions/followers-mirror.js'
 import { registerGetFeedFunction } from './functions/get-feed.js'
 import { registerGetModerationQueueFunction } from './functions/get-moderation-queue.js'
@@ -42,6 +43,7 @@ registerDeletePostFunction()
 registerDeleteReactionFunction()
 registerFeedFanOutFunction()
 registerFollowUserFunction()
+registerGetAdminMetricsFunction()
 registerFollowersMirrorFunction()
 registerGetFeedFunction()
 registerGetModerationQueueFunction()
