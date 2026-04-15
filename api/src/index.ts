@@ -13,6 +13,7 @@ import { registerListFollowingFunction } from './functions/list-following.js'
 import { registerGetUserFunction } from './functions/get-user.js'
 import { registerHealthFunction } from './functions/health.js'
 import { registerMediaUploadUrlFunction } from './functions/media-upload-url.js'
+import { registerMediaPostProcessFunctions } from './functions/media-post-process.js'
 import { registerUpdateProfileFunction } from './functions/update-profile.js'
 import { registerUserPostAuthorSyncFunction } from './functions/user-post-author-sync.js'
 import { registerUsersByHandleMirrorFunction } from './functions/users-by-handle-mirror.js'
@@ -33,6 +34,7 @@ registerListFollowingFunction()
 registerGetUserFunction()
 registerHealthFunction()
 registerMediaUploadUrlFunction()
+registerMediaPostProcessFunctions()
 registerUpdateProfileFunction()
 registerUserPostAuthorSyncFunction()
 registerUsersByHandleMirrorFunction()

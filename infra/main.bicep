@@ -72,6 +72,16 @@ module search './modules/search.bicep' = {
   }
 }
 
+module frontDoor './modules/frontdoor.bicep' = {
+  name: 'frontDoor'
+  params: {
+    names: naming.outputs.names
+    tags: tags
+    storageHostName: storage.outputs.blobHostName
+    customDomainHostName: frontDoorCustomDomainHostName
+  }
+}
+
 module functions './modules/functions.bicep' = {
   name: 'functions'
   params: {
@@ -85,6 +95,7 @@ module functions './modules/functions.bicep' = {
     cosmosDatabaseName: cosmos.outputs.databaseName
     cosmosEndpoint: cosmos.outputs.endpoint
     keyVaultResourceId: observability.outputs.keyVaultId
+    mediaBaseUrl: 'https://${frontDoor.outputs.endpointHostName}'
     storageAccountName: storage.outputs.accountName
     storageAccountResourceId: storage.outputs.accountResourceId
     deploymentContainerName: storage.outputs.deploymentContainerName
@@ -103,16 +114,6 @@ module staticWebApp './modules/static-web-app.bicep' = {
     applicationInsightsConnectionString: observability.outputs.applicationInsightsConnectionString
     functionAppName: functions.outputs.functionAppName
     functionAppResourceId: functions.outputs.functionAppResourceId
-  }
-}
-
-module frontDoor './modules/frontdoor.bicep' = {
-  name: 'frontDoor'
-  params: {
-    names: naming.outputs.names
-    tags: tags
-    storageHostName: storage.outputs.blobHostName
-    customDomainHostName: frontDoorCustomDomainHostName
   }
 }
 

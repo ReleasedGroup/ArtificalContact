@@ -6,6 +6,7 @@ param cosmosAccountName string
 param cosmosDatabaseName string
 param cosmosEndpoint string
 param keyVaultResourceId string
+param mediaBaseUrl string
 param storageAccountName string
 param storageAccountResourceId string
 param deploymentContainerName string
@@ -124,6 +125,18 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
         {
           name: 'COSMOS_ENDPOINT'
           value: cosmosEndpoint
+        }
+        {
+          name: 'MEDIA_BASE_URL'
+          value: mediaBaseUrl
+        }
+        {
+          name: 'MEDIA_CONTAINER_NAME'
+          value: names.mediaContainer
+        }
+        {
+          name: 'CONTENT_SAFETY_THRESHOLD'
+          value: '4'
         }
         {
           name: 'AZURE_REGION'

@@ -17,12 +17,24 @@ describe('getEnvironmentConfig', () => {
       BUILD_SHA: 'sha-1234',
       COSMOS_DATABASE_NAME: 'acn',
       COSMOS_CONNECTION__accountEndpoint: 'https://cosmos.example',
+      MEDIA_BASE_URL: 'https://cdn.example.com',
+      MEDIA_CONTAINER_NAME: 'media',
+      CONTENT_SAFETY_ENDPOINT: 'https://safety.example.com',
+      CONTENT_SAFETY_KEY: 'secret-key',
+      CONTENT_SAFETY_THRESHOLD: '6',
+      FFMPEG_PATH: '/tools/ffmpeg',
     })
 
     expect(config.buildSha).toBe('sha-1234')
     expect(config.region).toBe('australiaeast')
     expect(config.cosmosDatabaseName).toBe('acn')
     expect(config.cosmosEndpoint).toBe('https://cosmos.example')
+    expect(config.mediaBaseUrl).toBe('https://cdn.example.com')
+    expect(config.mediaContainerName).toBe('media')
+    expect(config.contentSafetyEndpoint).toBe('https://safety.example.com')
+    expect(config.contentSafetyKey).toBe('secret-key')
+    expect(config.contentSafetyThreshold).toBe(6)
+    expect(config.ffmpegPath).toBe('/tools/ffmpeg')
   })
 
   it('falls back to the legacy COSMOS_ENDPOINT setting when the connection prefix is absent', () => {
@@ -31,5 +43,17 @@ describe('getEnvironmentConfig', () => {
     })
 
     expect(config.cosmosEndpoint).toBe('https://legacy-cosmos.example')
+  })
+
+  it('clamps invalid content safety threshold values to the supported range', () => {
+    const invalidThreshold = getEnvironmentConfig({
+      CONTENT_SAFETY_THRESHOLD: 'nan',
+    })
+    const highThreshold = getEnvironmentConfig({
+      CONTENT_SAFETY_THRESHOLD: '99',
+    })
+
+    expect(invalidThreshold.contentSafetyThreshold).toBe(4)
+    expect(highThreshold.contentSafetyThreshold).toBe(7)
   })
 })
