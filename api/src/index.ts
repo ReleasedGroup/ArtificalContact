@@ -9,6 +9,7 @@ import { registerFollowUserFunction } from './functions/follow-user.js'
 import { registerFollowersMirrorFunction } from './functions/followers-mirror.js'
 import { registerGetFeedFunction } from './functions/get-feed.js'
 import { registerGetPublicFeedFunction } from './functions/get-public-feed.js'
+import { registerGetNotificationsFunction } from './functions/get-notifications.js'
 import { registerGifSearchFunction } from './functions/search-gifs.js'
 import { registerSearchFunction } from './functions/search.js'
 import { registerGetPostFunction } from './functions/get-post.js'
@@ -39,6 +40,7 @@ registerFollowUserFunction()
 registerFollowersMirrorFunction()
 registerGetFeedFunction()
 registerGetPublicFeedFunction()
+registerGetNotificationsFunction()
 registerGifSearchFunction()
 registerSearchFunction()
 registerGetPostFunction()
