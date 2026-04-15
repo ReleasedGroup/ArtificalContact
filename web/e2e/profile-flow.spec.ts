@@ -38,8 +38,10 @@ test('sign in, claim a handle, and open the public profile', async ({
   }
 
   let savedPayload: Record<string, unknown> | null = null
+  let sessionEstablished = false
 
   await page.route('**/.auth/login/github**', async (route) => {
+    sessionEstablished = true
     await route.fulfill({
       status: 302,
       headers: {
@@ -72,6 +74,23 @@ test('sign in, claim a handle, and open the public profile', async ({
 
   await page.route('**/api/me', async (route) => {
     if (route.request().method() === 'GET') {
+      if (!sessionEstablished) {
+        await route.fulfill({
+          status: 401,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: null,
+            errors: [
+              {
+                code: 'auth.unauthorized',
+                message: 'Authentication required.',
+              },
+            ],
+          }),
+        })
+        return
+      }
+
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
