@@ -65,10 +65,19 @@ interface RenderablePost {
   github?: RenderableGitHubMetadata | null
 }
 
+interface ThreadConversationEntry {
+  post: ThreadPost
+  actualDepth: number
+  visualDepth: number
+  isFlattened: boolean
+}
+
 const compactCountFormatter = new Intl.NumberFormat(undefined, {
   notation: 'compact',
   maximumFractionDigits: 1,
 })
+
+const maxVisibleThreadDepth = 3
 
 const githubEventLabels: Record<string, string> = {
   issue: 'Issue',
@@ -215,6 +224,71 @@ function getReplyContextLabel(
   }
 
   return 'Reply in this thread'
+}
+
+function buildThreadConversationEntries(
+  posts: ThreadPost[],
+  threadId: string,
+): ThreadConversationEntry[] {
+  const postsById = new Map(posts.map((post) => [post.id, post]))
+  const childPosts = new Map<string, ThreadPost[]>()
+
+  for (const post of posts) {
+    if (post.parentId === null) {
+      continue
+    }
+
+    const siblings = childPosts.get(post.parentId) ?? []
+    siblings.push(post)
+    childPosts.set(post.parentId, siblings)
+  }
+
+  for (const siblings of childPosts.values()) {
+    siblings.sort(compareThreadPosts)
+  }
+
+  const sortedPosts = [...posts].sort(compareThreadPosts)
+  const rootCandidates = sortedPosts.filter((post) => {
+    if (post.parentId === null) {
+      return true
+    }
+
+    return !postsById.has(post.parentId)
+  })
+  const orderedRoots = [
+    ...rootCandidates.filter((post) => post.id === threadId),
+    ...rootCandidates.filter((post) => post.id !== threadId),
+  ]
+  const visited = new Set<string>()
+  const entries: ThreadConversationEntry[] = []
+
+  const visit = (post: ThreadPost, depth: number) => {
+    if (visited.has(post.id)) {
+      return
+    }
+
+    visited.add(post.id)
+    entries.push({
+      post,
+      actualDepth: depth,
+      visualDepth: Math.min(depth, maxVisibleThreadDepth),
+      isFlattened: depth > maxVisibleThreadDepth,
+    })
+
+    for (const child of childPosts.get(post.id) ?? []) {
+      visit(child, depth + 1)
+    }
+  }
+
+  for (const post of orderedRoots) {
+    visit(post, 0)
+  }
+
+  for (const post of sortedPosts) {
+    visit(post, 0)
+  }
+
+  return entries
 }
 
 function renderPostText(text: string | null) {
@@ -476,16 +550,16 @@ function PostCard({
   )
 }
 
-function ThreadContextSection({
-  posts,
+function ThreadConversationSection({
+  entries,
   postsById,
-  title,
+  selectedPostId,
 }: {
-  posts: ThreadPost[]
+  entries: ThreadConversationEntry[]
   postsById: Map<string, ThreadPost>
-  title: string
+  selectedPostId: string
 }) {
-  if (posts.length === 0) {
+  if (entries.length === 0) {
     return null
   }
 
@@ -494,28 +568,55 @@ function ThreadContextSection({
       <div className="flex items-center justify-between gap-3 border-b border-white/8 pb-4">
         <div>
           <p className="text-sm font-medium uppercase tracking-[0.24em] text-cyan-100/80">
-            {title}
+            Thread conversation
           </p>
           <p className="mt-2 text-sm leading-7 text-slate-400">
-            Public posts from the same thread, ordered chronologically.
+            Root post plus nested replies. Indentation caps after level{' '}
+            {maxVisibleThreadDepth} so deep branches stay readable.
           </p>
         </div>
         <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-300">
-          {posts.length} item{posts.length === 1 ? '' : 's'}
+          {entries.length} item{entries.length === 1 ? '' : 's'}
         </span>
       </div>
 
       <div className="mt-5 space-y-4">
-        {posts.map((post) => (
-          <PostCard
-            key={post.id}
-            contextLabel={getReplyContextLabel(post, postsById)}
-            post={{
-              ...post,
-              github: toRenderableGitHubMetadata(post.github),
-            }}
-          />
-        ))}
+        {entries.map((entry) => {
+          const contextLabel = getReplyContextLabel(entry.post, postsById)
+          const indentRem = entry.visualDepth * 1.25
+
+          return (
+            <div
+              key={entry.post.id}
+              data-thread-entry=""
+              data-thread-depth={entry.actualDepth}
+              data-thread-visual-depth={entry.visualDepth}
+              style={indentRem > 0 ? { marginLeft: `${indentRem}rem` } : undefined}
+              className={
+                entry.visualDepth > 0
+                  ? 'border-l border-white/8 pl-4'
+                  : undefined
+              }
+            >
+              {entry.isFlattened && contextLabel && (
+                <p className="mb-2 pl-1 text-xs font-medium tracking-[0.12em] text-slate-400">
+                  {contextLabel}
+                </p>
+              )}
+              <PostCard
+                contextLabel={entry.isFlattened ? null : contextLabel}
+                emphasis={
+                  entry.post.id === selectedPostId ? 'selected' : 'context'
+                }
+                post={{
+                  ...entry.post,
+                  github: toRenderableGitHubMetadata(entry.post.github),
+                }}
+                showOpenLink={entry.post.id !== selectedPostId}
+              />
+            </div>
+          )
+        })}
       </div>
     </article>
   )
@@ -524,17 +625,16 @@ function ThreadContextSection({
 function ReadyPostDetail({ data }: { data: PostDetailData }) {
   const orderedPosts = [...data.thread.posts].sort(compareThreadPosts)
   const postsById = new Map(orderedPosts.map((post) => [post.id, post]))
-  const selectedIndex = orderedPosts.findIndex(
-    (post) => post.id === data.post.id,
+  const threadEntries = buildThreadConversationEntries(
+    orderedPosts,
+    data.thread.threadId,
   )
-  const earlierPosts =
-    selectedIndex > 0 ? orderedPosts.slice(0, selectedIndex) : []
-  const laterPosts =
-    selectedIndex >= 0 ? orderedPosts.slice(selectedIndex + 1) : []
-  const threadContextPosts =
-    selectedIndex === -1
-      ? orderedPosts.filter((post) => post.id !== data.post.id)
-      : []
+  const selectedIndex = threadEntries.findIndex(
+    (entry) => entry.post.id === data.post.id,
+  )
+  const selectedInThread = selectedIndex >= 0
+  const selectedThreadEntry =
+    selectedIndex >= 0 ? threadEntries[selectedIndex] : null
   const rootPost =
     orderedPosts.find(
       (post) => post.id === data.thread.threadId && post.parentId === null,
@@ -542,6 +642,11 @@ function ReadyPostDetail({ data }: { data: PostDetailData }) {
   const selectedContextLabel = getReplyContextLabel(data.post, postsById)
   const authorHandle = getAuthorHandle(data.post)
   const totalReplies = Math.max(orderedPosts.length - 1, 0)
+  const selectedDepth = selectedThreadEntry?.actualDepth ?? null
+  const selectedVisualDepth = selectedThreadEntry?.visualDepth ?? null
+  const selectedFlattened = selectedThreadEntry?.isFlattened ?? false
+  const selectedStandaloneRoot =
+    !selectedInThread && data.post.id === data.post.threadId && data.post.parentId === null
 
   return (
     <div className="py-6 sm:py-8">
@@ -586,64 +691,56 @@ function ReadyPostDetail({ data }: { data: PostDetailData }) {
 
       <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(18rem,0.82fr)]">
         <section className="space-y-6">
-          <article className="rounded-[1.75rem] border border-white/10 bg-slate-900/72 p-6">
-            <div className="flex items-center justify-between gap-3 border-b border-white/8 pb-4">
-              <div>
-                <p className="text-sm font-medium uppercase tracking-[0.24em] text-fuchsia-200/75">
-                  Selected post
-                </p>
-                <p className="mt-2 text-sm leading-7 text-slate-400">
-                  The canonical public payload from{' '}
-                  <code>/api/posts/{'{id}'}</code>.
-                </p>
+          {!selectedInThread && (
+            <article className="rounded-[1.75rem] border border-white/10 bg-slate-900/72 p-6">
+              <div className="flex items-center justify-between gap-3 border-b border-white/8 pb-4">
+                <div>
+                  <p className="text-sm font-medium uppercase tracking-[0.24em] text-fuchsia-200/75">
+                    Selected post
+                  </p>
+                  <p className="mt-2 text-sm leading-7 text-slate-400">
+                    The standalone payload loaded, but this item was not present
+                    in the returned thread page.
+                  </p>
+                </div>
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-300">
+                  {data.post.type}
+                </span>
               </div>
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-300">
-                {data.post.type}
-              </span>
-            </div>
 
-            <div className="mt-5">
-              <PostCard
-                emphasis="selected"
-                contextLabel={selectedContextLabel}
-                post={{
-                  ...data.post,
-                  github: toRenderableGitHubMetadata(data.post.github),
-                }}
-                showOpenLink={false}
-              />
-            </div>
-          </article>
+              <div className="mt-5">
+                <PostCard
+                  contextLabel={
+                    selectedStandaloneRoot ? 'Root post in the thread' : selectedContextLabel
+                  }
+                  emphasis="selected"
+                  post={{
+                    ...data.post,
+                    github: toRenderableGitHubMetadata(data.post.github),
+                  }}
+                  showOpenLink={false}
+                />
+              </div>
+            </article>
+          )}
 
-          <ThreadContextSection
-            posts={earlierPosts}
+          <ThreadConversationSection
+            entries={threadEntries}
             postsById={postsById}
-            title="Earlier in thread"
-          />
-          <ThreadContextSection
-            posts={threadContextPosts}
-            postsById={postsById}
-            title="Thread context"
-          />
-          <ThreadContextSection
-            posts={laterPosts}
-            postsById={postsById}
-            title="Later in thread"
+            selectedPostId={data.post.id}
           />
 
-          {earlierPosts.length === 0 &&
-            laterPosts.length === 0 &&
-            threadContextPosts.length === 0 && (
-              <article className="rounded-[1.75rem] border border-dashed border-white/12 bg-slate-950/35 p-6">
-                <h2 className="text-xl font-semibold text-white">
-                  This post currently stands alone.
-                </h2>
-                <p className="mt-3 text-sm leading-7 text-slate-300">
-                  No additional public posts were returned for this thread, so
-                  the detail page only needs to render the selected post.
-                </p>
-              </article>
-            )}
+          {threadEntries.length === 0 && !selectedInThread && (
+            <article className="rounded-[1.75rem] border border-dashed border-white/12 bg-slate-950/35 p-6">
+              <h2 className="text-xl font-semibold text-white">
+                This post currently stands alone.
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-slate-300">
+                No additional public posts were returned for this thread, so
+                the detail page only needs to render the selected post.
+              </p>
+            </article>
+          )}
         </section>
 
         <aside className="space-y-6">
@@ -681,8 +778,17 @@ function ReadyPostDetail({ data }: { data: PostDetailData }) {
             <div className="mt-5 space-y-3 text-sm leading-7 text-slate-300">
               <p>
                 This page resolves the standalone post first, then loads the
-                matching thread to provide surrounding context.
+                matching thread to provide conversation context.
               </p>
+              {selectedDepth !== null && (
+                <p>
+                  Selected thread depth: {selectedDepth}
+                  {selectedVisualDepth !== null &&
+                    selectedVisualDepth !== selectedDepth &&
+                    ` (rendered at level ${selectedVisualDepth})`}
+                  {selectedFlattened && ' with flattened indentation'}
+                </p>
+              )}
               {data.thread.continuationToken && (
                 <p className="text-slate-400">
                   The thread payload is paginated. Additional context exists
@@ -702,23 +808,6 @@ function ReadyPostDetail({ data }: { data: PostDetailData }) {
               )}
             </div>
           </article>
-
-          {rootPost && rootPost.id !== data.post.id && (
-            <article className="rounded-[1.75rem] border border-white/10 bg-slate-900/70 p-6">
-              <p className="text-sm font-medium uppercase tracking-[0.24em] text-emerald-100/80">
-                Conversation entry point
-              </p>
-              <div className="mt-5">
-                <PostCard
-                  contextLabel="Root post in the thread"
-                  post={{
-                    ...rootPost,
-                    github: toRenderableGitHubMetadata(rootPost.github),
-                  }}
-                />
-              </div>
-            </article>
-          )}
         </aside>
       </div>
     </div>
