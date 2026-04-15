@@ -55,6 +55,40 @@ describe('NotificationsScreen', () => {
   beforeEach(() => {
     mockFetch.mockReset()
     vi.stubGlobal('fetch', mockFetch)
+    mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
+      const requestUrl = typeof input === 'string' ? input : input.toString()
+
+      if (requestUrl.includes('/api/me/notifications')) {
+        return createJsonResponse(200, {
+          data: {
+            preferences: {
+              userId: 'github:viewer-1',
+              events: {
+                follow: { inApp: true, email: false, webPush: false },
+                reply: { inApp: true, email: false, webPush: false },
+                reaction: { inApp: true, email: false, webPush: false },
+                mention: { inApp: true, email: false, webPush: false },
+                followeePost: { inApp: false, email: false, webPush: false },
+              },
+              webPush: {
+                supported: false,
+                subscription: null,
+              },
+              createdAt: '2026-04-15T00:00:00.000Z',
+              updatedAt: '2026-04-15T00:00:00.000Z',
+            },
+          },
+          errors: [],
+        })
+      }
+
+      return createJsonResponse(200, {
+        data: [],
+        cursor: null,
+        unreadCount: 0,
+        errors: [],
+      })
+    })
   })
 
   afterEach(() => {
@@ -63,8 +97,34 @@ describe('NotificationsScreen', () => {
   })
 
   it('filters the loaded notification feed by the selected tab', async () => {
-    mockFetch.mockResolvedValue(
-      createJsonResponse(200, {
+    mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
+      const requestUrl = typeof input === 'string' ? input : input.toString()
+
+      if (requestUrl.includes('/api/me/notifications')) {
+        return createJsonResponse(200, {
+          data: {
+            preferences: {
+              userId: 'github:viewer-1',
+              events: {
+                follow: { inApp: true, email: false, webPush: false },
+                reply: { inApp: true, email: false, webPush: false },
+                reaction: { inApp: true, email: false, webPush: false },
+                mention: { inApp: true, email: false, webPush: false },
+                followeePost: { inApp: false, email: false, webPush: false },
+              },
+              webPush: {
+                supported: false,
+                subscription: null,
+              },
+              createdAt: '2026-04-15T00:00:00.000Z',
+              updatedAt: '2026-04-15T00:00:00.000Z',
+            },
+          },
+          errors: [],
+        })
+      }
+
+      return createJsonResponse(200, {
         data: [
           {
             id: 'notif-mention',
@@ -92,8 +152,8 @@ describe('NotificationsScreen', () => {
         cursor: null,
         unreadCount: 2,
         errors: [],
-      }),
-    )
+      })
+    })
 
     renderNotificationsScreen()
 
@@ -105,23 +165,45 @@ describe('NotificationsScreen', () => {
     })
 
     expect(screen.getByText(/Grace Hopper/i)).toBeInTheDocument()
-    expect(
-      screen.queryByText(/Linus Torvalds/i),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/Linus Torvalds/i)).not.toBeInTheDocument()
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Replies' }))
     })
 
     expect(screen.getByText(/Linus Torvalds/i)).toBeInTheDocument()
-    expect(
-      screen.queryByText(/Grace Hopper/i),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/Grace Hopper/i)).not.toBeInTheDocument()
   })
 
   it('shows a focused empty state when a tab has no matching notifications', async () => {
-    mockFetch.mockResolvedValue(
-      createJsonResponse(200, {
+    mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
+      const requestUrl = typeof input === 'string' ? input : input.toString()
+
+      if (requestUrl.includes('/api/me/notifications')) {
+        return createJsonResponse(200, {
+          data: {
+            preferences: {
+              userId: 'github:viewer-1',
+              events: {
+                follow: { inApp: true, email: false, webPush: false },
+                reply: { inApp: true, email: false, webPush: false },
+                reaction: { inApp: true, email: false, webPush: false },
+                mention: { inApp: true, email: false, webPush: false },
+                followeePost: { inApp: false, email: false, webPush: false },
+              },
+              webPush: {
+                supported: false,
+                subscription: null,
+              },
+              createdAt: '2026-04-15T00:00:00.000Z',
+              updatedAt: '2026-04-15T00:00:00.000Z',
+            },
+          },
+          errors: [],
+        })
+      }
+
+      return createJsonResponse(200, {
         data: [
           {
             id: 'notif-follow',
@@ -138,8 +220,8 @@ describe('NotificationsScreen', () => {
         cursor: null,
         unreadCount: 1,
         errors: [],
-      }),
-    )
+      })
+    })
 
     renderNotificationsScreen()
 
@@ -157,8 +239,34 @@ describe('NotificationsScreen', () => {
   })
 
   it('falls back to derived in-app links when targetUrl is not a safe relative path', async () => {
-    mockFetch.mockResolvedValue(
-      createJsonResponse(200, {
+    mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
+      const requestUrl = typeof input === 'string' ? input : input.toString()
+
+      if (requestUrl.includes('/api/me/notifications')) {
+        return createJsonResponse(200, {
+          data: {
+            preferences: {
+              userId: 'github:viewer-1',
+              events: {
+                follow: { inApp: true, email: false, webPush: false },
+                reply: { inApp: true, email: false, webPush: false },
+                reaction: { inApp: true, email: false, webPush: false },
+                mention: { inApp: true, email: false, webPush: false },
+                followeePost: { inApp: false, email: false, webPush: false },
+              },
+              webPush: {
+                supported: false,
+                subscription: null,
+              },
+              createdAt: '2026-04-15T00:00:00.000Z',
+              updatedAt: '2026-04-15T00:00:00.000Z',
+            },
+          },
+          errors: [],
+        })
+      }
+
+      return createJsonResponse(200, {
         data: [
           {
             id: 'notif-reaction',
@@ -177,8 +285,8 @@ describe('NotificationsScreen', () => {
         cursor: null,
         unreadCount: 1,
         errors: [],
-      }),
-    )
+      })
+    })
 
     renderNotificationsScreen()
 
