@@ -3,6 +3,7 @@ param names object
 param tags object = {}
 
 var postsV1IndexName = 'posts-v1'
+var hashtagsV1IndexName = 'hashtags-v1'
 
 resource searchService 'Microsoft.Search/searchServices@2023-11-01' = {
   name: names.search
@@ -153,6 +154,43 @@ resource postsV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = {
         searchable: true
         filterable: true
         sortable: false
+        facetable: false
+        retrievable: true
+      }
+    ]
+  }
+}
+
+resource hashtagsV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = {
+  name: hashtagsV1IndexName
+  parent: searchService
+  properties: {
+    fields: [
+      {
+        name: 'id'
+        type: 'Edm.String'
+        key: true
+        filterable: true
+        searchable: false
+        sortable: false
+        facetable: false
+        retrievable: true
+      }
+      {
+        name: 'count'
+        type: 'Edm.Int32'
+        filterable: true
+        searchable: false
+        sortable: true
+        facetable: false
+        retrievable: true
+      }
+      {
+        name: 'lastUsedAt'
+        type: 'Edm.DateTimeOffset'
+        filterable: true
+        searchable: false
+        sortable: true
         facetable: false
         retrievable: true
       }
