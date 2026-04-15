@@ -261,6 +261,23 @@ function normalizePostText(value: unknown): unknown {
   return value.trim()
 }
 
+function isAllowedTenorMediaUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    const hostname = url.hostname.trim().toLowerCase()
+
+    return url.protocol === 'https:' && hostname.endsWith('.tenor.com')
+  } catch {
+    return false
+  }
+}
+
+function buildTenorMediaUrlSchema(label: string) {
+  return z.string().url().refine(isAllowedTenorMediaUrl, {
+    message: `${label} must use an https://*.tenor.com URL.`,
+  })
+}
+
 function readUniqueMatches(text: string, pattern: RegExp): string[] {
   const values = new Set<string>()
 
@@ -455,8 +472,10 @@ function buildReplyGifMediaSchema() {
     .object({
       id: z.preprocess(normalizePostText, z.string().min(1)),
       kind: z.literal('gif'),
-      url: z.string().url(),
-      thumbUrl: z.string().url().nullable().optional(),
+      url: buildTenorMediaUrlSchema('GIF URLs'),
+      thumbUrl: buildTenorMediaUrlSchema('GIF thumbnail URLs')
+        .nullable()
+        .optional(),
       width: z.number().int().positive().nullable().optional(),
       height: z.number().int().positive().nullable().optional(),
     })

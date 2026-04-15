@@ -1338,17 +1338,6 @@ describe('App', () => {
         })
       }
 
-      if (String(input).startsWith('/api/gifs/search')) {
-        return createJsonResponse(200, {
-          data: {
-            mode: 'featured',
-            query: '',
-            results: [],
-          },
-          errors: [],
-        })
-      }
-
       if (String(input) === '/api/posts/post-1/replies') {
         const payload = JSON.parse(String(init?.body ?? '{}')) as {
           media?: Array<Record<string, unknown>>

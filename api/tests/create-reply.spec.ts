@@ -414,6 +414,43 @@ describe('createReplyHandler', () => {
     })
   })
 
+  it('returns validation errors when the reply GIF URL is outside the allowed Tenor hosts', async () => {
+    const repository: ReadablePostRepository = {
+      getPostById: vi.fn(async () => createStoredPost()),
+      create: vi.fn(async (post) => post),
+    }
+    const handler = buildCreateReplyHandler({
+      repositoryFactory: () => repository,
+    })
+
+    const response = await handler(
+      createRequest({
+        media: [
+          {
+            id: 'tenor-123',
+            kind: 'gif',
+            url: 'https://example.com/full.gif',
+            thumbUrl: 'https://media.tenor.com/tiny.gif',
+          },
+        ],
+      }),
+      createContext(),
+    )
+
+    expect(response.status).toBe(400)
+    expect(response.jsonBody).toEqual({
+      data: null,
+      errors: [
+        {
+          code: 'invalid_post',
+          message: 'GIF URLs must use an https://*.tenor.com URL.',
+          field: 'media.0.url',
+        },
+      ],
+    })
+    expect(repository.create).not.toHaveBeenCalled()
+  })
+
   it('returns 500 when the reply validation configuration is invalid', async () => {
     const originalMaxLength = process.env.POST_MAX_LENGTH
     process.env.POST_MAX_LENGTH = 'invalid'

@@ -123,6 +123,38 @@ describe('buildCreateReplyRequestSchema', () => {
     })
   })
 
+  it.each([
+    ['url', 'http://media.tenor.com/full.gif'],
+    ['url', 'https://example.com/full.gif'],
+    ['thumbUrl', 'http://media.tenor.com/tiny.gif'],
+    ['thumbUrl', 'https://example.com/tiny.gif'],
+  ])(
+    'rejects reply GIF %s values outside HTTPS Tenor hosts',
+    (field, invalidUrl) => {
+      const result = buildCreateReplyRequestSchema(280).safeParse({
+        media: [
+          {
+            id: 'tenor-123',
+            kind: 'gif',
+            url: 'https://media.tenor.com/full.gif',
+            thumbUrl: 'https://media.tenor.com/tiny.gif',
+            [field]: invalidUrl,
+          },
+        ],
+      })
+
+      expect(result.success).toBe(false)
+      if (result.success) {
+        throw new Error('Expected validation failure for an invalid GIF URL.')
+      }
+
+      expect(result.error.issues[0]?.path).toEqual(['media', 0, field])
+      expect(result.error.issues[0]?.message).toContain(
+        'must use an https://*.tenor.com URL.',
+      )
+    },
+  )
+
   it('rejects replies that omit both text and a GIF', () => {
     const result = buildCreateReplyRequestSchema(280).safeParse({
       text: '   ',
