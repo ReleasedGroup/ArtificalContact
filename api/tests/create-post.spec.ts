@@ -74,11 +74,14 @@ describe('resolvePostMaxLength', () => {
     expect(resolvePostMaxLength({ POST_MAX_LENGTH: '500' })).toBe(500)
   })
 
-  it('rejects a non-positive configured value', () => {
-    expect(() => resolvePostMaxLength({ POST_MAX_LENGTH: '0' })).toThrowError(
-      'POST_MAX_LENGTH must be a positive integer.',
-    )
-  })
+  it.each(['0', '280abc', '280.5'])(
+    'rejects an invalid configured value of %s',
+    (configuredValue) => {
+      expect(() =>
+        resolvePostMaxLength({ POST_MAX_LENGTH: configuredValue }),
+      ).toThrowError('POST_MAX_LENGTH must be a positive integer.')
+    },
+  )
 })
 
 describe('createPostHandler', () => {
