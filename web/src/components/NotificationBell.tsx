@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   getNotificationsPage,
   type NotificationItem,
@@ -191,6 +191,7 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
 
 export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false)
+  const dialogRef = useRef<HTMLElement | null>(null)
   const notificationsQuery = useQuery({
     queryKey: ['notifications', 'bell'],
     queryFn: ({ signal }) => getNotificationsPage({ signal }),
@@ -204,11 +205,20 @@ export function NotificationBell() {
   const notifications = notificationsQuery.data?.notifications.slice(0, 5) ?? []
   const buttonLabel =
     unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'
+  const dialogId = 'notification-bell-dialog'
+  const titleId = 'notification-bell-title'
+
+  useEffect(() => {
+    if (isOpen) {
+      dialogRef.current?.focus()
+    }
+  }, [isOpen])
 
   return (
     <div className="relative">
       <button
         type="button"
+        aria-controls={dialogId}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
         aria-label={buttonLabel}
@@ -242,14 +252,20 @@ export function NotificationBell() {
 
       {isOpen && (
         <section
+          ref={dialogRef}
+          id={dialogId}
           role="dialog"
-          aria-label="Notifications"
+          aria-labelledby={titleId}
+          tabIndex={-1}
           className="absolute right-0 top-full z-20 mt-3 w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-[1.8rem] border border-white/10 bg-slate-950/96 shadow-2xl shadow-slate-950/50 backdrop-blur"
         >
           <div className="border-b border-white/8 px-5 py-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-medium uppercase tracking-[0.24em] text-cyan-100/80">
+                <p
+                  id={titleId}
+                  className="text-sm font-medium uppercase tracking-[0.24em] text-cyan-100/80"
+                >
                   Notifications
                 </p>
                 <p className="mt-2 text-sm text-slate-300">

@@ -30,6 +30,9 @@ function renderNotificationBell() {
 describe('NotificationBell', () => {
   beforeEach(() => {
     mockFetch.mockReset()
+    vi.spyOn(Date, 'now').mockReturnValue(
+      new Date('2026-04-15T10:10:00.000Z').valueOf(),
+    )
     vi.stubGlobal('fetch', mockFetch)
   })
 
