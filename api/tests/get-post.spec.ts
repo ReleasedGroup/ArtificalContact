@@ -371,4 +371,46 @@ describe('CosmosPostStore', () => {
     )
     expect(fetchAll).toHaveBeenCalledOnce()
   })
+
+  it('queries authored user posts by author id for denormalization refreshes', async () => {
+    const fetchAll = vi.fn(async () => ({
+      resources: [
+        createStoredPost({
+          id: 'p_02',
+          authorId: 'u_author',
+        }),
+      ],
+    }))
+    const query = vi.fn(
+      () =>
+        ({
+          fetchAll,
+        }) as { fetchAll: typeof fetchAll },
+    )
+    const container = {
+      item: vi.fn(),
+      items: {
+        query,
+      },
+    } as unknown as Container
+    const store = new CosmosPostStore(container)
+
+    const result = await store.listPostsByAuthorId('u_author')
+
+    expect(result).toEqual([
+      createStoredPost({
+        id: 'p_02',
+        authorId: 'u_author',
+      }),
+    ])
+    expect(query).toHaveBeenCalledWith({
+      query:
+        'SELECT * FROM c WHERE c.authorId = @authorId AND c.kind = @kind ORDER BY c.createdAt ASC',
+      parameters: [
+        { name: '@authorId', value: 'u_author' },
+        { name: '@kind', value: 'user' },
+      ],
+    })
+    expect(fetchAll).toHaveBeenCalledOnce()
+  })
 })

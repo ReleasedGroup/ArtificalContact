@@ -86,6 +86,22 @@ export class CosmosPostStore implements MutablePostStore, PostRepository {
     return resource ?? post
   }
 
+  async listPostsByAuthorId(authorId: string): Promise<StoredPostDocument[]> {
+    const querySpec: SqlQuerySpec = {
+      query:
+        'SELECT * FROM c WHERE c.authorId = @authorId AND c.kind = @kind ORDER BY c.createdAt ASC',
+      parameters: [
+        { name: '@authorId', value: authorId },
+        { name: '@kind', value: 'user' },
+      ],
+    }
+    const { resources } = await this.postsContainer.items
+      .query<StoredPostDocument>(querySpec)
+      .fetchAll()
+
+    return resources
+  }
+
   async upsertPost(post: StoredPostDocument): Promise<StoredPostDocument> {
     const { resource } =
       await this.postsContainer.items.upsert<StoredPostDocument>(post)
