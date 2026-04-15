@@ -5,6 +5,7 @@ import { registerDeletePostFunction } from './functions/delete-post.js'
 import { registerFeedFanOutFunction } from './functions/feed-fanout.js'
 import { registerFollowUserFunction } from './functions/follow-user.js'
 import { registerFollowersMirrorFunction } from './functions/followers-mirror.js'
+import { registerGetFeedFunction } from './functions/get-feed.js'
 import { registerGetPostFunction } from './functions/get-post.js'
 import { registerGetThreadFunction } from './functions/get-thread.js'
 import { registerListFollowersFunction } from './functions/list-followers.js'
@@ -25,6 +26,7 @@ registerDeletePostFunction()
 registerFeedFanOutFunction()
 registerFollowUserFunction()
 registerFollowersMirrorFunction()
+registerGetFeedFunction()
 registerGetPostFunction()
 registerGetThreadFunction()
 registerListFollowersFunction()

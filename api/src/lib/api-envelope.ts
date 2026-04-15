@@ -9,6 +9,7 @@ export interface ApiError {
 export interface ApiEnvelope<TData> {
   data: TData | null
   errors: ApiError[]
+  cursor?: string | null
 }
 
 const defaultJsonHeaders = {
