@@ -42,6 +42,10 @@ export interface AuthSigninTelemetryEvent {
   isNewUser: boolean
 }
 
+export interface TelemetryMetricProperties {
+  [key: string]: boolean | number | string
+}
+
 export function trackAuthSigninEvent(event: AuthSigninTelemetryEvent): void {
   const client = getTelemetryClient()
   if (client === null) {
@@ -54,5 +58,22 @@ export function trackAuthSigninEvent(event: AuthSigninTelemetryEvent): void {
       idp: event.identityProvider.trim().toLowerCase(),
       isNewUser: event.isNewUser,
     },
+  })
+}
+
+export function trackMetric(
+  name: string,
+  value: number,
+  properties: TelemetryMetricProperties = {},
+): void {
+  const client = getTelemetryClient()
+  if (client === null) {
+    return
+  }
+
+  client.trackMetric({
+    name,
+    value,
+    properties,
   })
 }

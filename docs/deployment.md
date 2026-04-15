@@ -65,6 +65,7 @@ The following repository secrets are required:
 - `AZURE_TENANT_ID`
 - `AZURE_SUBSCRIPTION_ID`
 - `AZURE_STATIC_WEB_APPS_API_TOKEN`
+- `PAGERDUTY_AZURE_INTEGRATION_URL` (optional, but required to provision the PagerDuty-backed action group and alert rules)
 
 The following repository variables are required:
 
@@ -74,6 +75,15 @@ The following repository variables are required:
 - `AZURE_RESOURCE_GROUP`
 - `AZURE_FUNCTION_APP_NAME`
 - `FRONTDOOR_CUSTOM_DOMAIN` (set to a real delegated host name such as `cdn.yourdomain.com` to enable the managed-cert custom domain; `.example.com` placeholders keep Front Door on the default hostname only)
+
+When `PAGERDUTY_AZURE_INTEGRATION_URL` is set, the infra deployment provisions one Azure Monitor action group and four Application Insights log alerts from `technical.md` §11:
+
+- 5xx request rate over 1% in 5 minutes
+- Cosmos DB dependency 429 rate over 0.5% in 5 minutes
+- `search.sync.lag_seconds` over 60 seconds
+- Azure AI Search dependency latency p95 over 500 ms in 5 minutes
+
+Use the PagerDuty Microsoft Azure integration URL (or an Event Orchestration integration URL if you route through Event Orchestration). If the secret is omitted, the deployment skips the PagerDuty action group and alert rules entirely so non-production environments can still deploy cleanly.
 
 ## Deployment workflows
 

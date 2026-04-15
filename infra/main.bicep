@@ -11,6 +11,9 @@ param frontDoorCustomDomainHostName string = 'cdn-placeholder.example.com'
 param contentSafetyThreshold int = 4
 param communicationServicesEmailSenderAddress string = ''
 param communicationServicesEndpoint string = ''
+@secure()
+@description('Optional PagerDuty Azure integration URL. When provided, Application Insights alert rules are wired to a PagerDuty-backed action group.')
+param pagerDutyIntegrationUrl string = ''
 
 var supportedStaticWebAppLocations = [
   'centralus'
@@ -41,15 +44,6 @@ module naming './modules/naming.bicep' = {
   }
 }
 
-module observability './modules/observability.bicep' = {
-  name: 'observability'
-  params: {
-    location: location
-    names: naming.outputs.names
-    tags: tags
-  }
-}
-
 module storage './modules/storage.bicep' = {
   name: 'storage'
   params: {
@@ -77,6 +71,18 @@ module search './modules/search.bicep' = {
     cosmosAccountName: cosmos.outputs.accountName
     cosmosDatabaseName: cosmos.outputs.databaseName
     cosmosPostsContainerName: cosmos.outputs.postsContainerName
+  }
+}
+
+module observability './modules/observability.bicep' = {
+  name: 'observability'
+  params: {
+    cosmosAccountName: cosmos.outputs.accountName
+    location: location
+    names: naming.outputs.names
+    pagerDutyIntegrationUrl: pagerDutyIntegrationUrl
+    searchEndpoint: search.outputs.endpoint
+    tags: tags
   }
 }
 

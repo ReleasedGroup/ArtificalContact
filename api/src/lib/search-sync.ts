@@ -1,4 +1,5 @@
 import type { StoredPostDocument } from './posts.js'
+import { trackMetric } from './telemetry.js'
 import { type UserDocument } from './users.js'
 import { normalizeHandleLower } from './users-by-handle-mirror.js'
 
@@ -20,6 +21,7 @@ export const DEFAULT_SEARCH_POSTS_INDEX_NAME = 'posts-v1'
 export const DEFAULT_SEARCH_USERS_INDEX_NAME = 'users-v1'
 
 const nonDeletedPostStates = new Set<string>(['ok'])
+const searchSyncLagMetricName = 'search.sync.lag_seconds'
 
 export interface SearchPostIndexDocument {
   id: string
@@ -214,12 +216,58 @@ function buildSearchUserIndexDocument(
   }
 }
 
+function toUnixMilliseconds(value: string | null): number | null {
+  if (value === null) {
+    return null
+  }
+
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function resolveSearchSyncLagSeconds(
+  timestamps: readonly (string | null)[],
+  now: number,
+): number | null {
+  let maxLagMs = -1
+
+  for (const timestamp of timestamps) {
+    const unixMilliseconds = toUnixMilliseconds(timestamp)
+    if (unixMilliseconds === null) {
+      continue
+    }
+
+    maxLagMs = Math.max(maxLagMs, Math.max(0, now - unixMilliseconds))
+  }
+
+  return maxLagMs >= 0 ? maxLagMs / 1000 : null
+}
+
+function trackSearchSyncLag(
+  entityType: 'post' | 'user',
+  lagSeconds: number | null,
+): void {
+  if (lagSeconds === null) {
+    return
+  }
+
+  trackMetric(searchSyncLagMetricName, lagSeconds, {
+    entityType,
+  })
+}
+
 export async function syncSearchPostsBatch(
   documents: readonly StoredPostDocument[],
   store: SearchSyncStore,
   logger: LoggerLike = nullLogger,
 ): Promise<void> {
   const collapsed = collapseById(documents, logger, 'post')
+  const lagSeconds = resolveSearchSyncLagSeconds(
+    collapsed.map((document) =>
+      toNullableString(document.updatedAt) ?? toNullableString(document.createdAt),
+    ),
+    Date.now(),
+  )
   const postsToDelete: string[] = []
   const postsToUpsert: SearchPostIndexDocument[] = []
 
@@ -241,6 +289,8 @@ export async function syncSearchPostsBatch(
     await store.deletePosts(postsToDelete)
     logger.info('Deleted %d posts from Azure AI Search.', postsToDelete.length)
   }
+
+  trackSearchSyncLag('post', lagSeconds)
 }
 
 export async function syncSearchUsersBatch(
@@ -249,6 +299,10 @@ export async function syncSearchUsersBatch(
   logger: LoggerLike = nullLogger,
 ): Promise<void> {
   const collapsed = collapseById(documents, logger, 'user')
+  const lagSeconds = resolveSearchSyncLagSeconds(
+    collapsed.map((document) => toNullableString(document.updatedAt)),
+    Date.now(),
+  )
   const usersToUpsert: SearchUserIndexDocument[] = []
   const usersToDelete: string[] = []
 
@@ -274,4 +328,6 @@ export async function syncSearchUsersBatch(
     await store.deleteUsers(usersToDelete)
     logger.info('Deleted %d users from Azure AI Search.', usersToDelete.length)
   }
+
+  trackSearchSyncLag('user', lagSeconds)
 }
