@@ -2,6 +2,8 @@ param location string
 param names object
 param tags object = {}
 
+var usersContainerAutoscaleMaxThroughput = 4000
+
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
   name: names.cosmosAccount
   location: location
@@ -51,9 +53,9 @@ resource usersContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/cont
       }
     }
     options: {
-      // Cosmos autoscale is expressed as the max RU/s ceiling for the container.
+      // Cosmos autoscale uses the max RU/s ceiling only, so 4000 yields an effective 400-4000 RU/s range.
       autoscaleSettings: {
-        maxThroughput: 4000
+        maxThroughput: usersContainerAutoscaleMaxThroughput
       }
     }
   }

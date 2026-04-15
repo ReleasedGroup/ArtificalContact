@@ -199,7 +199,7 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 
 | Container | Partition Key | Throughput | Notes |
 |---|---|---|---|
-| `users` | `/id` | Autoscale 1k–4k RU/s | One document per user (account + profile combined) |
+| `users` | `/id` | Autoscale 400–4k RU/s | One document per user (account + profile combined) |
 | `usersByHandle` | `/handle` | Autoscale 400–1k RU/s | Lookup mirror; populated by change feed on `users` |
 | `posts` | `/threadId` | Autoscale 1k–10k RU/s | Root posts have `threadId == id`; replies share the root id |
 | `follows` | `/followerId` | Autoscale 400–4k RU/s | Following list per user |

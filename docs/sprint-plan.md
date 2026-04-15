@@ -33,7 +33,7 @@
 
 **Scope**
 - SWA built-in auth: Microsoft Entra ID + GitHub providers configured via `staticwebapp.config.json`
-- `users` Cosmos container (autoscale 1k–4k RU/s) provisioned via Bicep
+- `users` Cosmos container (autoscale 400–4k RU/s) provisioned via Bicep
 - `usersByHandle` mirror container + change-feed populator
 - API: `GET /api/me` (JIT-provisioning), `PUT /api/me`, `GET /api/users/{handle}`
 - Auth middleware (decodes `x-ms-client-principal`, attaches role context)
