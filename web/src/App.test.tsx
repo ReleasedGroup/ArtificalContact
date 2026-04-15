@@ -144,6 +144,17 @@ describe('App', () => {
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'agents ×' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'evals ×' })).toBeInTheDocument()
+    expect(screen.getByText('Composer preview')).toBeInTheDocument()
+    expect(
+      screen.getByRole('textbox', {
+        name: 'Post body',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('textbox', {
+        name: 'Reply body',
+      }),
+    ).toBeInTheDocument()
   })
 
   it('renders the /me error state when the profile request fails', async () => {
@@ -221,27 +232,27 @@ describe('App', () => {
 
       return createJsonResponse(200, {
         data: {
-            user: {
-              id: 'github:abc123',
-              identityProvider: 'github',
-              identityProviderUserId: 'abc123',
-              email: 'nick@example.com',
-              handle: 'ada',
-              displayName: 'Ada Lovelace',
-              bio: 'Designing resilient evaluation loops.',
-              avatarUrl: null,
-              bannerUrl: null,
-              expertise: ['agents', 'evals'],
-              links: {},
-              status: 'active',
-              roles: ['user'],
-              counters: {
-                posts: 0,
-                followers: 0,
-                following: 0,
-              },
-              createdAt: '2026-04-15T00:00:00.000Z',
-              updatedAt: '2026-04-15T02:00:00.000Z',
+          user: {
+            id: 'github:abc123',
+            identityProvider: 'github',
+            identityProviderUserId: 'abc123',
+            email: 'nick@example.com',
+            handle: 'ada',
+            displayName: 'Ada Lovelace',
+            bio: 'Designing resilient evaluation loops.',
+            avatarUrl: null,
+            bannerUrl: null,
+            expertise: ['agents', 'evals'],
+            links: {},
+            status: 'active',
+            roles: ['user'],
+            counters: {
+              posts: 0,
+              followers: 0,
+              following: 0,
+            },
+            createdAt: '2026-04-15T00:00:00.000Z',
+            updatedAt: '2026-04-15T02:00:00.000Z',
           },
         },
         errors: [],
@@ -292,10 +303,9 @@ describe('App', () => {
     expect(
       await screen.findByText('Profile created. Your public profile is live.'),
     ).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'View public profile' })).toHaveAttribute(
-      'href',
-      '/u/ada',
-    )
+    expect(
+      screen.getByRole('link', { name: 'View public profile' }),
+    ).toHaveAttribute('href', '/u/ada')
   })
 
   it('renders a public profile when the current route matches /u/{handle}', async () => {
@@ -373,10 +383,9 @@ describe('App', () => {
     expect(
       screen.getByText('No public profile exists for the requested handle.'),
     ).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Back to sign-in' })).toHaveAttribute(
-      'href',
-      '/',
-    )
+    expect(
+      screen.getByRole('link', { name: 'Back to sign-in' }),
+    ).toHaveAttribute('href', '/')
   })
 
   it('returns to loading immediately when the handle changes', async () => {

@@ -6,6 +6,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react'
+import { ComposerPreviewPanel } from './components/ComposerPreviewPanel'
 import { WEB_BUILD_SHA } from './build-meta.generated'
 import { signOut } from './lib/auth'
 import { getHealth, type HealthPayload } from './lib/health'
@@ -481,7 +482,9 @@ function ProfileEditorScreen() {
           setProfileState({
             status: 'error',
             message:
-              error instanceof Error ? error.message : 'Unable to reach /api/me.',
+              error instanceof Error
+                ? error.message
+                : 'Unable to reach /api/me.',
           })
         })
       }
@@ -498,11 +501,15 @@ function ProfileEditorScreen() {
     signOut({ queryClient })
   }
 
-  const currentUser = profileState.status === 'ready' ? profileState.data.user : null
-  const normalizedDraftHandle = draft ? normalizeHandleInput(draft.handle) : null
+  const currentUser =
+    profileState.status === 'ready' ? profileState.data.user : null
+  const normalizedDraftHandle = draft
+    ? normalizeHandleInput(draft.handle)
+    : null
   const previewHandle = normalizedDraftHandle ?? currentUser?.handle ?? null
-  const publicProfileHref =
-    currentUser?.handle ? getPublicProfileHref(currentUser.handle) : null
+  const publicProfileHref = currentUser?.handle
+    ? getPublicProfileHref(currentUser.handle)
+    : null
 
   const addExpertiseTag = () => {
     if (draft === null) {
@@ -648,7 +655,11 @@ function ProfileEditorScreen() {
     )
   }
 
-  if (profileState.status === 'loading' || draft === null || currentUser === null) {
+  if (
+    profileState.status === 'loading' ||
+    draft === null ||
+    currentUser === null
+  ) {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center px-6 py-12 sm:px-8 lg:px-12">
         <section className="w-full rounded-[2rem] border border-white/10 bg-slate-950/80 p-8 shadow-2xl shadow-indigo-950/20 backdrop-blur sm:p-12">
@@ -738,9 +749,13 @@ function ProfileEditorScreen() {
             <span className="text-slate-600">.</span>
             <span>Status {currentUser.status}</span>
             <span className="text-slate-600">.</span>
-            <span>Joined {formatJoinedDate(currentUser.createdAt) ?? 'Unknown'}</span>
+            <span>
+              Joined {formatJoinedDate(currentUser.createdAt) ?? 'Unknown'}
+            </span>
             <span className="text-slate-600">.</span>
-            <span>Updated {formatTimestamp(currentUser.updatedAt) ?? 'Unknown'}</span>
+            <span>
+              Updated {formatTimestamp(currentUser.updatedAt) ?? 'Unknown'}
+            </span>
           </div>
 
           <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-400">
@@ -764,7 +779,8 @@ function ProfileEditorScreen() {
             </span>
           </div>
 
-          {(currentUser.status === 'pending' || profileState.data.isNewUser) && (
+          {(currentUser.status === 'pending' ||
+            profileState.data.isNewUser) && (
             <div className="mt-6 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
               Choose a public handle and finish the rest of the public-facing
               profile fields here. Avatar and banner uploads stay in placeholder
@@ -784,9 +800,9 @@ function ProfileEditorScreen() {
                   </p>
                   <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-400">
                     Claim the handle visitors will use at{' '}
-                    <code>/u/{'{handle}'}</code>, then update your display
-                    name, public bio, and expertise tags. The save action
-                    writes to <code>/api/me</code>.
+                    <code>/u/{'{handle}'}</code>, then update your display name,
+                    public bio, and expertise tags. The save action writes to{' '}
+                    <code>/api/me</code>.
                   </p>
                 </div>
                 <button
@@ -980,8 +996,8 @@ function ProfileEditorScreen() {
                   <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/70 p-4">
                     <p className="text-sm font-medium text-white">Banner</p>
                     <p className="mt-2 text-sm leading-7 text-slate-400">
-                      The banner slot is wired as a placeholder panel only.
-                      When media upload arrives, this surface can switch to the
+                      The banner slot is wired as a placeholder panel only. When
+                      media upload arrives, this surface can switch to the
                       shared asset flow without a layout rewrite.
                     </p>
                   </div>
@@ -1031,6 +1047,12 @@ function ProfileEditorScreen() {
               </section>
             </aside>
           </div>
+
+          <ComposerPreviewPanel
+            authorBadge={getEditorInitials(draft.displayName)}
+            authorHandle={previewHandle}
+            authorName={draft.displayName.trim() || 'Display name'}
+          />
         </div>
       </section>
     </main>
