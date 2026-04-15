@@ -9,6 +9,7 @@ import {
 
 export const DEFAULT_FOLLOWING_PAGE_SIZE = 50
 export const MAX_FOLLOWING_PAGE_SIZE = 100
+const FOLLOWEE_PROFILE_LOOKUP_CONCURRENCY = 10
 
 export interface FollowingPage {
   handle: string
@@ -58,6 +59,32 @@ function normalizeFollowingPageLimit(limit: string | undefined): number | null {
   return parsedLimit
 }
 
+async function mapWithConcurrencyLimit<TInput, TOutput>(
+  items: readonly TInput[],
+  concurrencyLimit: number,
+  mapper: (item: TInput) => Promise<TOutput>,
+): Promise<TOutput[]> {
+  if (items.length === 0) {
+    return []
+  }
+
+  const results = new Array<TOutput>(items.length)
+  let nextIndex = 0
+  const workerCount = Math.min(concurrencyLimit, items.length)
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex
+        nextIndex += 1
+        results[currentIndex] = await mapper(items[currentIndex]!)
+      }
+    }),
+  )
+
+  return results
+}
+
 export async function lookupFollowing(
   request: FollowingPageRequest,
   repository: FollowingListRepository,
@@ -104,15 +131,17 @@ export async function lookupFollowing(
     },
   )
 
-  const followeeProfiles = await Promise.all(
-    page.follows.map(async (follow) => {
+  const followeeProfiles = await mapWithConcurrencyLimit(
+    page.follows,
+    FOLLOWEE_PROFILE_LOOKUP_CONCURRENCY,
+    async (follow) => {
       const user = await store.getUserById(follow.followedId)
       if (user === null) {
         return null
       }
 
       return buildPublicUserProfileFromUser(user)
-    }),
+    },
   )
 
   return {

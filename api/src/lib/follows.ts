@@ -135,7 +135,7 @@ function createCosmosFollowRepository(
             SELECT * FROM c
             WHERE c.followerId = @followerId
               AND c.type = @type
-            ORDER BY c.createdAt DESC
+            ORDER BY c.createdAt DESC, c.id DESC
           `,
           parameters: [
             { name: '@followerId', value: followerId },
