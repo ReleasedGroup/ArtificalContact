@@ -48,6 +48,7 @@ npm run test
 - Vitest covers the follow-counter change-feed logic, including inserts, soft deletes, duplicate deliveries, and missing-user safety
 - Vitest covers the `counterFn` reply-counter change-feed logic, including inserts, soft deletes, duplicate deliveries, and missing-parent safety
 - Vitest covers the `feedFanOutFn` worker, including duplicate deliveries, follower cap enforcement, and safe skips for replies, GitHub posts, and deleted posts
+- Vitest covers the Sprint 4 synthetic 10k-follower load scenario, including the capped fan-out RU budget model and the pull-on-read fallback for overflow followers
 - Vitest covers the media post-processing logic, default visual generation, and function dependency wiring, including deterministic `media` upserts, content-safety flagging, derived-blob recursion guards, public media URL rewriting, and image thumbnail variant generation
 - TypeScript compilation validates the Azure Functions source and module graph
 - ESLint checks the Node/TypeScript implementation
