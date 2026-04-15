@@ -5,7 +5,6 @@ import {
   render,
   screen,
   waitFor,
-  within,
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -181,22 +180,6 @@ function createResolvedMeProfile(overrides?: Record<string, unknown>) {
       updatedAt: '2026-04-15T02:00:00.000Z',
       ...overrides,
     },
-  }
-}
-
-function createReactionSummaryEntry(overrides?: Record<string, unknown>) {
-  return {
-    actor: {
-      id: 'user-1',
-      handle: 'grace',
-      displayName: 'Grace Hopper',
-      avatarUrl: 'https://cdn.example.com/grace.png',
-    },
-    sentiment: 'like',
-    emojiValues: [],
-    gifValue: null,
-    reactedAt: '2026-04-15T03:00:00.000Z',
-    ...overrides,
   }
 }
 
@@ -1034,25 +1017,28 @@ describe('App', () => {
     )
   })
 
-  it('opens a paginated reaction summary popover from the post detail route', async () => {
+  it('submits a like from the post detail reaction bar and refreshes the thread', async () => {
     window.history.replaceState({}, '', '/p/post-1')
+    let currentLikes = 12
 
-    mockFetch.mockImplementation(async (input) => {
+    mockFetch.mockImplementation(async (input, init) => {
       if (String(input) === '/api/me') {
-        return createJsonResponse(403, {
-          data: null,
-          errors: [
-            {
-              code: 'auth.forbidden',
-              message: 'The authenticated user context was not available.',
-            },
-          ],
+        return createJsonResponse(200, {
+          data: createResolvedMeProfile(),
+          errors: [],
         })
       }
 
       if (String(input) === '/api/posts/post-1') {
         return createJsonResponse(200, {
-          data: createPublicPost(),
+          data: createPublicPost({
+            counters: {
+              likes: currentLikes,
+              dislikes: 0,
+              emoji: 3,
+              replies: 2,
+            },
+          }),
           errors: [],
         })
       }
@@ -1061,52 +1047,34 @@ describe('App', () => {
         return createJsonResponse(200, {
           data: {
             threadId: 'post-1',
-            posts: [createThreadPost()],
-            continuationToken: null,
-          },
-          errors: [],
-        })
-      }
-
-      if (String(input) === '/api/posts/post-1/reactions?limit=8&type=like') {
-        return createJsonResponse(200, {
-          data: {
-            reactions: [
-              createReactionSummaryEntry(),
-              createReactionSummaryEntry({
-                actor: {
-                  id: 'user-2',
-                  handle: 'ada',
-                  displayName: 'Ada Lovelace',
-                  avatarUrl: 'https://cdn.example.com/ada.png',
+            posts: [
+              createThreadPost({
+                counters: {
+                  likes: currentLikes,
+                  dislikes: 0,
+                  emoji: 3,
+                  replies: 2,
                 },
-                reactedAt: '2026-04-15T02:30:00.000Z',
               }),
             ],
-            continuationToken: 'next-like-page',
+            continuationToken: null,
           },
           errors: [],
         })
       }
 
       if (
-        String(input) ===
-        '/api/posts/post-1/reactions?limit=8&type=like&continuationToken=next-like-page'
+        String(input) === '/api/posts/post-1/reactions' &&
+        init?.method === 'POST'
       ) {
+        currentLikes += 1
         return createJsonResponse(200, {
           data: {
-            reactions: [
-              createReactionSummaryEntry({
-                actor: {
-                  id: 'user-3',
-                  handle: 'linus',
-                  displayName: 'Linus Torvalds',
-                  avatarUrl: 'https://cdn.example.com/linus.png',
-                },
-                reactedAt: '2026-04-15T02:00:00.000Z',
-              }),
-            ],
-            continuationToken: null,
+            reaction: {
+              sentiment: 'like',
+              emojiValues: [],
+              gifValue: null,
+            },
           },
           errors: [],
         })
@@ -1121,38 +1089,36 @@ describe('App', () => {
       await screen.findByRole('heading', { name: 'Standalone post detail' }),
     ).toBeInTheDocument()
 
-    fireEvent.click(screen.getAllByRole('button', { name: '12 likes' })[0])
-
-    const likeDialog = await screen.findByRole('dialog', {
-      name: 'Like reactions',
-    })
-    expect(likeDialog).toBeInTheDocument()
-    const graceLink = (
-      await within(likeDialog).findByText('Grace Hopper')
-    ).closest('a')
-    expect(graceLink).toHaveAttribute('href', '/u/grace')
-    expect(await within(likeDialog).findByText('@ada')).toBeInTheDocument()
+    const likeButton = screen.getByRole('button', { name: 'Like reaction' })
+    expect(likeButton).toHaveTextContent('👍 12')
+    expect(likeButton).toBeEnabled()
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Load more likes' }))
+      fireEvent.click(likeButton)
     })
 
-    const linusLink = (
-      await within(likeDialog).findByText('Linus Torvalds')
-    ).closest('a')
-    expect(linusLink).toHaveAttribute('href', '/u/linus')
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Like reaction' })).toHaveTextContent(
+        '👍 13',
+      )
+    })
     expect(mockFetch).toHaveBeenCalledWith(
-      '/api/posts/post-1/reactions?limit=8&type=like',
+      '/api/posts/post-1/reactions',
       expect.objectContaining({
-        headers: { Accept: 'application/json' },
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ type: 'like' }),
       }),
     )
-    expect(mockFetch).toHaveBeenCalledWith(
-      '/api/posts/post-1/reactions?limit=8&type=like&continuationToken=next-like-page',
-      expect.objectContaining({
-        headers: { Accept: 'application/json' },
-      }),
-    )
+    expect(
+      mockFetch.mock.calls.filter(([request]) => request === '/api/posts/post-1'),
+    ).toHaveLength(2)
+    expect(
+      mockFetch.mock.calls.filter(([request]) => request === '/api/threads/post-1'),
+    ).toHaveLength(2)
   })
 
   it('renders the selected reply inside the threaded conversation', async () => {
