@@ -254,6 +254,10 @@ describe('createReactionHandler', () => {
     const postStore: PostStore = {
       getPostById: vi.fn(async () => createStoredPost()),
     }
+    const now = vi
+      .fn<() => Date>()
+      .mockReturnValueOnce(new Date('2026-04-15T06:00:00.000Z'))
+      .mockReturnValueOnce(new Date('2026-04-15T06:05:00.000Z'))
     const getByPostAndUser = vi
       .fn<ReactionRepository['getByPostAndUser']>()
       .mockResolvedValueOnce(null)
@@ -271,7 +275,7 @@ describe('createReactionHandler', () => {
       }),
     })
     const handler = buildCreateReactionHandler({
-      now: () => new Date('2026-04-15T06:00:00.000Z'),
+      now,
       postStoreFactory: () => postStore,
       reactionRepositoryFactory: () => reactionRepository,
     })
@@ -288,9 +292,10 @@ describe('createReactionHandler', () => {
       createStoredReaction({
         sentiment: 'like',
         emojiValues: ['🔥'],
-        updatedAt: '2026-04-15T06:00:00.000Z',
+        updatedAt: '2026-04-15T06:05:00.000Z',
       }),
     )
+    expect(now).toHaveBeenCalledTimes(2)
     expect(response.status).toBe(200)
   })
 

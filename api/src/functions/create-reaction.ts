@@ -203,10 +203,12 @@ export function buildCreateReactionHandler(
             throw error
           }
 
+          const retryMutationAt = now()
+
           mutation = applyReactionMutation(existingReaction, parsedBody.data, {
             postId,
             userId: authenticatedUser.id,
-            now: firstMutationAt,
+            now: retryMutationAt,
             ...(dependencies.reactionPolicy === undefined
               ? {}
               : { policy: dependencies.reactionPolicy }),

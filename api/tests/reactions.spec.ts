@@ -67,6 +67,20 @@ describe('buildCreateReactionRequestSchema', () => {
       'Like and dislike reactions do not accept a value.',
     )
   })
+
+  it('does not silently drop non-string values during preprocessing', () => {
+    const schema = buildCreateReactionRequestSchema()
+
+    const result = schema.safeParse({
+      type: 'like',
+      value: 0,
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error?.issues[0]?.message).toBe(
+      'Invalid input: expected string, received number',
+    )
+  })
 })
 
 describe('applyReactionMutation', () => {

@@ -59,9 +59,9 @@ export const DEFAULT_REACTION_POLICY: ReactionPolicy = {
   allowGifWithEmoji: true,
 }
 
-function normalizeOptionalString(value: unknown): string | undefined {
+function normalizeOptionalString(value: unknown): unknown {
   if (typeof value !== 'string') {
-    return undefined
+    return value
   }
 
   const trimmed = value.trim()
@@ -321,11 +321,6 @@ export function applyReactionMutation(
   }
 }
 
-type CosmosLikeError = Error & {
-  code?: number | string
-  statusCode?: number
-}
-
 export function getErrorStatusCode(error: unknown): number | undefined {
   if (typeof error !== 'object' || error === null) {
     return undefined
@@ -354,14 +349,5 @@ function isExpectedCosmosStatusCode(
   error: unknown,
   statusCode: number,
 ): boolean {
-  if (!(error instanceof Error)) {
-    return false
-  }
-
-  const cosmosError = error as CosmosLikeError
-  return (
-    cosmosError.statusCode === statusCode ||
-    cosmosError.code === statusCode ||
-    cosmosError.code === String(statusCode)
-  )
+  return getErrorStatusCode(error) === statusCode
 }
