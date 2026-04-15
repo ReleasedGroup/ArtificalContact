@@ -461,6 +461,62 @@ Administrators shall be able to:
 - review moderation actions
 - manage system settings
 - manage configurable limits such as post size, media size, and reaction rules
+- curate the platform-wide list of synced GitHub repositories (see §9.12)
+
+---
+
+## 9.12 GitHub Repository Sync
+The system shall publish posts to the public timeline whenever activity occurs in an admin-curated set of GitHub repositories. This gives the AI practitioner community a single feed view of releases, issues, and pull requests across important upstream projects.
+
+### 9.12.1 Scope and Ownership
+- Repository connections are **platform-wide** and **admin-curated**. Individual users cannot add their own repositories in the first release.
+- Each connected repository is represented by a synthetic identity in the feed (e.g. `@github/openai-cookbook`) so that synced posts are clearly attributable to a repo and not to a human user.
+- Synced posts are public and surfaced through the explore feed, search, and per-repo profile pages, the same way as any other public post.
+
+### 9.12.2 Event Types
+The first release shall sync the following event types:
+- **Issues:** opened, closed, reopened
+- **Pull requests:** opened, merged, closed (without merge)
+- **Releases:** published (drafts and pre-releases per admin policy)
+
+Other event types (comments, reviews, discussions, stars, forks) are explicitly out of scope for the first release.
+
+### 9.12.3 Ingestion
+- Events shall be ingested by **polling the public GitHub REST API** on a fixed schedule (default every 5 minutes per repo).
+- Polling shall use a per-repo high-water-mark cursor so each event is processed exactly once.
+- Polling shall respect GitHub API rate limits and back off appropriately on 403/429 responses.
+- A single shared GitHub App or Personal Access Token authenticates polling, allowing access to the public REST API at a higher rate limit. No per-user OAuth is performed in this release.
+
+### 9.12.4 Display
+GitHub-sourced posts shall be **first-class GitHub posts** with a distinct, labelled card in the feed showing:
+- repository owner and name
+- event type badge (`Issue`, `Pull request`, `Release`)
+- state badge (e.g. `open`, `merged`, `closed`, `pre-release`)
+- issue/PR number or release tag
+- title
+- short excerpt of the body (truncated)
+- author handle and avatar from GitHub
+- created or updated timestamp
+- link out to the canonical URL on github.com
+
+### 9.12.5 Interactions
+Users shall be able to react to, reply to, and quote GitHub posts the same way as any other post. Replies create normal threads; the synthetic repo identity does not respond.
+
+### 9.12.6 Deduplication and Idempotency
+- Each GitHub post shall have a deterministic identifier derived from `(repoId, eventType, eventId)` so that retries and overlapping polls cannot produce duplicates.
+- State changes (e.g. an issue moving from `open` to `closed`) shall update the existing post in place rather than creating a new one, except for releases which are immutable.
+
+### 9.12.7 Moderation and Safety
+- Admins shall be able to remove an individual synced post or unsync an entire repository at any time.
+- Synced post bodies shall pass through the same content safety checks as user posts before being made visible.
+- Repositories that are made private, archived, or deleted upstream shall stop producing new posts; existing posts remain unless removed by an admin.
+
+### 9.12.8 Administration UI
+The admin surface shall allow:
+- adding a repository by `owner/name`
+- choosing which event types to sync per repo
+- pausing or removing a repository
+- viewing per-repo sync health (last successful poll, lag, recent errors)
 
 ---
 
@@ -471,7 +527,7 @@ Likely logical entities include:
 - User
 - UserProfile
 - FollowRelationship
-- Post
+- Post (including GitHub-sourced posts as a typed variant)
 - ThreadIndex
 - FeedEntry
 - Reaction
@@ -480,6 +536,8 @@ Likely logical entities include:
 - Report
 - ModerationAction
 - MediaReference
+- GitHubRepository (admin-curated sync source)
+- GitHubSyncCursor (per-repo, per-event-type high-water-mark)
 
 ## 10.2 Cosmos DB for NoSQL Design Principles
 Because Azure Cosmos DB for NoSQL is the primary data store, the system shall be designed around access patterns and partition strategy rather than strict normalisation.
@@ -675,6 +733,9 @@ The system should support:
 ---
 
 ## 13. UX and UI Requirements
+
+A clickable visual mockup of the proposed UI is maintained at [`mockup/index.html`](mockup/index.html) (see [`mockup/README.md`](mockup/README.md)). It illustrates the home feed, explore/search, thread view, profile, notifications, and moderation queue, and is the canonical reference for layout and visual language until the production React build supersedes it.
+
 The product shall provide:
 - responsive layouts for desktop and mobile browsers
 - a familiar social feed experience
@@ -709,6 +770,7 @@ The first release may require integration with:
 - Azure Blob Storage for media
 - optional GIF provider service for GIF search and insertion
 - optional push notification service
+- the public GitHub REST API for the repository sync feature (§9.12), authenticated via a shared GitHub App or PAT
 
 All integrations shall be abstracted to allow change without rewriting core business logic.
 
@@ -741,6 +803,19 @@ Audio and video uploads introduce:
 
 ### 16.4 Notification Complexity
 Notifications can become noisy or expensive. User preferences and throttling rules should be incorporated from the start.
+
+### 16.5 GitHub Sync Considerations
+The repository sync feature (§9.12) introduces:
+- dependence on a third-party API and its rate limits
+- write amplification proportional to the number of synced repos and their event volume
+- moderation surface for content authored outside the platform
+- a synthetic identity model (`@github/owner-repo`) that must coexist with real user accounts without colliding on handles
+
+Mitigations:
+- shared polling identity with conservative defaults and exponential backoff on 403/429
+- deterministic post ids for idempotent retries
+- admin pause/remove controls and content safety on incoming bodies
+- a reserved `@github/*` handle namespace that cannot be claimed by users
 
 ---
 
@@ -787,6 +862,7 @@ The first release shall be considered functionally acceptable when:
 - a user can manage notification preferences and receive supported notifications
 - moderators can review reports and take moderation actions
 - a user can search for users, posts, and hashtags through the Azure AI Search–backed search experience
+- (post-beta, see Sprint 9 in the sprint plan) admins can connect a GitHub repository and the next polling cycle produces first-class GitHub posts in the public timeline for new issues, pull requests, and releases
 - the solution operates on Azure Static Web Apps, Azure Functions, Azure Cosmos DB for NoSQL, Azure Blob Storage, and Azure AI Search
 
 ---

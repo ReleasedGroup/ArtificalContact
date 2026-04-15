@@ -203,13 +203,45 @@
 | Cost overrun on Cosmos autoscale | Low | Med | Weekly cost reviews from Sprint 2; alerts on RU/s ceiling hits |
 | Media abuse (storage egress) | Low | High | Front Door rate limiting; per-user upload quotas (Sprint 8) |
 | GDPR/account-deletion gaps | Low | High | Legal sign-off before public beta (open question Q5) |
+| GitHub API rate limits during sync (Sprint 9) | Med | Med | Per-repo backoff + circuit breaker; alarm at < 500 remaining; budget capped at ~60 active repos |
+| Moderation surface for content authored on GitHub | Med | Med | Content safety on body excerpts at write; admin pause/remove per repo and per post |
+
+---
+
+---
+
+## Sprint 9 — GitHub Repository Sync *(post-beta)*
+**Goal:** Surface activity from an admin-curated set of GitHub repositories as first-class GitHub posts in the public timeline.
+
+> Implements `requirements.md` §9.12 and `technical.md` §14. Scheduled post-beta so the launch date is unaffected; can be promoted ahead of Sprint 8 if stakeholders prefer it at GA.
+
+**Scope**
+- `githubRepos` Cosmos container with admin CRUD endpoints (`/api/admin/github/repos`)
+- `posts` document shape extended with `kind: "github"` and a `github` subdocument (deterministic id `gh_${repoId}_${eventType}_${eventId}`)
+- Synthetic per-repo users (`sys_github_${repoId}`) with reserved `@github/owner-name` handles, enforced uniqueness in `usersByHandle`
+- `pollGitHubRepoFn` — timer-triggered Function fanning out one execution per active repo, polling issues, pull requests, and releases via the GitHub REST API (`since` cursor + pagination), with content safety on body excerpts
+- Backoff and circuit breaker on 403/429; jittered schedule to avoid alignment with rate-limit reset
+- AI Search `posts-v1` schema additions: `kind`, `githubEventType`, `githubRepo` filterable fields; reindex via the existing pull indexer + change-feed push
+- SPA: first-class GitHub post card (event-type badge, state badge, repo, number/tag, title, excerpt, link out)
+- Public per-repo profile page at `/u/github/{owner}/{name}`
+- Admin screen: list repos, add by `owner/name`, choose event types, pause/resume, view sync health (last poll, lag, recent errors)
+- Operational metrics + alerts: `github.poll.duration_ms`, `github.poll.events_processed`, `github.poll.rate_remaining`, no-successful-poll-in-30-min alert
+
+**Definition of done**
+- An admin can connect a public repo and within one polling interval the next opened issue, opened/merged PR, and published release appear in `/explore` and search results
+- A state change on a tracked issue (open → closed) updates the existing post in place rather than creating a duplicate
+- Removing a repo stops new posts within one polling interval; existing posts remain unless explicitly purged
+- Synthetic `@github/*` handles cannot be claimed by real users
+- Rate-limit budget supports ≥ 50 active repos with the configured 5-minute polling interval, verified via a synthetic load test
+- Users can react and reply to GitHub posts the same as user posts
 
 ---
 
 ## Post-Beta (not in this plan)
-Documented in `requirements.md` §20. Strong candidates for the next planning cycle:
+Documented in `requirements.md` §20. Sprint 9 above is already committed; the following remain candidates for the cycle after that:
 1. Hybrid/vector search via `posts-v2` index with Azure OpenAI embeddings
 2. Multi-region Cosmos DB writes
 3. Verified practitioner badges
 4. Bookmarks and reposts
 5. Topic communities/spaces
+6. Per-user GitHub OAuth so users can sync their own repos (extends Sprint 9)

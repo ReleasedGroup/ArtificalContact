@@ -29,6 +29,7 @@ It does **not** specify UI visual design or detailed copy — those live in `des
 | Search | Azure AI Search (Basic tier initially, Standard at scale) | Full-text and faceted search over posts, users, hashtags |
 | Identity | Microsoft Entra ID + GitHub via SWA built-in auth | Sign-in, role assignment |
 | Email | Azure Communication Services Email | Verification, password reset, notification email |
+| GitHub sync | GitHub REST API (shared App / PAT) | Polled by a timer-triggered Function to publish issue/PR/release activity for admin-curated repos (see §16) |
 | Secrets/config | Azure Key Vault + App Configuration | Connection strings, signing keys, feature flags |
 | Observability | Application Insights + Log Analytics | Logs, metrics, traces, alerts |
 | IaC | Bicep (with `azd` for environment lifecycle) | Repeatable deployments |
@@ -84,6 +85,8 @@ It does **not** specify UI visual design or detailed copy — those live in `des
 ---
 
 ## 4. Frontend (Azure Static Web Apps)
+
+> **Visual reference:** A static HTML/JS mockup of the proposed UI lives at [`mockup/index.html`](mockup/index.html). It is framework-free (Tailwind CDN, no build) and demonstrates the home feed, explore, thread, profile, notifications, moderation, and compose flows. The production React build mirrors its layout and visual language. See [`mockup/README.md`](mockup/README.md) for the spec→mockup mapping.
 
 ### 4.1 Stack
 - **Framework:** React 18 + TypeScript + Vite
@@ -152,6 +155,11 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 | `modQueue` | GET `/api/mod/queue` | Moderator role only |
 | `modAction` | POST `/api/mod/actions` | Moderator role only |
 | `adminMetrics` | GET `/api/admin/metrics` | Administrator role only |
+| `listSyncedRepos` | GET `/api/admin/github/repos` | Administrator only — lists curated GitHub repositories with sync health |
+| `addSyncedRepo` | POST `/api/admin/github/repos` | Administrator only — `{ owner, name, eventTypes[] }` |
+| `updateSyncedRepo` | PATCH `/api/admin/github/repos/{id}` | Administrator only — pause/resume, change event types |
+| `removeSyncedRepo` | DELETE `/api/admin/github/repos/{id}` | Administrator only — stops polling; existing posts retained unless explicitly purged |
+| `getSyncedRepoProfile` | GET `/api/users/github/{owner}/{name}` | Public — returns the synthetic repo profile and its synced posts |
 
 #### Cosmos DB change-feed-triggered
 | Function | Source container | Purpose |
@@ -165,6 +173,11 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 | Function | Source container | Purpose |
 |---|---|---|
 | `mediaPostProcessFn` | `images`, `video`, `audio`, `gif` | Generate thumbnails, run content safety, write `media` document |
+
+#### Timer-triggered
+| Function | Schedule | Purpose |
+|---|---|---|
+| `pollGitHubRepoFn` | every 5 min (per active repo, fanned out via durable orchestration or queue) | Polls the GitHub REST API for new/changed issues, pull requests, and releases; writes new or updated `github` posts; updates the per-repo high-water-mark cursor (see §16) |
 
 ### 5.3 Cross-cutting Concerns
 - **Validation:** Zod schemas at the function boundary, shared with the SPA where possible.
@@ -199,6 +212,7 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 | `reports` | `/status` | 400 RU/s shared | Status values: `open`, `triaged`, `resolved` |
 | `modActions` | `/targetType` | 400 RU/s shared | Audit trail |
 | `rateLimits` | `/userId` | 400 RU/s shared | TTL-driven token buckets |
+| `githubRepos` | `/id` | 400 RU/s shared | One document per curated repo: owner, name, event-type flags, status, cursors, last-poll timestamps, recent error log |
 
 ### 6.3 Document Shapes (illustrative)
 
@@ -231,6 +245,7 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 {
   "id": "p_01HXYZ...",
   "type": "post",                   // post | reply
+  "kind": "user",                   // user | github
   "threadId": "p_01HXYZ...",        // == id for root, else root post id
   "parentId": null,                  // reply target
   "authorId": "u_01HXYZ...",
@@ -249,6 +264,45 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
   "createdAt": "...",
   "updatedAt": "...",
   "deletedAt": null
+}
+```
+
+A GitHub-sourced post uses the same container but sets `kind: "github"` and adds a `github` subdocument. Its `id` is deterministic so re-polling is idempotent:
+
+```jsonc
+{
+  "id": "gh_${repoId}_issue_${issueId}",   // or _pr_ / _release_
+  "type": "post",
+  "kind": "github",
+  "threadId": "gh_${repoId}_issue_${issueId}",
+  "parentId": null,
+  "authorId": "sys_github_${repoId}",       // synthetic user
+  "authorHandle": "github/openai-cookbook", // reserved namespace
+  "authorDisplayName": "openai/openai-cookbook",
+  "authorAvatarUrl": "https://avatars.githubusercontent.com/u/14957082?v=4",
+  "text": "Add streaming example for tool use",
+  "github": {
+    "repoId": "r_01HXYZ...",
+    "owner": "openai",
+    "name": "openai-cookbook",
+    "eventType": "issue",                   // issue | pull_request | release
+    "eventId": "2293847562",                // GitHub's numeric id
+    "number": 1284,                          // for issues/PRs
+    "tag": null,                             // for releases (e.g. "v1.4.0")
+    "state": "open",                         // open | closed | merged | published | pre-release
+    "actorLogin": "ada-lovelace",            // GitHub user who triggered the event
+    "actorAvatarUrl": "https://avatars.githubusercontent.com/...",
+    "url": "https://github.com/openai/openai-cookbook/issues/1284",
+    "bodyExcerpt": "When passing a tool definition that requires...",
+    "labels": ["enhancement", "good first issue"],
+    "githubCreatedAt": "2026-04-15T08:42:00Z",
+    "githubUpdatedAt": "2026-04-15T09:01:00Z"
+  },
+  "counters": { "likes": 0, "dislikes": 0, "emoji": 0, "replies": 0 },
+  "visibility": "public",
+  "moderationState": "ok",
+  "createdAt": "2026-04-15T09:02:14Z",
+  "updatedAt": "2026-04-15T09:02:14Z"
 }
 ```
 
@@ -339,6 +393,9 @@ Fields:
 - `visibility` (filterable)
 - `moderationState` (filterable)
 - `likeCount`, `replyCount` (filterable, sortable)
+- `kind` (filterable, facetable — `user` | `github`)
+- `githubEventType` (filterable, facetable — `issue` | `pull_request` | `release`, only set when `kind = github`)
+- `githubRepo` (filterable, searchable — `owner/name`, only set when `kind = github`)
 
 Scoring profile: `recencyAndEngagement` boosting recent `createdAt` and engagement counters.
 
@@ -453,7 +510,77 @@ These are starting figures; production tuning happens during the first month aft
 
 ---
 
-## 14. Open Technical Questions
+## 14. GitHub Repository Sync
+
+Implements the requirement defined in `requirements.md` §9.12.
+
+### 14.1 Goals
+- Surface issues, pull requests, and releases from an admin-curated set of public GitHub repositories as **first-class GitHub posts** in the platform feed.
+- Be idempotent under retries and overlapping polls.
+- Stay well within GitHub's public REST API rate limits.
+- Keep the data model uniform — synced posts live in the same `posts` container as user posts and flow through the same change feed pipeline (search sync, counters, fan-out for user replies on them).
+
+### 14.2 Components
+| Component | Role |
+|---|---|
+| `githubRepos` Cosmos container | Source of truth for which repos are synced and their per-event-type cursors |
+| `pollGitHubRepoFn` (Functions, timer trigger) | The poller. Runs on a schedule and fans out one execution per active repo |
+| `posts` container (`kind: github`) | Where synced posts land. Re-uses the existing change feed (search sync, counters, replies) |
+| Synthetic users (`sys_github_${repoId}`) | One per synced repo, in the `users` container with `roles: ["github"]`, displayed as `@github/owner-name`. Cannot sign in |
+| Admin endpoints (`/api/admin/github/...`) | CRUD over `githubRepos` |
+| Front Door + Functions outbound | Calls `https://api.github.com` with the shared GitHub App / PAT credential from Key Vault |
+
+### 14.3 Polling Algorithm
+For each active repo, on each tick (default every 5 minutes, randomised with ±60 s jitter to avoid alignment with the GitHub rate-limit reset):
+
+1. Read the `githubRepos` document for the repo.
+2. For each enabled event type (`issue`, `pull_request`, `release`):
+   - Call the appropriate REST endpoint with `since` set to the cursor's `lastSeenUpdatedAt` and `sort=updated&direction=asc&per_page=100`.
+   - Paginate while there are more pages and the rate-limit budget allows.
+   - For each event:
+     - Compute the deterministic post id `gh_${repoId}_${eventType}_${eventId}`.
+     - Compute the new document (full payload mapped from the GitHub response).
+     - **Upsert** into `posts` with an `If-Match` based on the prior `_etag` if known, otherwise a plain upsert. Releases are write-once; issues and PRs may update in place when state changes (`open` → `closed`, etc.).
+     - On insert, run the body excerpt through Azure AI Content Safety; on rejection set `moderationState: "hidden"`.
+3. Update the cursor's `lastSeenUpdatedAt` to the most recent processed `updated_at`.
+4. If GitHub returns 403 or 429, record the `Retry-After` and back off; do not advance the cursor.
+5. Write a brief health record (last poll timestamp, items processed, errors) onto the `githubRepos` document.
+
+The change feed handles everything else automatically:
+- `searchSyncFn` upserts the post into `posts-v1` with `kind=github`, `githubEventType`, and `githubRepo` populated.
+- `counterFn` keeps reaction and reply counts in sync as users interact.
+- `feedFanOutFn` is **not** invoked for synthetic GitHub users (they have no followers in the real sense). GitHub posts surface via the public explore feed and per-repo profile page rather than through follower fan-out.
+
+### 14.4 Identity Reservation
+- Handles starting with `github/` are reserved at the API layer. The `usersByHandle` mirror enforces uniqueness so a real user cannot claim them.
+- The synthetic repo profile page is served by `getSyncedRepoProfile` and renders posts filtered by `authorId = sys_github_${repoId}`.
+
+### 14.5 Rate Limit Budget
+- Public REST API allowance with a GitHub App: 5,000 requests/hour per installation.
+- Worst case at 5-minute polling, three event types per repo, two pages each: ~72 requests/hour/repo. This budgets ~60 active repos comfortably; alarms trigger at 50.
+- A circuit breaker pauses polling on the offending repo for one hour after sustained 403/429.
+
+### 14.6 Failure Modes
+| Failure | Behaviour |
+|---|---|
+| GitHub returns 5xx | Retry with exponential backoff; do not advance cursor |
+| Rate limited | Honour `Retry-After`; pause this repo only |
+| Repo made private/deleted | 404 on next poll; mark repo `status: "unreachable"`; existing posts retained, no new posts |
+| Content safety blocks a body | Post is created with `moderationState: "hidden"`; visible only to admins for review |
+| Two pollers race the same repo | Deterministic ids + upsert make this safe; the loser's writes are no-ops |
+| Cursor lost or corrupted | Backfill from `since = now - 24h` and let the deterministic ids dedupe |
+
+### 14.7 Operational Metrics
+- `github.poll.duration_ms` per repo
+- `github.poll.events_processed` per repo
+- `github.poll.rate_remaining` (gauge, from response headers)
+- `github.poll.errors` per repo per error class
+- Alert: any repo with no successful poll in > 30 minutes
+- Alert: rate remaining < 500 across the installation
+
+---
+
+## 15. Open Technical Questions
 1. **Vector search:** when do we add embeddings to `posts-v2`? Probably after launch + 4 weeks of data.
 2. **Multi-region writes:** likely deferred until > 50k DAU.
 3. **Notification channels:** confirm Web Push vs Notification Hubs by end of Sprint 3.
@@ -462,7 +589,7 @@ These are starting figures; production tuning happens during the first month aft
 
 ---
 
-## 15. References (Microsoft Docs)
+## 16. References (Microsoft Docs)
 - [Azure Static Web Apps overview](https://learn.microsoft.com/en-us/azure/static-web-apps/overview)
 - [Azure Functions overview](https://learn.microsoft.com/en-us/azure/azure-functions/functions-overview)
 - [Flex Consumption plan](https://learn.microsoft.com/en-us/azure/azure-functions/flex-consumption-plan)
@@ -473,3 +600,8 @@ These are starting figures; production tuning happens during the first month aft
 - [User delegation SAS](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blob-user-delegation-sas-create-dotnet)
 - [Azure AI Search overview](https://learn.microsoft.com/en-us/azure/search/search-what-is-azure-search)
 - [Index Cosmos DB data with Azure AI Search](https://learn.microsoft.com/en-us/azure/search/search-howto-index-cosmosdb)
+- [Azure Functions timer trigger](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bind-timer-trigger)
+- [GitHub REST API — issues](https://docs.github.com/en/rest/issues/issues)
+- [GitHub REST API — pulls](https://docs.github.com/en/rest/pulls/pulls)
+- [GitHub REST API — releases](https://docs.github.com/en/rest/releases/releases)
+- [GitHub REST API rate limiting](https://docs.github.com/en/rest/overview/resources-in-the-rest-api#rate-limiting)

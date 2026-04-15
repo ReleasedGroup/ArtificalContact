@@ -1,0 +1,945 @@
+<!doctype html>
+<html lang="en" class="h-full bg-gray-950 scheme-dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ArtificialContact — UI Mockup</title>
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['InterVariable', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            },
+            colors: {
+              brand: {
+                50:  '#eef4ff',
+                100: '#d9e6ff',
+                200: '#bcd1ff',
+                300: '#8fb1ff',
+                400: '#5b86ff',
+                500: '#3a63ff',
+                600: '#2945ee',
+                700: '#2236c6',
+                800: '#1f309d',
+                900: '#1d2e7c',
+              },
+            },
+            boxShadow: {
+              glow: '0 0 0 1px rgba(58, 99, 255, 0.35), 0 8px 30px -10px rgba(58, 99, 255, 0.45)',
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      html, body { font-family: 'InterVariable', Inter, ui-sans-serif, system-ui, sans-serif; }
+      .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+      .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 999px; }
+      .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+      .view { display: none; }
+      .view.active { display: block; }
+      .grain {
+        background-image: radial-gradient(circle at 20% 10%, rgba(58,99,255,0.18), transparent 40%),
+                          radial-gradient(circle at 80% 0%, rgba(150,80,255,0.15), transparent 50%);
+      }
+      .ring-soft { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06); }
+      .nav-item.active { background: rgba(58,99,255,0.12); color: #d9e6ff; box-shadow: inset 0 0 0 1px rgba(58,99,255,0.35); }
+      .nav-item.active svg { color: #8fb1ff; }
+      .pill { display:inline-flex; align-items:center; gap:.25rem; padding:.125rem .5rem; border-radius:9999px; font-size:.75rem; font-weight:500; }
+      .gradient-border { position: relative; }
+      .gradient-border::before {
+        content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px;
+        background: linear-gradient(135deg, rgba(58,99,255,.6), rgba(150,80,255,.4), transparent 60%);
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor; mask-composite: exclude; pointer-events:none;
+      }
+    </style>
+  </head>
+  <body class="h-full bg-gray-950 text-gray-100 antialiased">
+    <!-- ===================== SHELL ===================== -->
+    <div class="flex h-full">
+      <!-- Mobile sidebar backdrop -->
+      <div id="sidebarBackdrop" class="fixed inset-0 z-40 hidden bg-gray-950/80 backdrop-blur-sm lg:hidden"></div>
+
+      <!-- Sidebar (drawer on mobile, fixed column on lg+) -->
+      <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 flex w-72 -translate-x-full flex-col border-r border-white/5 bg-gray-950/95 backdrop-blur transition-transform duration-200 ease-out lg:static lg:z-auto lg:w-72 lg:translate-x-0 lg:bg-gray-950/80">
+        <div class="flex h-16 shrink-0 items-center gap-2 px-6">
+          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-fuchsia-600 shadow-glow">
+            <svg viewBox="0 0 24 24" class="h-5 w-5 text-white" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L3 7l9 5 9-5-9-5z" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M3 12l9 5 9-5M3 17l9 5 9-5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="truncate text-sm font-semibold tracking-tight text-white">ArtificialContact</div>
+            <div class="text-[11px] uppercase tracking-wider text-gray-500">for AI practitioners</div>
+          </div>
+          <button id="sidebarClose" class="ml-auto rounded-md p-1.5 text-gray-400 hover:bg-white/5 lg:hidden" aria-label="Close menu">
+            <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 6 6 18M6 6l12 12" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <nav class="flex flex-1 flex-col gap-y-6 px-4 py-4">
+          <ul class="space-y-1">
+            <li><a href="#" data-view="home" class="nav-item active group flex items-center gap-x-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/5">
+              <svg viewBox="0 0 24 24" class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11l9-8 9 8M5 10v10h14V10" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Home feed
+            </a></li>
+            <li><a href="#" data-view="explore" class="nav-item group flex items-center gap-x-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/5">
+              <svg viewBox="0 0 24 24" class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3" stroke-linecap="round"/></svg>
+              Explore
+            </a></li>
+            <li><a href="#" data-view="thread" class="nav-item group flex items-center gap-x-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/5">
+              <svg viewBox="0 0 24 24" class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Threads
+            </a></li>
+            <li><a href="#" data-view="notifications" class="nav-item group flex items-center gap-x-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/5">
+              <svg viewBox="0 0 24 24" class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Notifications
+              <span class="ml-auto rounded-full bg-brand-500/20 px-2 py-0.5 text-[11px] font-semibold text-brand-300 ring-1 ring-brand-500/40">4</span>
+            </a></li>
+            <li><a href="#" data-view="profile" class="nav-item group flex items-center gap-x-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/5">
+              <svg viewBox="0 0 24 24" class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              Profile
+            </a></li>
+            <li><a href="#" data-view="moderation" class="nav-item group flex items-center gap-x-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/5">
+              <svg viewBox="0 0 24 24" class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Moderation
+              <span class="ml-auto rounded-md bg-amber-400/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-300 ring-1 ring-amber-400/30">Mod</span>
+            </a></li>
+          </ul>
+
+          <div>
+            <div class="px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500">Trending hashtags</div>
+            <ul class="mt-2 space-y-1 px-1 text-sm">
+              <li class="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-white/5"><span class="text-gray-300">#evals</span><span class="text-xs text-gray-500">2.1k</span></li>
+              <li class="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-white/5"><span class="text-gray-300">#rag</span><span class="text-xs text-gray-500">1.8k</span></li>
+              <li class="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-white/5"><span class="text-gray-300">#agents</span><span class="text-xs text-gray-500">1.3k</span></li>
+              <li class="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-white/5"><span class="text-gray-300">#claude46</span><span class="text-xs text-gray-500">980</span></li>
+              <li class="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-white/5"><span class="text-gray-300">#azureai</span><span class="text-xs text-gray-500">744</span></li>
+            </ul>
+          </div>
+
+          <div class="mt-auto rounded-xl bg-white/5 p-3 ring-soft">
+            <div class="flex items-center gap-3">
+              <div class="h-9 w-9 rounded-full bg-gradient-to-br from-fuchsia-500 to-brand-500 flex items-center justify-center text-sm font-semibold">AL</div>
+              <div class="min-w-0">
+                <div class="truncate text-sm font-semibold text-white">Ada Lovelace</div>
+                <div class="truncate text-xs text-gray-400">@ada · evals + rag</div>
+              </div>
+              <button class="ml-auto rounded-md p-1.5 text-gray-400 hover:bg-white/10 hover:text-white" title="Sign out">
+                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 17l5-5-5-5M21 12H9M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+          </div>
+        </nav>
+      </aside>
+
+      <!-- Main column -->
+      <div class="flex flex-1 flex-col overflow-hidden">
+        <!-- Top bar -->
+        <header class="sticky top-0 z-10 flex h-16 items-center gap-x-2 border-b border-white/5 bg-gray-950/80 px-3 backdrop-blur sm:gap-x-4 sm:px-6">
+          <button id="sidebarOpen" class="lg:hidden rounded-md p-2 text-gray-400 hover:bg-white/5" aria-label="Open menu">
+            <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h16" stroke-linecap="round"/></svg>
+          </button>
+          <a href="#" class="flex items-center gap-2 lg:hidden" aria-label="ArtificialContact">
+            <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-fuchsia-600 shadow-glow">
+              <svg viewBox="0 0 24 24" class="h-4 w-4 text-white" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L3 7l9 5 9-5-9-5z" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M3 12l9 5 9-5M3 17l9 5 9-5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          </a>
+          <div class="flex min-w-0 flex-1 items-center">
+            <div class="relative w-full max-w-xl">
+              <svg viewBox="0 0 24 24" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3" stroke-linecap="round"/></svg>
+              <input id="searchBox" type="text" placeholder="Search…" class="w-full rounded-lg border-0 bg-white/5 py-2 pl-10 pr-3 text-sm text-gray-100 placeholder:text-gray-500 ring-soft focus:bg-white/10 focus:outline-none focus:ring-2 focus:ring-brand-500 sm:placeholder:text-gray-500" />
+            </div>
+          </div>
+          <div class="flex shrink-0 items-center gap-2">
+            <button class="hidden md:inline-flex items-center gap-2 rounded-lg bg-white/5 px-3 py-1.5 text-sm font-medium text-gray-300 ring-soft hover:bg-white/10">
+              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+              New thread
+            </button>
+            <button id="composeBtn" class="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-2.5 py-1.5 text-sm font-semibold text-white shadow-glow hover:bg-brand-400 sm:px-3">
+              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4L16.5 3.5z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="hidden sm:inline">Compose</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- Content + right rail -->
+        <div class="flex flex-1 overflow-hidden">
+          <main class="flex-1 overflow-y-auto scrollbar-thin">
+            <!-- ============ HOME FEED ============ -->
+            <section data-view-id="home" class="view active">
+              <div class="mx-auto max-w-3xl px-4 py-6 sm:px-6">
+                <!-- Composer -->
+                <div class="gradient-border rounded-2xl bg-gray-900/60 p-4 ring-soft">
+                  <div class="flex gap-3">
+                    <div class="h-10 w-10 shrink-0 rounded-full bg-gradient-to-br from-fuchsia-500 to-brand-500 flex items-center justify-center text-sm font-semibold">AL</div>
+                    <div class="flex-1">
+                      <textarea rows="2" placeholder="Share an experiment, prompt, eval result, or hot take…" class="w-full resize-none rounded-lg border-0 bg-transparent text-[15px] placeholder:text-gray-500 focus:outline-none focus:ring-0"></textarea>
+                      <div class="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-white/5 pt-2">
+                        <div class="flex items-center gap-1 text-gray-400">
+                          <button class="rounded-md p-1.5 hover:bg-white/5 hover:text-brand-300" title="Image">
+                            <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
+                          </button>
+                          <button class="rounded-md p-1.5 hover:bg-white/5 hover:text-brand-300" title="Video">
+                            <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.6"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                          </button>
+                          <button class="rounded-md p-1.5 hover:bg-white/5 hover:text-brand-300" title="Audio">
+                            <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" stroke-linecap="round"/></svg>
+                          </button>
+                          <button class="rounded-md p-1.5 hover:bg-white/5 hover:text-brand-300" title="GIF">
+                            <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9v6M11 9h3m-3 3h2m-2 3v-6M16 9v6"/></svg>
+                          </button>
+                          <span class="ml-2 hidden text-xs text-gray-500 sm:inline">#hashtag · @mention</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                          <span class="text-xs text-gray-500">240 / 280</span>
+                          <button class="rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white shadow-glow hover:bg-brand-400">Post</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Filter tabs -->
+                <div class="mt-6 flex items-center gap-1 border-b border-white/5 text-sm">
+                  <button class="border-b-2 border-brand-500 px-3 py-2 font-semibold text-white">For you</button>
+                  <button class="border-b-2 border-transparent px-3 py-2 text-gray-400 hover:text-gray-200">Following</button>
+                  <button class="border-b-2 border-transparent px-3 py-2 text-gray-400 hover:text-gray-200">Latest</button>
+                  <button class="border-b-2 border-transparent px-3 py-2 text-gray-400 hover:text-gray-200">Media</button>
+                </div>
+
+                <!-- Feed list -->
+                <div id="feedList" class="mt-2 divide-y divide-white/5"></div>
+
+                <div class="mt-6 flex items-center justify-center pb-12">
+                  <button class="rounded-lg bg-white/5 px-4 py-2 text-sm text-gray-300 ring-soft hover:bg-white/10">Load more</button>
+                </div>
+              </div>
+            </section>
+
+            <!-- ============ EXPLORE ============ -->
+            <section data-view-id="explore" class="view">
+              <div class="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+                <div class="flex items-end justify-between">
+                  <div>
+                    <h1 class="text-2xl font-semibold tracking-tight text-white">Explore</h1>
+                    <p class="text-sm text-gray-400">Search powered by Azure AI Search · semantic ranker enabled</p>
+                  </div>
+                  <div class="hidden sm:flex items-center gap-2 text-sm">
+                    <span class="text-gray-500">Sort by</span>
+                    <select class="rounded-md border-0 bg-white/5 py-1.5 pl-3 pr-8 text-sm text-gray-200 ring-soft focus:ring-2 focus:ring-brand-500">
+                      <option>Relevance</option><option>Recency</option><option>Engagement</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Tab strip -->
+                <div class="mt-4 flex flex-wrap items-center gap-2 text-sm">
+                  <button class="rounded-full bg-brand-500/15 px-3 py-1 font-semibold text-brand-300 ring-1 ring-brand-500/40">All</button>
+                  <button class="rounded-full px-3 py-1 text-gray-400 hover:bg-white/5">Posts</button>
+                  <button class="rounded-full px-3 py-1 text-gray-400 hover:bg-white/5">People</button>
+                  <button class="rounded-full px-3 py-1 text-gray-400 hover:bg-white/5">Hashtags</button>
+                  <button class="rounded-full px-3 py-1 text-gray-400 hover:bg-white/5 inline-flex items-center gap-1">
+                    <svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="currentColor"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+                    GitHub
+                  </button>
+                </div>
+
+                <!-- Facet bar -->
+                <div class="mt-4 flex flex-wrap gap-2 text-xs">
+                  <span class="pill bg-white/5 text-gray-300 ring-1 ring-white/10">Last 7 days</span>
+                  <span class="pill bg-white/5 text-gray-300 ring-1 ring-white/10">has:image</span>
+                  <span class="pill bg-white/5 text-gray-300 ring-1 ring-white/10">#evals</span>
+                  <button class="pill bg-brand-500/10 text-brand-300 ring-1 ring-brand-500/40">+ Add filter</button>
+                </div>
+
+                <!-- People row -->
+                <h2 class="mt-8 text-xs font-semibold uppercase tracking-wider text-gray-500">People</h2>
+                <div id="peopleRow" class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+
+                <!-- Hashtag grid -->
+                <h2 class="mt-8 text-xs font-semibold uppercase tracking-wider text-gray-500">Trending hashtags</h2>
+                <div id="hashtagGrid" class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"></div>
+
+                <!-- Posts -->
+                <h2 class="mt-8 text-xs font-semibold uppercase tracking-wider text-gray-500">Top posts</h2>
+                <div id="explorePosts" class="mt-3 divide-y divide-white/5 rounded-2xl bg-gray-900/40 ring-soft"></div>
+              </div>
+            </section>
+
+            <!-- ============ THREAD DETAIL ============ -->
+            <section data-view-id="thread" class="view">
+              <div class="mx-auto max-w-3xl px-4 py-6 sm:px-6">
+                <button class="mb-4 inline-flex items-center gap-2 text-sm text-gray-400 hover:text-gray-200" data-view="home">
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M19 12H5M12 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  Back to feed
+                </button>
+
+                <article class="rounded-2xl bg-gray-900/60 p-5 ring-soft">
+                  <div class="flex items-start gap-3">
+                    <div class="h-11 w-11 rounded-full bg-gradient-to-br from-fuchsia-500 to-brand-500 flex items-center justify-center text-sm font-semibold">YS</div>
+                    <div class="flex-1">
+                      <div class="flex items-center gap-2 text-sm">
+                        <span class="font-semibold text-white">Yann Sutskever</span>
+                        <span class="pill bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-400/30">verified</span>
+                        <span class="text-gray-500">@yann · 2h</span>
+                      </div>
+                      <p class="mt-2 text-[15px] leading-relaxed text-gray-100">
+                        We've been quietly running an eval harness against five frontier models on a private long-context retrieval suite for six weeks.
+                        Some thoughts on what surprised us about <span class="text-brand-300">#claude46</span> and <span class="text-brand-300">#evals</span> in long-context regimes 🧵
+                      </p>
+                      <div class="mt-3 grid grid-cols-2 gap-2">
+                        <div class="aspect-video rounded-xl bg-gradient-to-br from-brand-700 via-fuchsia-700 to-rose-600 ring-soft"></div>
+                        <div class="aspect-video rounded-xl bg-gradient-to-br from-emerald-700 via-cyan-600 to-brand-600 ring-soft"></div>
+                      </div>
+                      <div class="mt-4 flex items-center gap-6 text-sm text-gray-400">
+                        <button class="flex items-center gap-2 hover:text-rose-300"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z" stroke-linecap="round" stroke-linejoin="round"/></svg> 1.4k</button>
+                        <button class="flex items-center gap-2 hover:text-sky-300"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 0 1 4 11.5 8.5 8.5 0 0 1 8.7 3.9 8.4 8.4 0 0 1 12.5 3h.5a8.5 8.5 0 0 1 8 8v.5z" stroke-linecap="round" stroke-linejoin="round"/></svg> 312</button>
+                        <button class="flex items-center gap-2 hover:text-emerald-300"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m17 1 4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3" stroke-linecap="round" stroke-linejoin="round"/></svg> 88</button>
+                        <button class="flex items-center gap-2 hover:text-amber-300"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                        <span class="ml-auto text-xs">2:14 PM · Apr 15, 2026</span>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <!-- Reply composer -->
+                <div class="mt-4 rounded-2xl bg-gray-900/40 p-3 ring-soft">
+                  <div class="flex gap-3">
+                    <div class="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-fuchsia-500 to-brand-500 flex items-center justify-center text-xs font-semibold">AL</div>
+                    <input class="flex-1 rounded-lg border-0 bg-transparent text-sm placeholder:text-gray-500 focus:outline-none focus:ring-0" placeholder="Reply to @yann…" />
+                    <button class="rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-400">Reply</button>
+                  </div>
+                </div>
+
+                <!-- Replies -->
+                <div id="threadReplies" class="mt-2 space-y-2"></div>
+              </div>
+            </section>
+
+            <!-- ============ NOTIFICATIONS ============ -->
+            <section data-view-id="notifications" class="view">
+              <div class="mx-auto max-w-3xl px-4 py-6 sm:px-6">
+                <h1 class="text-2xl font-semibold tracking-tight text-white">Notifications</h1>
+                <p class="text-sm text-gray-400">In-app delivery via the Cosmos DB change feed worker.</p>
+
+                <div class="mt-4 flex items-center gap-2 border-b border-white/5 text-sm">
+                  <button class="border-b-2 border-brand-500 px-3 py-2 font-semibold text-white">All</button>
+                  <button class="border-b-2 border-transparent px-3 py-2 text-gray-400 hover:text-gray-200">Mentions</button>
+                  <button class="border-b-2 border-transparent px-3 py-2 text-gray-400 hover:text-gray-200">Replies</button>
+                  <button class="border-b-2 border-transparent px-3 py-2 text-gray-400 hover:text-gray-200">Reactions</button>
+                  <button class="border-b-2 border-transparent px-3 py-2 text-gray-400 hover:text-gray-200">Follows</button>
+                </div>
+
+                <ul id="notifList" class="mt-2 divide-y divide-white/5"></ul>
+              </div>
+            </section>
+
+            <!-- ============ PROFILE ============ -->
+            <section data-view-id="profile" class="view">
+              <div class="mx-auto max-w-4xl">
+                <div class="relative h-44 w-full overflow-hidden bg-gradient-to-br from-brand-700 via-fuchsia-700 to-rose-600">
+                  <div class="absolute inset-0 grain"></div>
+                </div>
+                <div class="px-4 sm:px-6">
+                  <div class="-mt-16 flex flex-wrap items-end justify-between gap-3 sm:flex-nowrap">
+                    <div class="h-24 w-24 rounded-2xl bg-gradient-to-br from-fuchsia-500 to-brand-500 ring-4 ring-gray-950 flex items-center justify-center text-2xl font-bold shadow-glow sm:h-28 sm:w-28 sm:text-3xl">AL</div>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <button class="rounded-lg bg-white/5 px-3 py-1.5 text-sm font-medium text-gray-200 ring-soft hover:bg-white/10">Edit profile</button>
+                      <button class="rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white shadow-glow hover:bg-brand-400">Share</button>
+                    </div>
+                  </div>
+                  <div class="mt-5">
+                    <h1 class="text-2xl font-bold tracking-tight text-white">Ada Lovelace</h1>
+                    <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-400">
+                      <span>@ada</span>
+                      <span class="text-gray-600">·</span>
+                      <span>she/her</span>
+                      <span class="text-gray-600">·</span>
+                      <span class="inline-flex items-center gap-1">
+                        <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="10" r="3"/></svg>
+                        Sydney
+                      </span>
+                      <span class="text-gray-600">·</span>
+                      <span class="inline-flex items-center gap-1">
+                        <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/></svg>
+                        Joined Mar 2025
+                      </span>
+                    </div>
+                  </div>
+                  <p class="mt-4 max-w-2xl text-sm leading-relaxed text-gray-300">Symbolic AI nerd. Building eval harnesses for retrieval-augmented agents. Previously: research at <span class="text-brand-300">@dlsg</span>. Maintaining <span class="text-brand-300">#evals</span> and <span class="text-brand-300">#rag</span> office hours every Friday.</p>
+
+                  <div class="mt-4 flex flex-wrap gap-2">
+                    <span class="pill bg-white/5 text-gray-300 ring-1 ring-white/10">evals</span>
+                    <span class="pill bg-white/5 text-gray-300 ring-1 ring-white/10">rag</span>
+                    <span class="pill bg-white/5 text-gray-300 ring-1 ring-white/10">azure-ai</span>
+                    <span class="pill bg-white/5 text-gray-300 ring-1 ring-white/10">long-context</span>
+                  </div>
+
+                  <div class="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-400">
+                    <div><span class="font-semibold text-white">1,284</span> Following</div>
+                    <div><span class="font-semibold text-white">12.4k</span> Followers</div>
+                    <div><span class="font-semibold text-white">832</span> Posts</div>
+                    <div><span class="font-semibold text-white">94</span> Threads</div>
+                  </div>
+
+                  <div class="mt-6 flex items-center gap-1 overflow-x-auto border-b border-white/5 text-sm scrollbar-thin">
+                    <button class="shrink-0 border-b-2 border-brand-500 px-3 py-2 font-semibold text-white">Posts</button>
+                    <button class="shrink-0 border-b-2 border-transparent px-3 py-2 text-gray-400 hover:text-gray-200">Replies</button>
+                    <button class="shrink-0 border-b-2 border-transparent px-3 py-2 text-gray-400 hover:text-gray-200">Media</button>
+                    <button class="shrink-0 border-b-2 border-transparent px-3 py-2 text-gray-400 hover:text-gray-200">Likes</button>
+                  </div>
+
+                  <div id="profileFeed" class="mt-3 divide-y divide-white/5 rounded-2xl bg-gray-900/40 ring-soft"></div>
+
+                  <div class="h-12"></div>
+                </div>
+              </div>
+            </section>
+
+            <!-- ============ MODERATION ============ -->
+            <section data-view-id="moderation" class="view">
+              <div class="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+                <div class="flex items-end justify-between">
+                  <div>
+                    <h1 class="text-2xl font-semibold tracking-tight text-white">Moderation queue</h1>
+                    <p class="text-sm text-gray-400">Reports stored in the <code class="rounded bg-white/5 px-1 py-0.5 text-xs text-brand-300">reports</code> Cosmos container · partitioned by status.</p>
+                  </div>
+                  <div class="flex items-center gap-2 text-sm">
+                    <span class="pill bg-amber-400/10 text-amber-300 ring-1 ring-amber-400/30">12 open</span>
+                    <span class="pill bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-400/30">3 triaged</span>
+                  </div>
+                </div>
+
+                <div class="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+                  <div class="rounded-2xl bg-gray-900/60 p-4 ring-soft">
+                    <div class="text-xs uppercase tracking-wider text-gray-500">Queue depth (24h)</div>
+                    <div class="mt-1 text-3xl font-semibold text-white">24</div>
+                    <div class="mt-1 text-xs text-emerald-300">▼ 18% vs prior 24h</div>
+                  </div>
+                  <div class="rounded-2xl bg-gray-900/60 p-4 ring-soft">
+                    <div class="text-xs uppercase tracking-wider text-gray-500">Avg time to action</div>
+                    <div class="mt-1 text-3xl font-semibold text-white">42m</div>
+                    <div class="mt-1 text-xs text-amber-300">▲ 4m vs prior 24h</div>
+                  </div>
+                  <div class="rounded-2xl bg-gray-900/60 p-4 ring-soft">
+                    <div class="text-xs uppercase tracking-wider text-gray-500">Auto-flagged by Content Safety</div>
+                    <div class="mt-1 text-3xl font-semibold text-white">7</div>
+                    <div class="mt-1 text-xs text-gray-400">images: 4 · text: 3</div>
+                  </div>
+                </div>
+
+                <div class="mt-6 overflow-x-auto rounded-2xl ring-soft">
+                  <table class="min-w-full divide-y divide-white/5 text-sm">
+                    <thead class="bg-white/5 text-left text-xs uppercase tracking-wider text-gray-400">
+                      <tr>
+                        <th class="px-4 py-3">Reported item</th>
+                        <th class="px-4 py-3">Reporter</th>
+                        <th class="px-4 py-3">Reason</th>
+                        <th class="px-4 py-3">Status</th>
+                        <th class="px-4 py-3">Age</th>
+                        <th class="px-4 py-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="modQueue" class="divide-y divide-white/5 bg-gray-900/40"></tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          </main>
+
+          <!-- Right rail -->
+          <aside class="hidden xl:flex w-80 flex-col gap-4 border-l border-white/5 bg-gray-950/60 p-4 backdrop-blur">
+            <div class="rounded-2xl bg-gray-900/60 p-4 ring-soft">
+              <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">Who to follow</div>
+              <ul id="whoToFollow" class="mt-3 space-y-3"></ul>
+            </div>
+            <div class="rounded-2xl bg-gradient-to-br from-brand-700/40 to-fuchsia-700/30 p-4 ring-soft">
+              <div class="text-xs font-semibold uppercase tracking-wider text-brand-200">System status</div>
+              <ul class="mt-3 space-y-2 text-sm">
+                <li class="flex items-center justify-between"><span class="text-gray-200">API (Functions)</span><span class="pill bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-400/30">●  Healthy</span></li>
+                <li class="flex items-center justify-between"><span class="text-gray-200">Cosmos DB</span><span class="pill bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-400/30">●  Healthy</span></li>
+                <li class="flex items-center justify-between"><span class="text-gray-200">AI Search</span><span class="pill bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-400/30">●  Healthy</span></li>
+                <li class="flex items-center justify-between"><span class="text-gray-200">Blob / CDN</span><span class="pill bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-400/30">●  Healthy</span></li>
+                <li class="flex items-center justify-between"><span class="text-gray-200">Change feed lag</span><span class="text-xs text-gray-300">2.1s</span></li>
+              </ul>
+            </div>
+            <div class="rounded-2xl bg-gray-900/60 p-4 ring-soft">
+              <div class="flex items-center justify-between">
+                <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">GitHub sync sources</div>
+                <span class="pill bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-400/30">●  Live</span>
+              </div>
+              <ul id="ghSources" class="mt-3 space-y-2 text-sm"></ul>
+              <div class="mt-3 text-[11px] text-gray-500">Polled every 5 min · admin-curated</div>
+            </div>
+            <div class="rounded-2xl bg-gray-900/60 p-4 text-xs text-gray-400 ring-soft">
+              <div class="font-semibold text-gray-300">About this mockup</div>
+              <p class="mt-1 leading-relaxed">Static HTML + Tailwind via CDN. No build step. Switch screens via the left nav. Sample data is generated client-side and is not connected to any backend.</p>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== COMPOSE MODAL ===================== -->
+    <div id="composeModal" class="fixed inset-0 z-50 hidden">
+      <div class="absolute inset-0 bg-gray-950/80 backdrop-blur-sm" data-close-modal></div>
+      <div class="relative mx-4 mt-12 max-h-[90vh] overflow-y-auto rounded-2xl bg-gray-900 p-5 ring-1 ring-white/10 shadow-2xl sm:mx-auto sm:mt-24 sm:w-full sm:max-w-xl">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold text-white">Compose post</h3>
+          <button data-close-modal class="rounded-md p-1 text-gray-400 hover:bg-white/5">
+            <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 6 6 18M6 6l12 12" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="mt-4 flex gap-3">
+          <div class="h-10 w-10 shrink-0 rounded-full bg-gradient-to-br from-fuchsia-500 to-brand-500 flex items-center justify-center text-sm font-semibold">AL</div>
+          <textarea rows="5" class="flex-1 resize-none rounded-lg border-0 bg-white/5 p-3 text-[15px] text-gray-100 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500" placeholder="What's happening in your AI work?"></textarea>
+        </div>
+        <div class="mt-4 flex items-center justify-between border-t border-white/5 pt-3">
+          <div class="flex items-center gap-1 text-gray-400">
+            <button class="rounded-md p-1.5 hover:bg-white/5 hover:text-brand-300"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg></button>
+            <button class="rounded-md p-1.5 hover:bg-white/5 hover:text-brand-300"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.6"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></button>
+            <button class="rounded-md p-1.5 hover:bg-white/5 hover:text-brand-300"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9v6M11 9h3m-3 3h2m-2 3v-6M16 9v6"/></svg></button>
+          </div>
+          <button class="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-glow hover:bg-brand-400">Post</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== APP SCRIPT ===================== -->
+    <script>
+      // ---------- sample data ----------
+      const initials = (name) => name.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+      const gradients = [
+        'from-fuchsia-500 to-brand-500',
+        'from-emerald-500 to-cyan-500',
+        'from-amber-500 to-rose-500',
+        'from-sky-500 to-indigo-500',
+        'from-rose-500 to-purple-500',
+        'from-teal-400 to-emerald-600',
+      ];
+      const pickGradient = (i) => gradients[i % gradients.length];
+
+      const users = [
+        { name: 'Yann Sutskever', handle: 'yann', bio: 'Long-context retrieval. Verified researcher.', verified: true, followers: '128k' },
+        { name: 'Mira Patel',     handle: 'mira', bio: 'Open-weight evals. Building Insentra LLMOps.', followers: '32.4k' },
+        { name: 'Diego Hofmann',  handle: 'diego', bio: 'Agent infra at scale. RAG → tool use.', followers: '18.7k' },
+        { name: 'Sora Kim',       handle: 'sora', bio: 'Vector search bench-marker.', followers: '9.3k' },
+        { name: 'Lena Okafor',    handle: 'lena', bio: 'Safety + alignment research.', followers: '14.2k' },
+        { name: 'Tomás Ruiz',     handle: 'tomas', bio: 'Indie founder. Functions on Flex.', followers: '4.1k' },
+      ];
+
+      const ghRepos = [
+        { owner: 'openai', name: 'openai-cookbook', avatarColor: 'from-emerald-500 to-teal-600' },
+        { owner: 'anthropics', name: 'anthropic-sdk-python', avatarColor: 'from-orange-500 to-rose-600' },
+        { owner: 'microsoft', name: 'azure-functions-host', avatarColor: 'from-sky-500 to-brand-600' },
+      ];
+
+      const githubPosts = [
+        {
+          kind: 'github', time: '12m',
+          repo: ghRepos[0],
+          event: 'release',
+          state: 'published',
+          tag: 'v1.4.0',
+          title: 'v1.4.0 — streaming tool use examples + RAG eval harness',
+          body: 'Adds end-to-end streaming examples for tool use, a small RAG eval harness, and a notebook walking through prompt-cache hit-rate measurement on long-context agents.',
+          actor: 'ada-lovelace',
+          counts: { likes: 412, replies: 38, reposts: 27 },
+        },
+        {
+          kind: 'github', time: '34m',
+          repo: ghRepos[1],
+          event: 'pull_request',
+          state: 'merged',
+          number: 1284,
+          title: 'Add prompt caching helpers to the messages API',
+          body: 'Adds a `with_cache` helper that auto-marks the longest stable prefix as cacheable and exposes hit-rate metrics on the response object.',
+          actor: 'mira',
+          counts: { likes: 268, replies: 22, reposts: 14 },
+        },
+        {
+          kind: 'github', time: '1h',
+          repo: ghRepos[2],
+          event: 'issue',
+          state: 'open',
+          number: 9821,
+          title: 'Flex Consumption: cold start regression on Node 20 after 4.36 release',
+          body: 'Cold start p95 on a minimal HTTP function regressed from 480ms to 1.7s after the 4.36 host upgrade. Repro repo and Application Insights traces attached.',
+          actor: 'diego',
+          labels: ['bug','flex-consumption','node20'],
+          counts: { likes: 188, replies: 41, reposts: 9 },
+        },
+      ];
+
+      const posts = [
+        {
+          author: users[0], time: '2h',
+          text: "Quietly running an eval harness against five frontier models on a private long-context retrieval suite for six weeks. Surprises about #claude46 and #evals 🧵",
+          media: [{kind:'image'},{kind:'image'}],
+          counts: { likes: 1402, replies: 312, reposts: 88 },
+          hashtags: ['claude46','evals','rag'], verified: true,
+        },
+        {
+          author: users[1], time: '4h',
+          text: "Hot take: most 'agent benchmarks' are still smoke tests. Here's a small, brutal, reproducible one that fits in a single Cosmos document. #agents",
+          counts: { likes: 891, replies: 144, reposts: 41 },
+          hashtags: ['agents','evals'],
+        },
+        {
+          author: users[2], time: '6h',
+          text: "Replaced our home-grown feed indexer with the Azure AI Search Cosmos DB pull indexer + a change-feed-driven push function for freshness. p95 dropped from 4.8s to 380ms. #azureai",
+          media: [{kind:'image'}],
+          counts: { likes: 612, replies: 73, reposts: 22 },
+          hashtags: ['azureai','rag'],
+        },
+        {
+          author: users[3], time: '9h',
+          text: "Tiny LLM eval tip: stop reporting averages. Report per-task stratified pass-rates and a worst-decile slice. You'll find the regressions you currently miss.",
+          counts: { likes: 1233, replies: 201, reposts: 95 },
+          hashtags: ['evals'],
+        },
+        {
+          author: users[4], time: '11h',
+          text: "Reading list dump for anyone building a moderation pipeline on top of Azure AI Content Safety. Image, text, and the rate-limit gotchas nobody mentions.",
+          counts: { likes: 488, replies: 52, reposts: 14 },
+          hashtags: ['safety','azureai'],
+        },
+      ];
+
+      // ---------- renderers ----------
+      const avatarHTML = (user, size='h-10 w-10', text='text-sm') => {
+        const idx = user.handle.charCodeAt(0);
+        return `<div class="${size} shrink-0 rounded-full bg-gradient-to-br ${pickGradient(idx)} flex items-center justify-center ${text} font-semibold">${initials(user.name)}</div>`;
+      };
+
+      const mediaHTML = (media) => {
+        if (!media || !media.length) return '';
+        const cls = media.length === 1 ? 'grid-cols-1' : 'grid-cols-2';
+        return `<div class="mt-3 grid ${cls} gap-2">` + media.map((_, i) => `
+          <div class="aspect-video rounded-xl bg-gradient-to-br ${pickGradient(i+3)} ring-soft"></div>
+        `).join('') + '</div>';
+      };
+
+      const hashtagHTML = (tags) => (tags||[]).map(t => `<a class="text-brand-300 hover:underline">#${t}</a>`).join(' ');
+
+      const formatCount = (n) => n >= 1000 ? (n/1000).toFixed(1)+'k' : String(n);
+
+      const postCardHTML = (p, opts={}) => `
+        <article class="px-1 py-4">
+          <div class="flex items-start gap-3">
+            ${avatarHTML(p.author)}
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 text-sm">
+                <span class="font-semibold text-white">${p.author.name}</span>
+                ${p.verified ? '<span class="pill bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-400/30">verified</span>' : ''}
+                <span class="truncate text-gray-500">@${p.author.handle} · ${p.time}</span>
+              </div>
+              <p class="mt-1 text-[15px] leading-relaxed text-gray-100">${p.text} ${hashtagHTML(p.hashtags)}</p>
+              ${mediaHTML(p.media)}
+              <div class="mt-3 flex items-center gap-6 text-xs text-gray-400">
+                <button class="group flex items-center gap-2 hover:text-rose-300">
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  ${formatCount(p.counts.likes)}
+                </button>
+                <button class="flex items-center gap-2 hover:text-sky-300">
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 0 1 4 11.5 8.5 8.5 0 0 1 8.7 3.9 8.4 8.4 0 0 1 12.5 3h.5a8.5 8.5 0 0 1 8 8v.5z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  ${formatCount(p.counts.replies)}
+                </button>
+                <button class="flex items-center gap-2 hover:text-emerald-300">
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m17 1 4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  ${formatCount(p.counts.reposts)}
+                </button>
+                <button class="flex items-center gap-1 hover:text-amber-300">
+                  😄 <span class="text-gray-500">·</span> 🚀 <span class="text-gray-500">·</span> 🧠
+                </button>
+                <button class="ml-auto rounded-md p-1 hover:bg-white/5">
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </article>
+      `;
+
+      // ---------- GitHub post renderer ----------
+      const ghEventMeta = {
+        issue: {
+          label: 'Issue',
+          icon: '<svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/><path fill-rule="evenodd" d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zM1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0z"/></svg>',
+          chip: 'bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-400/30',
+        },
+        pull_request: {
+          label: 'Pull request',
+          icon: '<svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="currentColor"><path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354zM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0z"/></svg>',
+          chip: 'bg-sky-400/10 text-sky-300 ring-1 ring-sky-400/30',
+        },
+        release: {
+          label: 'Release',
+          icon: '<svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="currentColor"><path d="M2.75 7.25a5.25 5.25 0 1 1 10.5 0 5.25 5.25 0 0 1-10.5 0zM8 0a7.25 7.25 0 1 0 0 14.5A7.25 7.25 0 0 0 8 0zm1.86 4.66a.25.25 0 0 0-.47-.057L8.45 6.45 6.6 6.72a.25.25 0 0 0-.14.43l1.34 1.31-.32 1.85a.25.25 0 0 0 .36.27L9.5 9.7l1.66.87a.25.25 0 0 0 .36-.27l-.32-1.85 1.34-1.31a.25.25 0 0 0-.14-.43L10.55 6.45 9.86 4.66z"/></svg>',
+          chip: 'bg-fuchsia-400/10 text-fuchsia-300 ring-1 ring-fuchsia-400/30',
+        },
+      };
+      const ghStateChip = (state) => ({
+        open:        'bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-400/30',
+        closed:      'bg-rose-400/10 text-rose-300 ring-1 ring-rose-400/30',
+        merged:      'bg-fuchsia-400/10 text-fuchsia-300 ring-1 ring-fuchsia-400/30',
+        published:   'bg-amber-400/10 text-amber-300 ring-1 ring-amber-400/30',
+        'pre-release':'bg-amber-400/10 text-amber-300 ring-1 ring-amber-400/30',
+      })[state] || 'bg-white/5 text-gray-300 ring-1 ring-white/10';
+
+      const githubPostHTML = (g) => {
+        const meta = ghEventMeta[g.event];
+        const ref = g.event === 'release' ? g.tag : `#${g.number}`;
+        const repoLabel = `${g.repo.owner}/${g.repo.name}`;
+        return `
+        <article class="px-1 py-4">
+          <div class="flex items-start gap-3">
+            <div class="h-10 w-10 shrink-0 rounded-lg bg-gradient-to-br ${g.repo.avatarColor} flex items-center justify-center ring-soft">
+              <svg viewBox="0 0 16 16" class="h-5 w-5 text-white" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+              </svg>
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2 text-sm">
+                <span class="font-semibold text-white">${repoLabel}</span>
+                <span class="pill bg-white/5 text-gray-400 ring-1 ring-white/10">via GitHub sync</span>
+                <span class="text-gray-500">· ${g.time}</span>
+              </div>
+              <div class="mt-2 rounded-xl bg-gray-900/70 p-3 ring-soft">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="pill ${meta.chip}">${meta.icon} ${meta.label}</span>
+                  <span class="pill ${ghStateChip(g.state)}">${g.state}</span>
+                  <span class="text-xs text-gray-500">${repoLabel} ${ref}</span>
+                  <span class="ml-auto text-xs text-gray-500">by @${g.actor}</span>
+                </div>
+                <a class="mt-2 block text-[15px] font-semibold text-white hover:text-brand-200">${g.title}</a>
+                <p class="mt-1 line-clamp-2 text-sm text-gray-300">${g.body}</p>
+                ${g.labels && g.labels.length ? `<div class="mt-2 flex flex-wrap gap-1">${g.labels.map(l => `<span class="pill bg-white/5 text-gray-400 ring-1 ring-white/10">${l}</span>`).join('')}</div>` : ''}
+                <div class="mt-3 flex items-center gap-2 text-xs text-gray-500">
+                  <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 14a5 5 0 0 0 7.07 0l3.54-3.54a5 5 0 0 0-7.07-7.07l-1.06 1.06"/><path d="M14 10a5 5 0 0 0-7.07 0l-3.54 3.54a5 5 0 0 0 7.07 7.07l1.06-1.06"/></svg>
+                  <span>github.com/${repoLabel}/${g.event === 'release' ? 'releases/tag/'+g.tag : (g.event === 'pull_request' ? 'pull/'+g.number : 'issues/'+g.number)}</span>
+                </div>
+              </div>
+              <div class="mt-3 flex items-center gap-6 text-xs text-gray-400">
+                <button class="flex items-center gap-2 hover:text-rose-300"><svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z" stroke-linecap="round" stroke-linejoin="round"/></svg> ${formatCount(g.counts.likes)}</button>
+                <button class="flex items-center gap-2 hover:text-sky-300"><svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 0 1 4 11.5 8.5 8.5 0 0 1 8.7 3.9 8.4 8.4 0 0 1 12.5 3h.5a8.5 8.5 0 0 1 8 8v.5z" stroke-linecap="round" stroke-linejoin="round"/></svg> ${formatCount(g.counts.replies)}</button>
+                <button class="flex items-center gap-2 hover:text-emerald-300"><svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m17 1 4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3" stroke-linecap="round" stroke-linejoin="round"/></svg> ${formatCount(g.counts.reposts)}</button>
+                <button class="ml-auto rounded-md p-1 hover:bg-white/5"><svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              </div>
+            </div>
+          </div>
+        </article>
+        `;
+      };
+
+      const personCardHTML = (u, idx) => `
+        <div class="rounded-2xl bg-gray-900/60 p-4 ring-soft">
+          <div class="flex items-center gap-3">
+            ${avatarHTML(u, 'h-12 w-12')}
+            <div class="min-w-0">
+              <div class="flex items-center gap-1 text-sm font-semibold text-white">${u.name} ${u.verified ? '<svg viewBox="0 0 20 20" class="h-4 w-4 text-emerald-300" fill="currentColor"><path d="M10 2a8 8 0 1 0 0 16A8 8 0 0 0 10 2zm3.7 6.3-4.5 4.5a1 1 0 0 1-1.4 0L6 11a1 1 0 1 1 1.4-1.4L8.5 11l3.8-3.8a1 1 0 1 1 1.4 1.1z"/></svg>' : ''}</div>
+              <div class="truncate text-xs text-gray-500">@${u.handle} · ${u.followers} followers</div>
+            </div>
+          </div>
+          <p class="mt-2 line-clamp-2 text-xs text-gray-400">${u.bio}</p>
+          <div class="mt-3 flex justify-end">
+            <button class="rounded-lg bg-brand-500/15 px-3 py-1 text-xs font-semibold text-brand-300 ring-1 ring-brand-500/40 hover:bg-brand-500/25">Follow</button>
+          </div>
+        </div>
+      `;
+
+      const hashtagCardHTML = (tag, count) => `
+        <a class="block rounded-2xl bg-gray-900/60 p-4 ring-soft hover:bg-gray-900/80">
+          <div class="text-sm font-semibold text-white">#${tag}</div>
+          <div class="mt-1 text-xs text-gray-400">${count} posts · 24h</div>
+          <div class="mt-3 h-1 w-full rounded-full bg-white/5">
+            <div class="h-1 rounded-full bg-gradient-to-r from-brand-500 to-fuchsia-500" style="width: ${20 + Math.floor(Math.random()*70)}%"></div>
+          </div>
+        </a>
+      `;
+
+      const replyHTML = (p) => `
+        <article class="rounded-2xl bg-gray-900/40 p-4 ring-soft">
+          <div class="flex gap-3">
+            ${avatarHTML(p.author, 'h-9 w-9', 'text-xs')}
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 text-sm">
+                <span class="font-semibold text-white">${p.author.name}</span>
+                <span class="truncate text-gray-500">@${p.author.handle} · ${p.time}</span>
+              </div>
+              <p class="mt-1 text-sm text-gray-200">${p.text}</p>
+              <div class="mt-2 flex items-center gap-5 text-xs text-gray-400">
+                <span>♥ ${formatCount(p.counts.likes)}</span>
+                <span>↩ ${formatCount(p.counts.replies)}</span>
+                <span>↺ ${formatCount(p.counts.reposts)}</span>
+              </div>
+            </div>
+          </div>
+        </article>
+      `;
+
+      const notifications = [
+        { kind: 'reply',   user: users[2], text: 'replied to your post in #evals',          time: '12m', unread: true },
+        { kind: 'like',    user: users[1], text: 'and 47 others liked your post',           time: '38m', unread: true },
+        { kind: 'follow',  user: users[3], text: 'started following you',                   time: '2h',  unread: true },
+        { kind: 'mention', user: users[4], text: 'mentioned you in a thread about #safety', time: '4h',  unread: true },
+        { kind: 'reply',   user: users[5], text: 'replied to your thread on Azure Functions',time: '1d', unread: false },
+        { kind: 'like',    user: users[0], text: 'liked your post about the eval harness',  time: '2d',  unread: false },
+      ];
+
+      const notifIcon = (k) => ({
+        reply:   '<svg viewBox="0 0 24 24" class="h-4 w-4 text-sky-300" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 0 1 4 11.5 8.5 8.5 0 0 1 8.7 3.9 8.4 8.4 0 0 1 12.5 3h.5a8.5 8.5 0 0 1 8 8v.5z" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+        like:    '<svg viewBox="0 0 24 24" class="h-4 w-4 text-rose-300" fill="currentColor"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z"/></svg>',
+        follow:  '<svg viewBox="0 0 24 24" class="h-4 w-4 text-emerald-300" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6" stroke-linecap="round"/></svg>',
+        mention: '<svg viewBox="0 0 24 24" class="h-4 w-4 text-amber-300" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" stroke-linecap="round"/></svg>',
+      })[k] || '';
+
+      const notifHTML = (n) => `
+        <li class="flex items-start gap-3 px-2 py-3 ${n.unread ? 'bg-brand-500/5' : ''}">
+          <div class="mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-white/5 ring-soft">${notifIcon(n.kind)}</div>
+          ${avatarHTML(n.user, 'h-9 w-9', 'text-xs')}
+          <div class="min-w-0 flex-1">
+            <div class="text-sm text-gray-200"><span class="font-semibold text-white">${n.user.name}</span> ${n.text}</div>
+            <div class="text-xs text-gray-500">@${n.user.handle} · ${n.time}</div>
+          </div>
+          ${n.unread ? '<span class="mt-2 h-2 w-2 rounded-full bg-brand-400"></span>' : ''}
+        </li>
+      `;
+
+      const reports = [
+        { item: 'Post #p_01HXY...', reporter: '@diego', reason: 'Spam',          status: 'open',     age: '7m',  severity: 'low' },
+        { item: 'Image m_77...',    reporter: '@sora',  reason: 'NSFW',          status: 'open',     age: '14m', severity: 'high' },
+        { item: 'Reply #p_01HXZ...',reporter: '@lena',  reason: 'Harassment',    status: 'triaged',  age: '36m', severity: 'high' },
+        { item: 'Post #p_01HXY...', reporter: '@tomas', reason: 'Misinformation',status: 'open',     age: '1h',  severity: 'med' },
+        { item: 'User @bot7',       reporter: '@mira',  reason: 'Impersonation', status: 'open',     age: '2h',  severity: 'med' },
+      ];
+
+      const sevPill = (s) => ({
+        low:  'bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-400/30',
+        med:  'bg-amber-400/10 text-amber-300 ring-1 ring-amber-400/30',
+        high: 'bg-rose-400/10 text-rose-300 ring-1 ring-rose-400/30',
+      })[s];
+
+      const reportRowHTML = (r) => `
+        <tr class="hover:bg-white/[0.02]">
+          <td class="px-4 py-3"><div class="text-gray-200">${r.item}</div><div class="text-xs text-gray-500">via change feed</div></td>
+          <td class="px-4 py-3 text-gray-300">${r.reporter}</td>
+          <td class="px-4 py-3"><span class="pill ${sevPill(r.severity)}">${r.reason}</span></td>
+          <td class="px-4 py-3 text-gray-300">${r.status}</td>
+          <td class="px-4 py-3 text-gray-400">${r.age}</td>
+          <td class="px-4 py-3 text-right">
+            <button class="rounded-md bg-white/5 px-2 py-1 text-xs text-gray-200 ring-soft hover:bg-white/10">Hide</button>
+            <button class="rounded-md bg-rose-500/15 px-2 py-1 text-xs text-rose-300 ring-1 ring-rose-500/40 hover:bg-rose-500/25">Remove</button>
+          </td>
+        </tr>
+      `;
+
+      // ---------- mount ----------
+      const renderItem = (item) => item.kind === 'github' ? githubPostHTML(item) : postCardHTML(item);
+
+      // Interleave: github events near the top of the feed
+      const mixedFeed = [
+        githubPosts[0],
+        posts[0],
+        githubPosts[1],
+        posts[1],
+        posts[2],
+        githubPosts[2],
+        posts[3],
+        posts[4],
+      ];
+
+      function mount() {
+        document.getElementById('feedList').innerHTML = mixedFeed.map(renderItem).join('');
+        document.getElementById('explorePosts').innerHTML = mixedFeed.map(item => `<div class="px-4">${renderItem(item)}</div>`).join('');
+        document.getElementById('peopleRow').innerHTML = users.slice(0,6).map((u,i) => personCardHTML(u,i)).join('');
+        const tags = [['evals',2143],['rag',1812],['agents',1304],['claude46',976],['azureai',744],['safety',512],['vector',433],['cosmosdb',388],['longcontext',271],['llmops',204]];
+        document.getElementById('hashtagGrid').innerHTML = tags.map(([t,c]) => hashtagCardHTML(t,c)).join('');
+        document.getElementById('threadReplies').innerHTML = posts.slice(1,5).map(replyHTML).join('');
+        document.getElementById('notifList').innerHTML = notifications.map(notifHTML).join('');
+        document.getElementById('whoToFollow').innerHTML = users.slice(1,5).map((u,i) => `
+          <li class="flex items-center gap-3">
+            ${avatarHTML(u,'h-9 w-9','text-xs')}
+            <div class="min-w-0 flex-1">
+              <div class="truncate text-sm font-medium text-white">${u.name}</div>
+              <div class="truncate text-xs text-gray-500">@${u.handle}</div>
+            </div>
+            <button class="rounded-md bg-brand-500/15 px-2 py-1 text-xs font-semibold text-brand-300 ring-1 ring-brand-500/40 hover:bg-brand-500/25">Follow</button>
+          </li>
+        `).join('');
+        document.getElementById('profileFeed').innerHTML = posts.slice(0,4).map(p => `<div class="px-4">${postCardHTML(p)}</div>`).join('');
+        document.getElementById('modQueue').innerHTML = reports.map(reportRowHTML).join('');
+        document.getElementById('ghSources').innerHTML = ghRepos.map((r,i) => `
+          <li class="flex items-center gap-3">
+            <div class="h-7 w-7 shrink-0 rounded-md bg-gradient-to-br ${r.avatarColor} flex items-center justify-center ring-soft">
+              <svg viewBox="0 0 16 16" class="h-4 w-4 text-white" fill="currentColor"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="truncate text-gray-200">${r.owner}/${r.name}</div>
+              <div class="truncate text-[11px] text-gray-500">last poll · ${[1,3,4][i] || 2}m ago</div>
+            </div>
+            <span class="text-[11px] text-gray-500">${[12,8,3][i] || 0}/h</span>
+          </li>
+        `).join('');
+      }
+
+      // ---------- mobile sidebar drawer ----------
+      const sidebar = document.getElementById('sidebar');
+      const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+      const openSidebar = () => {
+        sidebar.classList.remove('-translate-x-full');
+        sidebarBackdrop.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+      };
+      const closeSidebar = () => {
+        sidebar.classList.add('-translate-x-full');
+        sidebarBackdrop.classList.add('hidden');
+        document.body.style.overflow = '';
+      };
+      document.getElementById('sidebarOpen').addEventListener('click', openSidebar);
+      document.getElementById('sidebarClose').addEventListener('click', closeSidebar);
+      sidebarBackdrop.addEventListener('click', closeSidebar);
+      // Reset drawer state when crossing the lg breakpoint
+      const mq = window.matchMedia('(min-width: 1024px)');
+      const syncSidebar = () => {
+        if (mq.matches) {
+          sidebar.classList.remove('-translate-x-full');
+          sidebarBackdrop.classList.add('hidden');
+          document.body.style.overflow = '';
+        } else {
+          sidebar.classList.add('-translate-x-full');
+        }
+      };
+      mq.addEventListener('change', syncSidebar);
+      syncSidebar();
+
+      // ---------- nav ----------
+      function setView(name) {
+        document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.dataset.viewId === name));
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === name));
+        document.querySelector('main').scrollTo({ top: 0, behavior: 'instant' });
+        if (!mq.matches) closeSidebar();
+      }
+      document.addEventListener('click', (e) => {
+        const trigger = e.target.closest('[data-view]');
+        if (trigger) { e.preventDefault(); setView(trigger.dataset.view); }
+      });
+
+      // ---------- compose modal ----------
+      const modal = document.getElementById('composeModal');
+      document.getElementById('composeBtn').addEventListener('click', () => modal.classList.remove('hidden'));
+      modal.addEventListener('click', (e) => { if (e.target.matches('[data-close-modal]')) modal.classList.add('hidden'); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { modal.classList.add('hidden'); if (!mq.matches) closeSidebar(); } });
+
+      mount();
+    </script>
+  </body>
+</html>
