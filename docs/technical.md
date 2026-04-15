@@ -62,8 +62,9 @@ It does **not** specify UI visual design or detailed copy — those live in `des
 ### 3.3 Request Flow (read post feed)
 1. Browser issues `GET /api/feed?cursor=...` to the SWA edge.
 2. SWA reverse-proxies to the linked Functions app, attaching the SWA auth principal header.
-3. The HTTP function authenticates the principal, point-reads up to N entries from the `feeds` container partitioned on `feedOwnerId = userId`, and returns the page.
+3. The HTTP function authenticates the principal, point-reads up to N entries from the `feeds` container partitioned on `feedOwnerId = userId`, merges in any pull-on-read results for over-cap followees, and returns the page.
 4. Each feed entry is denormalised: it already contains author handle, avatar URL, post excerpt, media thumbnails, and counts. No second-hop lookup is required for the common case.
+5. The `cursor` response value remains opaque and may carry pagination state for both the materialised feed partition and the pull-on-read fallback query.
 
 ### 3.4 Request Flow (publish post)
 1. Browser issues `POST /api/posts` with text content and media references.
@@ -73,7 +74,7 @@ It does **not** specify UI visual design or detailed copy — those live in `des
    - upserts a denormalised feed entry into each follower's `feeds` partition, capped at `MAX_FANOUT_FOLLOWERS` (e.g. 5,000)
 4. The same change feed fires `searchSyncFn`, which pushes/upserts the post into the `posts` index in Azure AI Search.
 5. The same change feed fires `counterFn`, which updates the author's profile post count.
-6. Followers exceeding the fan-out cap are served via a `pull-on-read` path that queries posts authored by their followees directly (a small fraction of users).
+6. Followers exceeding the fan-out cap are served via a `pull-on-read` path that queries posts authored by their over-cap followees directly and merges those posts into the materialised feed page (a small fraction of users).
 
 ### 3.5 Media Upload Flow
 1. Browser requests `POST /api/media/upload-url` with `{ contentType, sizeBytes, kind }` and includes `durationSeconds` for audio/video uploads.
