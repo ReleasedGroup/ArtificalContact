@@ -3,6 +3,7 @@ import { registerCounterFunction } from './functions/counter.js'
 import { registerDeleteFollowFunction } from './functions/delete-follow.js'
 import { registerDeletePostFunction } from './functions/delete-post.js'
 import { registerFollowUserFunction } from './functions/follow-user.js'
+import { registerFollowersMirrorFunction } from './functions/followers-mirror.js'
 import { registerGetPostFunction } from './functions/get-post.js'
 import { registerGetThreadFunction } from './functions/get-thread.js'
 import { registerCreatePostFunction } from './functions/create-post.js'
@@ -19,6 +20,7 @@ registerCounterFunction()
 registerDeleteFollowFunction()
 registerDeletePostFunction()
 registerFollowUserFunction()
+registerFollowersMirrorFunction()
 registerGetPostFunction()
 registerGetThreadFunction()
 registerCreatePostFunction()

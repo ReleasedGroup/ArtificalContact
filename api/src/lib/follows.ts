@@ -3,7 +3,7 @@ import { getEnvironmentConfig, type EnvironmentConfig } from './config.js'
 import { createCosmosClient } from './cosmos-client.js'
 import { readOptionalValue } from './strings.js'
 
-const defaultFollowsContainerName = 'follows'
+export const DEFAULT_FOLLOWS_CONTAINER_NAME = 'follows'
 let cachedFollowRepository: MutableFollowRepository | undefined
 
 export interface FollowDocument {
@@ -118,7 +118,7 @@ export function createFollowRepositoryFromConfig(
   }
 
   const followsContainerName =
-    readOptionalValue(env.FOLLOWS_CONTAINER_NAME) ?? defaultFollowsContainerName
+    readOptionalValue(env.FOLLOWS_CONTAINER_NAME) ?? DEFAULT_FOLLOWS_CONTAINER_NAME
   const client = createCosmosClient(config)
   const container = client
     .database(config.cosmosDatabaseName)

@@ -165,6 +165,7 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 | Function | Source container | Purpose |
 |---|---|---|
 | `usersByHandleMirrorFn` | `users` | Maintain the `usersByHandle` lookup mirror with deterministic ids and per-user sync state |
+| `followersMirrorFn` | `follows` | Maintain the reverse `followers` lookup mirror with deterministic ids for reverse social-graph queries |
 | `feedFanOutFn` | `posts` | Materialise feed entries into followers' `feeds` partitions |
 | `searchSyncFn` | `posts`, `users` | Upsert/delete documents in AI Search indexes |
 | `counterFn` | `posts`, `reactions`, `follows` | Update aggregate counters on parent documents |
