@@ -26,37 +26,50 @@ describe('HeaderSearchBox', () => {
   })
 
   it('debounces /api/search calls and renders grouped quick results', async () => {
-    mockFetch.mockResolvedValue(
-      createJsonResponse(200, {
-        data: {
-          query: 'ada',
-          type: 'all',
-          users: [
-            {
-              id: 'user-1',
-              handle: 'ada',
-              displayName: 'Ada Lovelace',
-              bio: 'Search engineer.',
-              expertise: ['search'],
-              followerCount: 4200,
-            },
-          ],
-          posts: [
-            {
-              id: 'post-1',
-              postId: 'post-1',
-              authorHandle: 'ada',
-              excerpt: 'Building robust agent search experiences.',
-              createdAt: '2026-04-16T00:00:00.000Z',
-              hashtags: ['search'],
-              mediaKinds: [],
-              kind: 'user',
-            },
-          ],
-        },
-        errors: [],
-      }),
-    )
+    mockFetch.mockImplementation(async (input) => {
+      const requestUrl = String(input)
+
+      if (requestUrl === '/api/search?q=ada&type=users') {
+        return createJsonResponse(200, {
+          data: {
+            value: [
+              {
+                id: 'user-1',
+                handle: 'ada',
+                displayName: 'Ada Lovelace',
+                bio: 'Search engineer.',
+                expertise: ['search'],
+                followerCount: 4200,
+              },
+            ],
+          },
+          errors: [],
+        })
+      }
+
+      if (requestUrl === '/api/search?q=ada&type=posts') {
+        return createJsonResponse(200, {
+          data: {
+            value: [
+              {
+                id: 'post-1',
+                authorHandle: 'ada',
+                text: 'Building robust agent search experiences.',
+                createdAt: '2026-04-16T00:00:00.000Z',
+                hashtags: ['search'],
+                mediaKinds: [],
+                likeCount: 12,
+                replyCount: 3,
+                kind: 'user',
+              },
+            ],
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${requestUrl}`)
+    })
 
     render(<HeaderSearchBox />)
 
@@ -94,8 +107,19 @@ describe('HeaderSearchBox', () => {
       await Promise.resolve()
     })
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      '/api/search?q=ada&limit=4',
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/search?q=ada&type=users',
+      expect.objectContaining({
+        headers: {
+          Accept: 'application/json',
+        },
+      }),
+    )
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/search?q=ada&type=posts',
       expect.objectContaining({
         headers: {
           Accept: 'application/json',
@@ -114,10 +138,7 @@ describe('HeaderSearchBox', () => {
     mockFetch.mockResolvedValue(
       createJsonResponse(200, {
         data: {
-          query: 'zz',
-          type: 'all',
-          users: [],
-          posts: [],
+          value: [],
         },
         errors: [],
       }),
@@ -142,6 +163,7 @@ describe('HeaderSearchBox', () => {
       await Promise.resolve()
     })
 
+    expect(mockFetch).toHaveBeenCalledTimes(2)
     expect(
       screen.getByText('No quick results matched "zz".'),
     ).toBeInTheDocument()

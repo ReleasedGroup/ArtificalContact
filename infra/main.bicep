@@ -72,6 +72,9 @@ module search './modules/search.bicep' = {
     location: location
     names: naming.outputs.names
     tags: tags
+    cosmosAccountName: cosmos.outputs.accountName
+    cosmosDatabaseName: cosmos.outputs.databaseName
+    cosmosPostsContainerName: cosmos.outputs.postsContainerName
   }
 }
 
@@ -108,6 +111,9 @@ module functions './modules/functions.bicep' = {
     searchUsersIndexName: search.outputs.usersIndexName
     searchResourceId: search.outputs.resourceId
   }
+  dependsOn: [
+    search
+  ]
 }
 
 module staticWebApp './modules/static-web-app.bicep' = {
@@ -131,6 +137,8 @@ output cosmosFeedsContainerName string = cosmos.outputs.feedsContainerName
 output cosmosFollowersContainerName string = cosmos.outputs.followersContainerName
 output cosmosFollowsContainerName string = cosmos.outputs.followsContainerName
 output cosmosMediaContainerName string = cosmos.outputs.mediaContainerName
+output cosmosNotificationPrefsContainerName string = cosmos.outputs.notificationPrefsContainerName
+output cosmosNotificationsContainerName string = cosmos.outputs.notificationsContainerName
 output cosmosPostsContainerName string = cosmos.outputs.postsContainerName
 output cosmosReactionsContainerName string = cosmos.outputs.reactionsContainerName
 output cosmosUsersContainerName string = cosmos.outputs.usersContainerName

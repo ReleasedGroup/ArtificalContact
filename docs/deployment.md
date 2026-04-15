@@ -6,7 +6,7 @@ Sprint 0 provisions the Azure and GitHub scaffolding required to start feature d
 
 - Azure Static Web Apps (Standard)
 - Azure Functions (Flex Consumption)
-- Azure Cosmos DB for NoSQL + `acn` database with `users`, `usersByHandle`, `posts`, `follows`, `followers`, `reactions`, `feeds`, and `media` containers
+- Azure Cosmos DB for NoSQL + `acn` database with `users`, `usersByHandle`, `posts`, `follows`, `followers`, `reactions`, `feeds`, `notifications`, `notificationPrefs`, and `media` containers
 - Azure Storage account + placeholder blob containers
 - Azure AI Search (Basic)
 - Azure Front Door (Standard) with cache rules for blob delivery
@@ -15,6 +15,9 @@ Sprint 0 provisions the Azure and GitHub scaffolding required to start feature d
 The Cosmos `reactions` container is partitioned on `/postId`. Reaction documents use
 the deterministic id pattern `${postId}:${userId}` so per-user reactions to a post
 can be upserted idempotently.
+
+The Cosmos `notifications` container is partitioned on `/targetUserId` and applies a
+default TTL of 90 days so stale notification documents age out automatically.
 
 ## Local prerequisites
 
@@ -73,6 +76,10 @@ The following repository variables are required:
 The Functions app's managed identity also needs Cosmos DB data-plane access to the
 `users` container because authenticated HTTP middleware resolves user profiles from
 that store.
+To support AI Search read and write operations without shared keys, the same
+managed identity is now granted `Search Index Data Contributor` and
+`Search Index Data Reader` on the AI Search service via Bicep role assignments.
+No AI Search admin keys are configured in Function App settings.
 For the Sprint 3 media upload pipeline, the Functions app also needs:
 
 - Storage Blob Data Contributor on the media storage account so `POST /api/media/upload-url` can request user delegation keys with managed identity

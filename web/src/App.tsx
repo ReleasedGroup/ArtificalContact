@@ -10,6 +10,7 @@ import { ComposerPreviewPanel } from './components/ComposerPreviewPanel'
 import { DirectBlobUploadCard } from './components/DirectBlobUploadCard'
 import { HomeFeedScreen } from './components/HomeFeedScreen'
 import { PostDetailScreen } from './components/PostDetailScreen'
+import { SearchResultsScreen } from './components/SearchResultsScreen'
 import { ThreadWorkspacePanel } from './components/ThreadWorkspacePanel'
 import { WEB_BUILD_SHA } from './build-meta.generated'
 import { signOut } from './lib/auth'
@@ -27,6 +28,7 @@ import {
   PublicProfileNotFoundError,
   type PublicUserProfile,
 } from './lib/public-profile'
+import type { SearchType } from './lib/search'
 import type { UploadedBlobResult } from './lib/media-upload'
 import { initializeTelemetry } from './lib/telemetry'
 
@@ -35,6 +37,7 @@ type AppRoute =
   | { kind: 'me' }
   | { kind: 'post'; postId: string }
   | { kind: 'profile'; handle: string }
+  | { kind: 'search'; query: string; type: SearchType }
 
 type PublicProfileState =
   | { status: 'loading' }
@@ -115,7 +118,23 @@ function decodePathSegment(segment: string): string {
   }
 }
 
-function getCurrentRoute(pathname = window.location.pathname): AppRoute {
+function getCurrentRoute(
+  pathname = window.location.pathname,
+  search = window.location.search,
+): AppRoute {
+  if (/^\/search\/?$/.test(pathname)) {
+    const searchParams = new URLSearchParams(search)
+    const rawType = searchParams.get('type')
+    const type: SearchType =
+      rawType === 'users' || rawType === 'hashtags' ? rawType : 'posts'
+
+    return {
+      kind: 'search',
+      query: searchParams.get('q') ?? '',
+      type,
+    }
+  }
+
   if (/^\/me\/?$/.test(pathname)) {
     return { kind: 'me' }
   }
@@ -289,6 +308,16 @@ function App() {
 
   if (route.kind === 'profile') {
     return <PublicProfileScreen handle={route.handle} />
+  }
+
+  if (route.kind === 'search') {
+    return (
+      <SearchResultsScreen
+        key={`${route.type}:${route.query}`}
+        initialQuery={route.query}
+        initialType={route.type}
+      />
+    )
   }
 
   if (route.kind === 'post') {

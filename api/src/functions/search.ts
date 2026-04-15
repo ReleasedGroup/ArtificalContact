@@ -4,172 +4,128 @@ import {
   type HttpResponseInit,
   type InvocationContext,
 } from '@azure/functions'
+import { createErrorResponse, createSuccessResponse } from '../lib/api-envelope.js'
 import {
-  createErrorResponse,
-  createSuccessResponse,
-} from '../lib/api-envelope.js'
-import { AzureSearchStore } from '../lib/azure-search-store.js'
-import {
-  DEFAULT_SEARCH_LIMIT,
-  MAX_SEARCH_LIMIT,
-  MIN_SEARCH_QUERY_LENGTH,
-  normalizeSearchText,
-  type SearchQueryStore,
-  type SearchResponse,
+  querySearchIndex,
+  resolveDefaultSearchFilter,
+  SearchConfigurationError,
+  SearchFilterValidationError,
+  SearchUpstreamError,
   type SearchType,
 } from '../lib/search.js'
 
 export interface SearchHandlerDependencies {
-  storeFactory?: () => SearchQueryStore
+  search?: (
+    input: {
+      q?: string
+      type: SearchType
+      filter?: string
+    },
+  ) => Promise<unknown>
 }
 
-let cachedStore: AzureSearchStore | undefined
-
-function getStore(): AzureSearchStore {
-  cachedStore ??= AzureSearchStore.fromEnvironment()
-  return cachedStore
+function normalizeSearchType(value: string | null): SearchType {
+  switch (value?.trim().toLowerCase()) {
+    case 'users':
+      return 'users'
+    case 'hashtags':
+      return 'hashtags'
+    case 'posts':
+    case '':
+    case null:
+    case undefined:
+      return 'posts'
+    default:
+      throw new Error('invalid_search_type')
+  }
 }
 
-function resolveSearchType(value: string | undefined): SearchType | null {
-  if (!value) {
-    return 'all'
-  }
-
-  const normalizedValue = value.trim().toLowerCase()
-  if (
-    normalizedValue === 'all' ||
-    normalizedValue === 'posts' ||
-    normalizedValue === 'users'
-  ) {
-    return normalizedValue
-  }
-
-  return null
+function createInvalidSearchTypeResponse(): HttpResponseInit {
+  return createErrorResponse(400, {
+    code: 'invalid_search_type',
+    message: 'The type query parameter must be one of: posts, users, hashtags.',
+    field: 'type',
+  })
 }
 
-function resolveSearchLimit(value: string | undefined): number {
-  if (!value) {
-    return DEFAULT_SEARCH_LIMIT
-  }
-
-  const parsed = Number.parseInt(value, 10)
-  if (!Number.isFinite(parsed)) {
-    return DEFAULT_SEARCH_LIMIT
-  }
-
-  return Math.min(MAX_SEARCH_LIMIT, Math.max(1, parsed))
+function createInvalidSearchFilterResponse(message: string): HttpResponseInit {
+  return createErrorResponse(400, {
+    code: 'invalid_search_filter',
+    message,
+    field: 'filter',
+  })
 }
 
-export function buildSearchHandler(
-  dependencies: SearchHandlerDependencies = {},
-) {
-  const storeFactory = dependencies.storeFactory ?? (() => getStore())
+export function buildSearchHandler(dependencies: SearchHandlerDependencies = {}) {
+  const search = dependencies.search ?? querySearchIndex
 
   return async function searchHandler(
     request: HttpRequest,
     context: InvocationContext,
   ): Promise<HttpResponseInit> {
-    const requestedQuery = request.query.get('q')?.trim() ?? ''
-    const normalizedQuery = normalizeSearchText(requestedQuery)
-
-    if (normalizedQuery.length < MIN_SEARCH_QUERY_LENGTH) {
-      return createErrorResponse(400, {
-        code: 'validation.search_query_too_short',
-        message: `Search queries must contain at least ${MIN_SEARCH_QUERY_LENGTH} characters.`,
-        field: 'q',
-      })
-    }
-
-    const searchType = resolveSearchType(request.query.get('type') ?? undefined)
-    if (searchType === null) {
-      return createErrorResponse(400, {
-        code: 'validation.invalid_search_type',
-        message: 'Search type must be one of all, posts, or users.',
-        field: 'type',
-      })
-    }
-
-    const limit = resolveSearchLimit(request.query.get('limit') ?? undefined)
-
-    let store: SearchQueryStore
-
+    let type: SearchType
     try {
-      store = storeFactory()
+      type = normalizeSearchType(request.query.get('type'))
+    } catch {
+      return createInvalidSearchTypeResponse()
+    }
+
+    const query = request.query.get('q')
+    const rawFilter = request.query.get('filter') ?? undefined
+
+    let resolvedFilter: string | undefined
+    try {
+      resolvedFilter = resolveDefaultSearchFilter(type, rawFilter)
     } catch (error) {
-      context.log('Search is unavailable because the Azure AI Search store is not configured.', {
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Unknown search store configuration error.',
-      })
-
-      return createErrorResponse(503, {
-        code: 'search.unavailable',
-        message: 'Search is not configured right now.',
-      })
-    }
-
-    try {
-      let response: SearchResponse
-
-      if (searchType === 'all') {
-        const [posts, users] = await Promise.all([
-          store.searchPosts({
-            query: normalizedQuery,
-            limit,
-          }),
-          store.searchUsers({
-            query: normalizedQuery,
-            limit,
-          }),
-        ])
-
-        response = {
-          query: requestedQuery,
-          type: searchType,
-          posts,
-          users,
-        }
-      } else if (searchType === 'posts') {
-        response = {
-          query: requestedQuery,
-          type: searchType,
-          posts: await store.searchPosts({
-            query: normalizedQuery,
-            limit,
-          }),
-          users: [],
-        }
-      } else {
-        response = {
-          query: requestedQuery,
-          type: searchType,
-          posts: [],
-          users: await store.searchUsers({
-            query: normalizedQuery,
-            limit,
-          }),
-        }
+      if (error instanceof SearchFilterValidationError) {
+        return createInvalidSearchFilterResponse(error.message)
       }
 
-      context.log('Search completed.', {
-        postCount: response.posts.length,
-        query: requestedQuery,
-        type: searchType,
-        userCount: response.users.length,
+      throw error
+    }
+
+    try {
+      const queryPayload: { type: SearchType; q?: string; filter?: string } = {
+        type,
+      }
+      if (query !== null) {
+        queryPayload.q = query
+      }
+      if (resolvedFilter !== undefined) {
+        queryPayload.filter = resolvedFilter
+      }
+
+      const results = await search(queryPayload)
+
+      context.log('Search lookup completed.', {
+        type,
+        query: query ?? null,
+        filterProvided: rawFilter ?? null,
+        filterApplied: resolvedFilter ?? null,
       })
 
-      return createSuccessResponse(response)
+      return createSuccessResponse(results)
     } catch (error) {
-      context.log('Search failed unexpectedly.', {
+      if (error instanceof SearchConfigurationError) {
+        return createErrorResponse(503, {
+          code: 'search_unconfigured',
+          message: error.message,
+        })
+      }
+      if (error instanceof SearchUpstreamError) {
+        return createErrorResponse(502, {
+          code: 'search_upstream_failed',
+          message: error.message,
+        })
+      }
+
+      context.log('Search lookup failed unexpectedly.', {
         error: error instanceof Error ? error.message : 'Unknown search error.',
-        query: requestedQuery,
-        type: searchType,
       })
 
       return createErrorResponse(500, {
         code: 'server.search_failed',
-        message: 'Unable to load search results right now.',
+        message: 'Unable to execute search at this time.',
       })
     }
   }

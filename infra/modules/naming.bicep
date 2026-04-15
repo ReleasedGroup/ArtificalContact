@@ -15,6 +15,8 @@ output names object = {
   followersContainer: 'followers'
   followsContainer: 'follows'
   mediaContainer: 'media'
+  notificationPrefsContainer: 'notificationPrefs'
+  notificationsContainer: 'notifications'
   postsContainer: 'posts'
   reactionsContainer: 'reactions'
   usersContainer: 'users'

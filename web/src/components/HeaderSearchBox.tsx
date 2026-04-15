@@ -1,22 +1,28 @@
 import { startTransition, useEffect, useId, useRef, useState } from 'react'
 import {
   MIN_SEARCH_QUERY_LENGTH,
-  search,
-  type SearchResponse,
   type SearchPostResult,
   type SearchUserResult,
+  searchSite,
 } from '../lib/search'
 
 const debounceDelayMs = 250
+const maximumQuickResults = 4
 const compactCountFormatter = new Intl.NumberFormat(undefined, {
   notation: 'compact',
   maximumFractionDigits: 1,
 })
 
+interface QuickSearchResults {
+  query: string
+  posts: SearchPostResult[]
+  users: SearchUserResult[]
+}
+
 type SearchState =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'ready'; data: SearchResponse }
+  | { status: 'ready'; data: QuickSearchResults }
   | { status: 'error'; message: string }
 
 function getProfileHref(handle: string): string {
@@ -44,6 +50,15 @@ function formatTimestamp(value: string | null): string | null {
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: 'medium',
   }).format(parsed)
+}
+
+function createExcerpt(value: string, maximumLength = 140): string {
+  const trimmed = value.trim().replace(/\s+/g, ' ')
+  if (trimmed.length <= maximumLength) {
+    return trimmed
+  }
+
+  return `${trimmed.slice(0, Math.max(0, maximumLength - 3)).trimEnd()}...`
 }
 
 function SearchResultUserRow({ result }: { result: SearchUserResult }) {
@@ -80,7 +95,7 @@ function SearchResultPostRow({ result }: { result: SearchPostResult }) {
 
   return (
     <a
-      href={getPostHref(result.postId)}
+      href={getPostHref(result.id)}
       className="block rounded-[1.35rem] border border-white/8 bg-white/4 px-4 py-3 transition hover:border-fuchsia-300/25 hover:bg-fuchsia-300/10"
     >
       <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
@@ -94,7 +109,7 @@ function SearchResultPostRow({ result }: { result: SearchPostResult }) {
       </div>
 
       <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-200">
-        {result.excerpt}
+        {createExcerpt(result.text)}
       </p>
     </a>
   )
@@ -160,15 +175,19 @@ export function HeaderSearchBox() {
         setSearchState({ status: 'loading' })
       })
 
-      void search(trimmedQuery, {
-        limit: 4,
-        signal: controller.signal,
-      })
-        .then((data) => {
+      void Promise.all([
+        searchSite(trimmedQuery, 'users', controller.signal),
+        searchSite(trimmedQuery, 'posts', controller.signal),
+      ])
+        .then(([usersResponse, postsResponse]) => {
           startTransition(() => {
             setSearchState({
               status: 'ready',
-              data,
+              data: {
+                query: trimmedQuery,
+                users: usersResponse.results.slice(0, maximumQuickResults),
+                posts: postsResponse.results.slice(0, maximumQuickResults),
+              },
             })
           })
         })
