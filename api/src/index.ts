@@ -2,6 +2,7 @@ import { registerCreateReplyFunction } from './functions/create-reply.js'
 import { registerCounterFunction } from './functions/counter.js'
 import { registerDeleteFollowFunction } from './functions/delete-follow.js'
 import { registerDeletePostFunction } from './functions/delete-post.js'
+import { registerFeedFanOutFunction } from './functions/feed-fanout.js'
 import { registerFollowUserFunction } from './functions/follow-user.js'
 import { registerFollowersMirrorFunction } from './functions/followers-mirror.js'
 import { registerGetPostFunction } from './functions/get-post.js'
@@ -19,6 +20,7 @@ registerCreateReplyFunction()
 registerCounterFunction()
 registerDeleteFollowFunction()
 registerDeletePostFunction()
+registerFeedFanOutFunction()
 registerFollowUserFunction()
 registerFollowersMirrorFunction()
 registerGetPostFunction()

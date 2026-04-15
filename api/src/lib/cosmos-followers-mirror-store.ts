@@ -1,6 +1,7 @@
 import { CosmosClient, type Container, type ItemDefinition } from '@azure/cosmos'
 import { getEnvironmentConfig } from './config.js'
 import { createCosmosClient } from './cosmos-client.js'
+import type { FollowerFeedTarget, FollowersFeedSourceStore } from './feed-fanout.js'
 import {
   DEFAULT_FOLLOWERS_CONTAINER_NAME,
   type ExistingFollowersMirrorRecord,
@@ -25,7 +26,9 @@ function isNotFound(error: unknown): boolean {
   return cosmosError.statusCode === 404 || cosmosError.code === 404
 }
 
-export class CosmosFollowersMirrorStore implements FollowersMirrorStore {
+export class CosmosFollowersMirrorStore
+  implements FollowersMirrorStore, FollowersFeedSourceStore
+{
   constructor(private readonly container: Container) {}
 
   static fromEnvironment(client?: CosmosClient): CosmosFollowersMirrorStore {
@@ -54,6 +57,28 @@ export class CosmosFollowersMirrorStore implements FollowersMirrorStore {
 
   async upsertMirror(document: FollowersMirrorDocument): Promise<void> {
     await this.container.items.upsert(document)
+  }
+
+  async listFollowersByFollowedId(
+    followedId: string,
+    limit: number,
+  ): Promise<FollowerFeedTarget[]> {
+    const cappedLimit = Math.max(1, Math.trunc(limit))
+    const query = `SELECT TOP ${cappedLimit} c.followerId, c.followedId FROM c WHERE c.followedId = @followedId ORDER BY c.createdAt ASC`
+    const { resources } = await this.container.items
+      .query<FollowerFeedTarget>(
+        {
+          query,
+          parameters: [{ name: '@followedId', value: followedId }],
+        },
+        {
+          partitionKey: followedId,
+          maxItemCount: cappedLimit,
+        },
+      )
+      .fetchAll()
+
+    return resources
   }
 
   private async readItem<T extends ItemDefinition>(
