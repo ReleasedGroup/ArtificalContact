@@ -6,8 +6,9 @@ var ancillaryContainersSharedThroughput = 400
 var feedsContainerAutoscaleMaxThroughput = 10000
 var followersContainerAutoscaleMaxThroughput = 4000
 var followsContainerAutoscaleMaxThroughput = 4000
-var usersContainerAutoscaleMaxThroughput = 4000
 var postsContainerAutoscaleMaxThroughput = 10000
+var reactionsContainerAutoscaleMaxThroughput = 4000
+var usersContainerAutoscaleMaxThroughput = 4000
 
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
   name: names.cosmosAccount
@@ -185,6 +186,29 @@ resource feedsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/cont
   }
 }
 
+resource reactionsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
+  parent: sqlDatabase
+  name: names.reactionsContainer
+  properties: {
+    resource: {
+      id: names.reactionsContainer
+      partitionKey: {
+        kind: 'Hash'
+        paths: [
+          '/postId'
+        ]
+        version: 2
+      }
+    }
+    options: {
+      // Cosmos autoscale uses the max RU/s ceiling only, so 4000 yields an effective 400-4000 RU/s range.
+      autoscaleSettings: {
+        maxThroughput: reactionsContainerAutoscaleMaxThroughput
+      }
+    }
+  }
+}
+
 resource mediaContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
   parent: sqlDatabase
   name: names.mediaContainer
@@ -210,4 +234,5 @@ output followersContainerName string = followersContainer.name
 output followsContainerName string = followsContainer.name
 output mediaContainerName string = mediaContainer.name
 output postsContainerName string = postsContainer.name
+output reactionsContainerName string = reactionsContainer.name
 output usersContainerName string = usersContainer.name

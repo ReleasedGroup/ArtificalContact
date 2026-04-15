@@ -16,6 +16,7 @@ output names object = {
   followsContainer: 'follows'
   mediaContainer: 'media'
   postsContainer: 'posts'
+  reactionsContainer: 'reactions'
   usersContainer: 'users'
   deploymentContainer: take('${hyphenBase}-packages', 63)
   frontDoorEndpoint: take('${hyphenBase}-edge', 50)
