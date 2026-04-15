@@ -1,6 +1,7 @@
 import { writeFile } from 'node:fs/promises'
 import sharp from 'sharp'
 import { describe, expect, it, vi } from 'vitest'
+import { buildMediaPostProcessFn } from '../src/functions/media-post-process.js'
 import {
   DefaultMediaVisualGenerator,
   processMediaBlob,
@@ -323,6 +324,45 @@ describe('processMediaBlob', () => {
     })
     expect(contentSafetyScanner.scanImage).not.toHaveBeenCalled()
     expect(blob.blobClient.metadataWrites[0]?.processingstate).toBe('error')
+  })
+})
+
+describe('buildMediaPostProcessFn', () => {
+  it('wires its dependencies into the blob handler and forwards the configured public base URL', async () => {
+    const blob = createStorageBlob(
+      'images',
+      'u_123/2026/04/photo.png',
+      Buffer.from('original-image'),
+      {
+        contentLength: 1234,
+        contentType: 'image/png',
+      },
+    )
+    const store = new RecordingMediaStore()
+    const mediaVisualGenerator: MediaVisualGenerator = {
+      generateVisuals: vi.fn().mockResolvedValue(createReadyVisuals()),
+    }
+    const contentSafetyScanner = createOkScanner()
+    const handler = buildMediaPostProcessFn('images', {
+      mediaStoreFactory: () => store,
+      mediaVisualGeneratorFactory: () => mediaVisualGenerator,
+      contentSafetyScannerFactory: () => contentSafetyScanner,
+      publicBaseUrl: 'https://cdn.example.com',
+      now: () => new Date('2026-04-15T09:10:00.000Z'),
+    })
+
+    await handler(blob as never, createLogger() as never)
+
+    expect(mediaVisualGenerator.generateVisuals).toHaveBeenCalledWith(
+      expect.objectContaining({
+        blobName: 'u_123/2026/04/photo.png',
+        mediaKind: 'image',
+        publicBaseUrl: 'https://cdn.example.com',
+      }),
+    )
+    expect(store.documents[0]?.url).toBe(
+      'https://cdn.example.com/images/u_123/2026/04/photo.png',
+    )
   })
 })
 

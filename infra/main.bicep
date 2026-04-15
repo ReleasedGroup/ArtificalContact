@@ -6,6 +6,9 @@ param location string = resourceGroup().location
 @description('Optional override for the Azure Static Web App region. When omitted, the deployment uses the primary location if supported by Static Web Apps, otherwise it falls back to eastasia.')
 param staticWebAppLocation string = ''
 param frontDoorCustomDomainHostName string = 'cdn-placeholder.example.com'
+@minValue(0)
+@maxValue(7)
+param contentSafetyThreshold int = 4
 
 var supportedStaticWebAppLocations = [
   'centralus'
@@ -95,6 +98,7 @@ module functions './modules/functions.bicep' = {
     cosmosDatabaseName: cosmos.outputs.databaseName
     cosmosEndpoint: cosmos.outputs.endpoint
     keyVaultResourceId: observability.outputs.keyVaultId
+    contentSafetyThreshold: contentSafetyThreshold
     mediaBaseUrl: 'https://${frontDoor.outputs.endpointHostName}'
     storageAccountName: storage.outputs.accountName
     storageAccountResourceId: storage.outputs.accountResourceId

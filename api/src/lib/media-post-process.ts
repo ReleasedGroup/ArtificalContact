@@ -240,7 +240,7 @@ async function createWebpVariants(
   const sourceImage = sharp(sourceBytes, {
     animated: false,
   }).rotate()
-  const metadata = await sourceImage.metadata()
+  const metadata = await sourceImage.clone().metadata()
   const originalWidth = normalizeNullableNumber(metadata.width)
   const originalHeight = normalizeNullableNumber(metadata.height)
   const storedVariants: StoredMediaVariantDocument[] = []
@@ -253,10 +253,8 @@ async function createWebpVariants(
       variant.label,
       'webp',
     )
-    const { data, info } = await sharp(sourceBytes, {
-      animated: false,
-    })
-      .rotate()
+    const { data, info } = await sourceImage
+      .clone()
       .resize({
         width: variant.maxWidth,
         withoutEnlargement: true,

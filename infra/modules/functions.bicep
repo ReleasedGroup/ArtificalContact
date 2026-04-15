@@ -7,6 +7,9 @@ param cosmosDatabaseName string
 param cosmosEndpoint string
 param keyVaultResourceId string
 param mediaBaseUrl string
+@minValue(0)
+@maxValue(7)
+param contentSafetyThreshold int = 4
 param storageAccountName string
 param storageAccountResourceId string
 param deploymentContainerName string
@@ -136,7 +139,7 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
         }
         {
           name: 'CONTENT_SAFETY_THRESHOLD'
-          value: '4'
+          value: string(contentSafetyThreshold)
         }
         {
           name: 'AZURE_REGION'
