@@ -56,7 +56,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
 }
 
 resource searchService 'Microsoft.Search/searchServices@2023-11-01' existing = {
-  id: searchResourceId
+  name: last(split(searchResourceId, '/'))
 }
 
 resource functionPlan 'Microsoft.Web/serverfarms@2024-04-01' = {
