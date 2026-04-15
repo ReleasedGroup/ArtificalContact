@@ -32,6 +32,7 @@ import {
   type ThreadPostMedia,
 } from '../lib/thread'
 import { ReactionBar } from './ReactionBar'
+import { ReportDialog } from './ReportDialog'
 
 type PostDetailState =
   | { status: 'loading' }
@@ -237,6 +238,18 @@ function buildViewerBadge(viewer: MeProfile): string {
   )
 }
 
+function canViewerReportTarget(
+  viewer: MeProfile | null,
+  targetAuthorId: string | null,
+): viewer is MeProfile {
+  return (
+    viewer !== null &&
+    viewer.status === 'active' &&
+    Boolean(viewer.handle) &&
+    viewer.id !== targetAuthorId
+  )
+}
+
 function getAuthorName(post: RenderablePost): string {
   return (
     post.authorDisplayName?.trim() ||
@@ -379,11 +392,19 @@ function renderPostText(text: string | null) {
 }
 
 function PostMediaGallery({
+  authorId,
   authorName,
+  authorHandle,
   media,
+  postId,
+  viewer,
 }: {
+  authorId: string | null
   authorName: string
+  authorHandle: string | null
   media: Array<PublicPostMedia | ThreadPostMedia>
+  postId: string
+  viewer: MeProfile | null
 }) {
   if (media.length === 0) {
     return null
@@ -450,16 +471,34 @@ function PostMediaGallery({
             )}
             <div className="flex items-center justify-between gap-3 px-4 py-3 text-xs text-slate-400">
               <span className="uppercase tracking-[0.18em]">{kind}</span>
-              {openHref ? (
-                <a
-                  href={openHref}
-                  className="text-cyan-100 transition hover:text-cyan-50"
-                >
-                  Open media
-                </a>
-              ) : (
-                <span>Preview unavailable</span>
-              )}
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                {openHref ? (
+                  <a
+                    href={openHref}
+                    className="text-cyan-100 transition hover:text-cyan-50"
+                  >
+                    Open media
+                  </a>
+                ) : (
+                  <span>Preview unavailable</span>
+                )}
+                {canViewerReportTarget(viewer, authorId) && openHref && (
+                  <ReportDialog
+                    actionClassName="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs font-medium text-amber-100 transition hover:border-amber-300/35 hover:bg-amber-300/15"
+                    actionLabel="Report media"
+                    dialogDescription={`Flag this ${kind} attachment from ${authorName} for moderator review.`}
+                    dialogTitle="Report this media"
+                    successMessage="Media report submitted."
+                    target={{
+                      targetType: 'media',
+                      targetId: item.id ?? openHref,
+                      targetPostId: postId,
+                      mediaUrl: openHref,
+                      targetProfileHandle: authorHandle,
+                    }}
+                  />
+                )}
+              </div>
             </div>
           </article>
         )
@@ -476,6 +515,7 @@ function PostCard({
   canReact,
   post,
   showOpenLink = true,
+  viewer,
 }: {
   actionSlot?: ReactNode
   contextLabel?: string | null
@@ -484,6 +524,7 @@ function PostCard({
   onReactionCommitted: () => void
   post: RenderablePost
   showOpenLink?: boolean
+  viewer: MeProfile | null
 }) {
   const authorName = getAuthorName(post)
   const authorHandle = getAuthorHandle(post)
@@ -585,7 +626,14 @@ function PostCard({
           )}
 
           {renderPostText(post.text)}
-          <PostMediaGallery authorName={authorName} media={post.media} />
+          <PostMediaGallery
+            authorId={post.authorId}
+            authorHandle={authorHandle}
+            authorName={authorName}
+            media={post.media}
+            postId={post.id}
+            viewer={viewer}
+          />
 
           <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-400">
             <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
@@ -644,6 +692,7 @@ function ThreadConversationSection({
   canReact,
   postsById,
   selectedPostId,
+  viewer,
 }: {
   entries: ThreadConversationEntry[]
   getActionSlot?: (post: RenderablePost) => ReactNode
@@ -651,6 +700,7 @@ function ThreadConversationSection({
   onReactionCommitted: () => void
   postsById: Map<string, ThreadPost>
   selectedPostId: string
+  viewer: MeProfile | null
 }) {
   if (entries.length === 0) {
     return null
@@ -714,6 +764,7 @@ function ThreadConversationSection({
                   github: toRenderableGitHubMetadata(entry.post.github),
                 }}
                 showOpenLink={entry.post.id !== selectedPostId}
+                viewer={viewer}
               />
             </div>
           )
@@ -936,6 +987,7 @@ function ReadyPostDetail({
                     github: toRenderableGitHubMetadata(data.post.github),
                   }}
                   showOpenLink={false}
+                  viewer={viewer}
                 />
               </div>
             </article>
@@ -948,6 +1000,7 @@ function ReadyPostDetail({
             getActionSlot={getActionSlot}
             postsById={postsById}
             selectedPostId={data.post.id}
+            viewer={viewer}
           />
 
           {threadEntries.length === 0 && !selectedInThread && (
@@ -1305,27 +1358,43 @@ export function PostDetailScreen({ postId }: { postId: string }) {
   }
 
   const getActionSlot = (post: RenderablePost) => {
-    if (viewer?.id !== post.authorId) {
+    if (viewer?.id === post.authorId) {
+      const isDeleting =
+        deleteState.status === 'deleting' && deleteState.postId === post.id
+
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            void handleDeletePost(post)
+          }}
+          className="rounded-full border border-rose-300/20 bg-rose-300/10 px-4 py-2 text-rose-100 transition hover:border-rose-300/35 hover:bg-rose-300/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-slate-400"
+          disabled={
+            replyState.status === 'submitting' ||
+            deleteState.status === 'deleting'
+          }
+        >
+          {isDeleting ? `Deleting ${post.type}...` : `Delete ${post.type}`}
+        </button>
+      )
+    }
+
+    if (!canViewerReportTarget(viewer, post.authorId)) {
       return null
     }
 
-    const isDeleting =
-      deleteState.status === 'deleting' && deleteState.postId === post.id
-
     return (
-      <button
-        type="button"
-        onClick={() => {
-          void handleDeletePost(post)
+      <ReportDialog
+        actionLabel={`Report ${post.type}`}
+        dialogDescription={`Flag this ${post.type} from ${getAuthorName(post)} for moderator review.`}
+        dialogTitle={`Report this ${post.type}`}
+        successMessage={`${post.type === 'reply' ? 'Reply' : 'Post'} report submitted.`}
+        target={{
+          targetType: post.type,
+          targetId: post.id,
+          targetProfileHandle: getAuthorHandle(post),
         }}
-        className="rounded-full border border-rose-300/20 bg-rose-300/10 px-4 py-2 text-rose-100 transition hover:border-rose-300/35 hover:bg-rose-300/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-slate-400"
-        disabled={
-          replyState.status === 'submitting' ||
-          deleteState.status === 'deleting'
-        }
-      >
-        {isDeleting ? `Deleting ${post.type}...` : `Delete ${post.type}`}
-      </button>
+      />
     )
   }
 

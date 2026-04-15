@@ -12,6 +12,7 @@ import { hasRole, type MeProfile } from '../lib/me'
 import { getFeedPage, type FeedEntry } from '../lib/feed'
 import { signOut } from '../lib/auth'
 import { HeaderSearchBox } from './HeaderSearchBox'
+import { ReportDialog } from './ReportDialog'
 
 interface HomeFeedScreenProps {
   viewer: MeProfile
@@ -88,10 +89,14 @@ function getRefreshMessage(state: PullRefreshState): string {
   }
 }
 
-function FeedCard({ entry }: { entry: FeedEntry }) {
+function FeedCard({ entry, viewer }: { entry: FeedEntry; viewer: MeProfile }) {
   const authorName = getAuthorName(entry)
   const authorHandle = entry.authorHandle?.trim() || null
   const timestamp = formatTimestamp(entry.createdAt)
+  const viewerCanReport =
+    viewer.status === 'active' && Boolean(viewer.handle?.trim())
+  const canReport =
+    viewerCanReport && entry.authorId !== null && entry.authorId !== viewer.id
 
   return (
     <article className="rounded-[1.75rem] border border-white/10 bg-slate-900/72 p-5 shadow-lg shadow-slate-950/20 transition hover:border-white/15 hover:bg-slate-900/80">
@@ -197,6 +202,19 @@ function FeedCard({ entry }: { entry: FeedEntry }) {
             >
               Open thread
             </a>
+            {canReport && (
+              <ReportDialog
+                actionLabel="Report post"
+                dialogDescription={`Flag ${authorName}'s post for moderator review.`}
+                dialogTitle="Report this post"
+                successMessage="Post report submitted."
+                target={{
+                  targetType: 'post',
+                  targetId: entry.postId,
+                  targetProfileHandle: authorHandle,
+                }}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -576,7 +594,7 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                 {!isPending && !isError && feedEntries.length > 0 && (
                   <div className="space-y-4">
                     {feedEntries.map((entry) => (
-                      <FeedCard key={entry.id} entry={entry} />
+                      <FeedCard key={entry.id} entry={entry} viewer={viewer} />
                     ))}
                   </div>
                 )}

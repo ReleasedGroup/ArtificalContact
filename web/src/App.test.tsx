@@ -940,6 +940,18 @@ describe('App', () => {
     window.history.replaceState({}, '', '/u/Ada')
 
     mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(403, {
+          data: null,
+          errors: [
+            {
+              code: 'auth.forbidden',
+              message: 'Sign-in required.',
+            },
+          ],
+        })
+      }
+
       if (String(input) === '/api/users/Ada') {
         return createJsonResponse(200, {
           data: {
@@ -974,19 +986,117 @@ describe('App', () => {
     expect(screen.getByText('Symbolic AI nerd.')).toBeInTheDocument()
     expect(screen.getByText('llm')).toBeInTheDocument()
     expect(screen.getByText('Public identity is live.')).toBeInTheDocument()
-    expect(mockFetch).toHaveBeenCalledTimes(1)
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/users/Ada',
+      expect.objectContaining({
+        headers: { Accept: 'application/json' },
+        signal: expect.any(AbortSignal),
+      }),
+    )
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/me',
+      expect.objectContaining({
+        headers: { Accept: 'application/json' },
+        signal: expect.any(AbortSignal),
+      }),
+    )
+  })
 
-    const [requestUrl, requestOptions] = mockFetch.mock.calls[0]
-    expect(requestUrl).toBe('/api/users/Ada')
-    expect(requestOptions).toMatchObject({
-      headers: { Accept: 'application/json' },
+  it('lets an authenticated viewer report a public profile', async () => {
+    window.history.replaceState({}, '', '/u/Ada')
+
+    mockFetch.mockImplementation(async (input, init) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(200, {
+          data: createResolvedMeProfile(),
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/users/Ada') {
+        return createJsonResponse(200, {
+          data: {
+            id: 'github:ada-target',
+            handle: 'Ada',
+            displayName: 'Ada Lovelace',
+            bio: 'Symbolic AI nerd.',
+            avatarUrl: null,
+            bannerUrl: null,
+            expertise: ['llm', 'evals'],
+            counters: {
+              posts: 12,
+              followers: 34,
+              following: 5,
+            },
+            createdAt: '2026-04-15T00:00:00.000Z',
+            updatedAt: '2026-04-16T00:00:00.000Z',
+          },
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/reports') {
+        expect(JSON.parse(String(init?.body ?? '{}'))).toEqual({
+          targetType: 'user',
+          targetId: 'github:ada-target',
+          targetProfileHandle: 'Ada',
+          reasonCode: 'spam',
+          details: null,
+        })
+
+        return createJsonResponse(201, {
+          data: {
+            report: {
+              id: 'report-profile',
+              status: 'open',
+              targetType: 'user',
+              targetId: 'github:ada-target',
+              reasonCode: 'spam',
+              createdAt: '2026-04-16T09:00:00.000Z',
+            },
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
     })
+
+    renderApp()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Ada Lovelace' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report profile' }))
+    expect(
+      await screen.findByRole('dialog', { name: 'Report this profile' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit report' }))
+
+    expect(
+      await screen.findByText('Profile report submitted.'),
+    ).toBeInTheDocument()
   })
 
   it('renders a not-found state when the public profile does not exist', async () => {
     window.history.replaceState({}, '', '/u/missing')
 
     mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(403, {
+          data: null,
+          errors: [
+            {
+              code: 'auth.forbidden',
+              message: 'Sign-in required.',
+            },
+          ],
+        })
+      }
+
       if (String(input) === '/api/users/missing') {
         return createJsonResponse(404, {
           data: null,
@@ -1160,6 +1270,18 @@ describe('App', () => {
     let profileRequestCount = 0
 
     mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(403, {
+          data: null,
+          errors: [
+            {
+              code: 'auth.forbidden',
+              message: 'Sign-in required.',
+            },
+          ],
+        })
+      }
+
       if (String(input).startsWith('/api/users/')) {
         profileRequestCount += 1
         return profileRequestCount === 1
@@ -1622,6 +1744,137 @@ describe('App', () => {
       screen.getByLabelText('audio attachment from Ada Lovelace'),
     ).toHaveAttribute('src', 'https://cdn.example.com/media/voice-note.mp3')
     expect(screen.getAllByRole('link', { name: 'Open media' })).toHaveLength(4)
+  })
+
+  it('lets an authenticated viewer report replies and media from the thread page', async () => {
+    window.history.replaceState({}, '', '/p/post-reportable')
+
+    const reportPayloads: unknown[] = []
+    const media = [
+      {
+        id: 'media-reportable',
+        kind: 'image',
+        url: 'https://cdn.example.com/media/reportable.png',
+        thumbUrl: 'https://cdn.example.com/media/reportable-thumb.png',
+        width: 1280,
+        height: 720,
+      },
+    ]
+
+    mockFetch.mockImplementation(async (input, init) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(200, {
+          data: createResolvedMeProfile(),
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/posts/post-reportable') {
+        return createJsonResponse(200, {
+          data: createPublicPost({
+            id: 'post-reportable',
+            threadId: 'post-reportable',
+            text: 'Root thread post',
+            media,
+          }),
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/threads/post-reportable') {
+        return createJsonResponse(200, {
+          data: {
+            threadId: 'post-reportable',
+            posts: [
+              createThreadPost({
+                id: 'post-reportable',
+                threadId: 'post-reportable',
+                text: 'Root thread post',
+                media,
+              }),
+              createThreadPost({
+                id: 'reply-reportable',
+                type: 'reply',
+                threadId: 'post-reportable',
+                parentId: 'post-reportable',
+                authorId: 'github:reply-author',
+                authorHandle: 'grace',
+                authorDisplayName: 'Grace Hopper',
+                text: 'Reply that should be reportable.',
+                createdAt: '2026-04-15T00:05:00.000Z',
+                updatedAt: '2026-04-15T00:05:00.000Z',
+              }),
+            ],
+            continuationToken: null,
+          },
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/reports') {
+        reportPayloads.push(JSON.parse(String(init?.body ?? '{}')))
+
+        return createJsonResponse(201, {
+          data: {
+            report: {
+              id: `report-${reportPayloads.length}`,
+              status: 'open',
+              targetType:
+                reportPayloads.length === 1 ? 'reply' : 'media',
+              targetId:
+                reportPayloads.length === 1
+                  ? 'reply-reportable'
+                  : 'media-reportable',
+              reasonCode: 'spam',
+              createdAt: '2026-04-16T10:00:00.000Z',
+            },
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    renderApp()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Standalone post detail' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report reply' }))
+    expect(
+      await screen.findByRole('dialog', { name: 'Report this reply' }),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Submit report' }))
+
+    expect(await screen.findByText('Reply report submitted.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report media' }))
+    expect(
+      await screen.findByRole('dialog', { name: 'Report this media' }),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Submit report' }))
+
+    expect(await screen.findByText('Media report submitted.')).toBeInTheDocument()
+    expect(reportPayloads).toEqual([
+      {
+        targetType: 'reply',
+        targetId: 'reply-reportable',
+        targetProfileHandle: 'grace',
+        reasonCode: 'spam',
+        details: null,
+      },
+      {
+        targetType: 'media',
+        targetId: 'media-reportable',
+        targetPostId: 'post-reportable',
+        mediaUrl: 'https://cdn.example.com/media/reportable.png',
+        targetProfileHandle: 'ada',
+        reasonCode: 'spam',
+        details: null,
+      },
+    ])
   })
 
   it('lets an authenticated viewer reply in-thread and soft-delete their reply', async () => {

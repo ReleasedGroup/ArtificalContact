@@ -80,9 +80,8 @@ describe('PostComposer', () => {
         writable: originalCreateObjectURLDescriptor.writable,
       })
     } else {
-      delete (
-        URL as { createObjectURL?: (file: File) => string }
-      ).createObjectURL
+      delete (URL as { createObjectURL?: (file: File) => string })
+        .createObjectURL
     }
 
     if (originalRevokeObjectURLDescriptor) {
@@ -93,9 +92,8 @@ describe('PostComposer', () => {
         writable: originalRevokeObjectURLDescriptor.writable,
       })
     } else {
-      delete (
-        URL as { revokeObjectURL?: (url: string) => void }
-      ).revokeObjectURL
+      delete (URL as { revokeObjectURL?: (url: string) => void })
+        .revokeObjectURL
     }
 
     vi.restoreAllMocks()
@@ -137,6 +135,56 @@ describe('PostComposer', () => {
     })
   })
 
+  it('captures alt text for attached images before submission', () => {
+    const handleSubmit = vi.fn()
+
+    render(<ComposerHarness onSubmit={handleSubmit} />)
+
+    const dropZone = screen.getByRole('group', {
+      name: 'Post image attachments',
+    })
+    const image = new File(['diagram'], 'system-architecture.png', {
+      type: 'image/png',
+    })
+
+    fireEvent.drop(dropZone, {
+      dataTransfer: { files: [image] },
+    })
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Post body' }), {
+      target: { value: 'Accessibility notes for the architecture review.' },
+    })
+    fireEvent.change(
+      screen.getByRole('textbox', {
+        name: 'Alt text',
+      }),
+      {
+        target: {
+          value:
+            'Architecture diagram showing the client, API, and storage layers.',
+        },
+      },
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+
+    expect(handleSubmit).toHaveBeenCalledWith({
+      mediaFiles: [
+        {
+          altText:
+            'Architecture diagram showing the client, API, and storage layers.',
+          file: image,
+        },
+      ],
+      value: 'Accessibility notes for the architecture review.',
+    })
+    expect(
+      screen.getByRole('img', {
+        name: 'Architecture diagram showing the client, API, and storage layers.',
+      }),
+    ).toBeInTheDocument()
+  })
+
   it('disables reply submission when the text is blank', () => {
     render(<ComposerHarness variant="reply" initialValue="   " />)
 
@@ -164,32 +212,50 @@ describe('PostComposer', () => {
     expect(screen.getByText('2 images ready')).toBeInTheDocument()
     expect(
       screen.getByRole('img', {
-        name: 'Selected media preview: diagram-a.png',
+        name: 'Selected image preview for diagram-a.png',
       }),
     ).toHaveAttribute('src', 'blob:diagram-a.png')
     expect(
       screen.getByRole('img', {
-        name: 'Selected media preview: diagram-b.webp',
+        name: 'Selected image preview for diagram-b.webp',
       }),
     ).toHaveAttribute('src', 'blob:diagram-b.webp')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove diagram-a.png' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove diagram-a.png' }),
+    )
 
     expect(screen.getByText('1 image ready')).toBeInTheDocument()
     expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:diagram-a.png')
     expect(
       screen.queryByRole('img', {
-        name: 'Selected media preview: diagram-a.png',
+        name: 'Selected image preview for diagram-a.png',
       }),
     ).not.toBeInTheDocument()
     expect(
       screen.getByRole('img', {
-        name: 'Selected media preview: diagram-b.webp',
+        name: 'Selected image preview for diagram-b.webp',
       }),
     ).toBeInTheDocument()
 
     unmount()
 
     expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:diagram-b.webp')
+  })
+
+  it('exposes keyboard-friendly attachment controls and guidance for screen readers', () => {
+    render(<ComposerHarness />)
+
+    expect(
+      screen.getByRole('button', { name: 'Browse images' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('group', { name: 'Post image attachments' }),
+    ).toHaveAccessibleDescription(
+      /drag images here or browse from the keyboard/i,
+    )
+    expect(
+      screen.getByRole('textbox', { name: 'Post body' }),
+    ).toHaveAccessibleDescription(/add alternative text/i)
   })
 })
