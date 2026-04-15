@@ -872,8 +872,8 @@ describe('App', () => {
       await screen.findByRole('heading', { name: 'Search results' }),
     ).toBeInTheDocument()
     expect(await screen.findByText('Exploring search sync')).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Posts' })).toHaveAttribute(
-      'aria-selected',
+    expect(screen.getByRole('button', { name: 'Posts' })).toHaveAttribute(
+      'aria-pressed',
       'true',
     )
     expect(screen.getByRole('link', { name: '#evals' })).toHaveAttribute(
@@ -954,7 +954,7 @@ describe('App', () => {
       '/search?q=adal&type=users',
     )
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Hashtags' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Hashtags' }))
 
     expect(await screen.findByRole('link', { name: '#adal' })).toHaveAttribute(
       'href',

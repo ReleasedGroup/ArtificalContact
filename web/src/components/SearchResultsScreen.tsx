@@ -16,6 +16,10 @@ const compactCountFormatter = new Intl.NumberFormat(undefined, {
   notation: 'compact',
   maximumFractionDigits: 1,
 })
+const resultTimestampFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+})
 
 const searchTabs: Array<{ value: SearchType; label: string }> = [
   { value: 'posts', label: 'Posts' },
@@ -37,10 +41,7 @@ function formatTimestamp(value: string): string | null {
     return null
   }
 
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(parsed)
+  return resultTimestampFormatter.format(parsed)
 }
 
 function buildMonogram(source: string): string {
@@ -376,11 +377,7 @@ export function SearchResultsScreen({
             />
           </form>
 
-          <div
-            className="mt-5 flex flex-wrap gap-2"
-            aria-label="Search result types"
-            role="tablist"
-          >
+          <div className="mt-5 flex flex-wrap gap-2" aria-label="Search result types">
             {searchTabs.map((tab) => {
               const isActive = activeType === tab.value
 
@@ -388,8 +385,7 @@ export function SearchResultsScreen({
                 <button
                   key={tab.value}
                   type="button"
-                  role="tab"
-                  aria-selected={isActive}
+                  aria-pressed={isActive}
                   onClick={() => {
                     setActiveType(tab.value)
                   }}
