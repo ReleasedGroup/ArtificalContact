@@ -44,6 +44,9 @@ function App() {
     queryKey: ['health'],
     queryFn: ({ signal }) => getHealth(signal),
     retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })
 
   useEffect(() => {
@@ -189,7 +192,7 @@ function App() {
 
                 {healthQuery.isError && <p>{healthErrorMessage}</p>}
 
-                {healthQuery.data && (
+                {healthQuery.isSuccess && (
                   <>
                     <p>
                       Build{' '}
