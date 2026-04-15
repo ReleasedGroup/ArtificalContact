@@ -158,6 +158,10 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
           value: names.notificationsContainer
         }
         {
+          name: 'NOTIFICATION_PREFS_CONTAINER_NAME'
+          value: names.notificationPrefsContainer
+        }
+        {
           name: 'CONTENT_SAFETY_THRESHOLD'
           value: string(contentSafetyThreshold)
         }
