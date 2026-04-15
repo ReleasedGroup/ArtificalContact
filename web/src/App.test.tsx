@@ -4,34 +4,49 @@ import App from './App'
 
 const mockFetch = vi.fn()
 
+function createJsonResponse<T>(status: number, payload: T) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => payload,
+  }
+}
+
 describe('App', () => {
   beforeEach(() => {
+    window.history.replaceState({}, '', '/')
     vi.stubGlobal('fetch', mockFetch)
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        data: {
-          service: 'artificialcontact-api',
-          status: 'ok',
-          buildSha: 'sha-1234',
-          region: 'australiaeast',
-          timestamp: '2026-04-15T00:00:00.000Z',
-          cosmos: {
-            status: 'ok',
-            databaseName: 'acn',
-          },
-        },
-        errors: [],
-      }),
-    })
+    mockFetch.mockReset()
   })
 
   afterEach(() => {
+    window.history.replaceState({}, '', '/')
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
   })
 
   it('renders the sign-in screen and exposes both SWA auth providers', async () => {
+    mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/health') {
+        return createJsonResponse(200, {
+          data: {
+            service: 'artificialcontact-api',
+            status: 'ok',
+            buildSha: 'sha-1234',
+            region: 'australiaeast',
+            timestamp: '2026-04-15T00:00:00.000Z',
+            cosmos: {
+              status: 'ok',
+              databaseName: 'acn',
+            },
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
     render(<App />)
 
     expect(
@@ -56,5 +71,86 @@ describe('App', () => {
     expect(await screen.findByText('Healthy')).toBeInTheDocument()
     expect(screen.getByText(/sha-1234/)).toBeInTheDocument()
     expect(screen.getByText(/Cosmos ping:/)).toBeInTheDocument()
+  })
+
+  it('renders a public profile when the current route matches /u/{handle}', async () => {
+    window.history.replaceState({}, '', '/u/Ada')
+
+    mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/users/Ada') {
+        return createJsonResponse(200, {
+          data: {
+            id: 'u1',
+            handle: 'Ada',
+            displayName: 'Ada Lovelace',
+            bio: 'Symbolic AI nerd.',
+            avatarUrl: 'https://cdn.example.com/ada.png',
+            bannerUrl: 'https://cdn.example.com/ada-banner.png',
+            expertise: ['llm', 'evals'],
+            counters: {
+              posts: 12,
+              followers: 34,
+              following: 5,
+            },
+            createdAt: '2026-04-15T00:00:00.000Z',
+            updatedAt: '2026-04-16T00:00:00.000Z',
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    render(<App />)
+
+    expect(
+      await screen.findByRole('heading', { name: 'Ada Lovelace' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('@Ada')).toBeInTheDocument()
+    expect(screen.getByText('Symbolic AI nerd.')).toBeInTheDocument()
+    expect(screen.getByText('llm')).toBeInTheDocument()
+    expect(screen.getByText('Public identity is live.')).toBeInTheDocument()
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+
+    const [requestUrl, requestOptions] = mockFetch.mock.calls[0]
+    expect(requestUrl).toBe('/api/users/Ada')
+    expect(requestOptions).toMatchObject({
+      headers: { Accept: 'application/json' },
+    })
+  })
+
+  it('renders a not-found state when the public profile does not exist', async () => {
+    window.history.replaceState({}, '', '/u/missing')
+
+    mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/users/missing') {
+        return createJsonResponse(404, {
+          data: null,
+          errors: [
+            {
+              code: 'user_not_found',
+              message: 'No public profile exists for the requested handle.',
+              field: 'handle',
+            },
+          ],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    render(<App />)
+
+    expect(
+      await screen.findByRole('heading', { name: 'Profile not found' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('No public profile exists for the requested handle.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Back to sign-in' })).toHaveAttribute(
+      'href',
+      '/',
+    )
   })
 })
