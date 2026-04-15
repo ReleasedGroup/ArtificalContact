@@ -15,10 +15,12 @@ output names object = {
   followersContainer: 'followers'
   followsContainer: 'follows'
   mediaContainer: 'media'
+  modActionsContainer: 'modActions'
   notificationPrefsContainer: 'notificationPrefs'
   notificationsContainer: 'notifications'
   postsContainer: 'posts'
   reactionsContainer: 'reactions'
+  reportsContainer: 'reports'
   usersContainer: 'users'
   deploymentContainer: take('${hyphenBase}-packages', 63)
   frontDoorEndpoint: take('${hyphenBase}-edge', 50)

@@ -10,7 +10,9 @@ var postsContainerAutoscaleMaxThroughput = 10000
 var reactionsContainerAutoscaleMaxThroughput = 4000
 var usersContainerAutoscaleMaxThroughput = 4000
 var mediaContainerThroughput = 400
+var modActionsContainerThroughput = 400
 var notificationPrefsContainerThroughput = 400
+var reportsContainerThroughput = 400
 
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
   name: names.cosmosAccount
@@ -251,6 +253,46 @@ resource mediaContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/cont
   }
 }
 
+resource reportsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
+  parent: sqlDatabase
+  name: names.reportsContainer
+  properties: {
+    options: {
+      throughput: reportsContainerThroughput
+    }
+    resource: {
+      id: names.reportsContainer
+      partitionKey: {
+        kind: 'Hash'
+        paths: [
+          '/status'
+        ]
+        version: 2
+      }
+    }
+  }
+}
+
+resource modActionsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
+  parent: sqlDatabase
+  name: names.modActionsContainer
+  properties: {
+    options: {
+      throughput: modActionsContainerThroughput
+    }
+    resource: {
+      id: names.modActionsContainer
+      partitionKey: {
+        kind: 'Hash'
+        paths: [
+          '/targetType'
+        ]
+        version: 2
+      }
+    }
+  }
+}
+
 resource notificationPrefsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
   parent: sqlDatabase
   name: names.notificationPrefsContainer
@@ -278,8 +320,10 @@ output feedsContainerName string = feedsContainer.name
 output followersContainerName string = followersContainer.name
 output followsContainerName string = followsContainer.name
 output mediaContainerName string = mediaContainer.name
+output modActionsContainerName string = modActionsContainer.name
 output notificationPrefsContainerName string = notificationPrefsContainer.name
 output notificationsContainerName string = notificationsContainer.name
 output postsContainerName string = postsContainer.name
 output reactionsContainerName string = reactionsContainer.name
+output reportsContainerName string = reportsContainer.name
 output usersContainerName string = usersContainer.name
