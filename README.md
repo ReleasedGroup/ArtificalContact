@@ -5,7 +5,7 @@ ArtificialContact is an Azure-native social network for AI practitioners. This r
 ## Repository layout
 
 - `web/`: React 19, TypeScript, Vite, Tailwind CSS v4.1, Vitest
-- `api/`: Azure Functions (Node 20, TypeScript) with `/api/health` plus the `usersByHandle` change-feed worker
+- `api/`: Azure Functions (Node 20, TypeScript) with `/api/health`, `/api/users/{handle}`, and the `usersByHandle` change-feed worker
 - `infra/`: Bicep modules and `azure.yaml` orchestration for Azure Developer CLI
 - `docs/`: requirements, technical design, deployment, and testing documentation
 
