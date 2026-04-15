@@ -12,6 +12,9 @@ export interface SearchQuery {
   q?: string
   type: SearchType
   filter?: string
+  orderBy?: string[]
+  scoringProfile?: string
+  top?: number
 }
 
 export interface SearchResponse {
@@ -34,6 +37,9 @@ interface SearchClientLike {
     options: {
       filter?: string
       includeTotalCount: boolean
+      orderBy?: string[]
+      scoringProfile?: string
+      top?: number
     },
   ): Promise<SearchResultPage>
 }
@@ -128,6 +134,11 @@ export async function querySearchIndex(
     const searchResults = await client.search(searchText, {
       ...(filter === undefined ? {} : { filter }),
       includeTotalCount: true,
+      ...(query.orderBy === undefined ? {} : { orderBy: query.orderBy }),
+      ...(query.scoringProfile === undefined
+        ? {}
+        : { scoringProfile: query.scoringProfile }),
+      ...(query.top === undefined ? {} : { top: query.top }),
     })
 
     const value: Record<string, unknown>[] = []

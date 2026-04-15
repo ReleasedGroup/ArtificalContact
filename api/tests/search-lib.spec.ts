@@ -67,6 +67,9 @@ describe('querySearchIndex', () => {
         type: 'posts',
         q: 'demo',
         filter: "authorHandle eq 'ada'",
+        orderBy: ['createdAt desc'],
+        scoringProfile: 'recencyAndEngagement',
+        top: 20,
       },
       clientFactory,
     )
@@ -75,6 +78,9 @@ describe('querySearchIndex', () => {
     expect(search).toHaveBeenCalledWith('demo', {
       filter: "authorHandle eq 'ada'",
       includeTotalCount: true,
+      orderBy: ['createdAt desc'],
+      scoringProfile: 'recencyAndEngagement',
+      top: 20,
     })
     expect(result).toEqual({
       '@odata.count': 1,
@@ -125,7 +131,12 @@ describe('querySearchIndex', () => {
 
     await expect(
       querySearchIndex({ type: 'posts', q: 'demo' }, () => ({ search })),
-    ).rejects.toEqual(new SearchUpstreamError('Search index query failed with status 503.', 503))
+    ).rejects.toEqual(
+      new SearchUpstreamError(
+        'Search index query failed with status 503.',
+        503,
+      ),
+    )
 
     expect(consoleError).toHaveBeenCalledWith(
       'Search index query failed.',

@@ -8,6 +8,7 @@ import { registerFeedFanOutFunction } from './functions/feed-fanout.js'
 import { registerFollowUserFunction } from './functions/follow-user.js'
 import { registerFollowersMirrorFunction } from './functions/followers-mirror.js'
 import { registerGetFeedFunction } from './functions/get-feed.js'
+import { registerGetPublicFeedFunction } from './functions/get-public-feed.js'
 import { registerGifSearchFunction } from './functions/search-gifs.js'
 import { registerGetPostFunction } from './functions/get-post.js'
 import { registerGetThreadFunction } from './functions/get-thread.js'
@@ -36,6 +37,7 @@ registerFeedFanOutFunction()
 registerFollowUserFunction()
 registerFollowersMirrorFunction()
 registerGetFeedFunction()
+registerGetPublicFeedFunction()
 registerGifSearchFunction()
 registerGetPostFunction()
 registerGetThreadFunction()
