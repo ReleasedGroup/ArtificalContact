@@ -61,12 +61,15 @@ export function ReactionBar({
     setLikes(likeCount)
     setDislikes(dislikesCount)
     setEmojis(emojiCount)
+  }, [dislikesCount, emojiCount, likeCount])
+
+  useEffect(() => {
     setUserLiked(false)
     setUserDisliked(false)
     setUserEmojis(new Set())
     setError(null)
     setIsPickerOpen(false)
-  }, [dislikesCount, emojiCount, likeCount])
+  }, [postId])
 
   const reactionSummary = useMemo(
     () => ({
@@ -293,7 +296,7 @@ export function ReactionBar({
             aria-label="Emoji reaction picker"
             disabled={!canInteract}
             className={`rounded-full border border-fuchsia-300/20 px-4 py-2 text-sm transition ${
-              hasActiveReaction && reactionSummary.emojis > 0
+              userEmojis.size > 0
                 ? 'bg-fuchsia-300/15 text-fuchsia-100'
                 : 'bg-white/5 text-slate-200 hover:bg-white/10'
             }`}

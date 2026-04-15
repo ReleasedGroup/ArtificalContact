@@ -153,6 +153,120 @@ describe('ReactionBar', () => {
     })
   })
 
+  it('preserves user reaction state when counts are refreshed from the parent', async () => {
+    vi.mocked(createReaction).mockResolvedValue({
+      reaction: {
+        sentiment: 'like',
+        emojiValues: [],
+        gifValue: null,
+      },
+    })
+    vi.mocked(deleteReaction).mockResolvedValue({
+      unreact: {
+        id: 'reaction-1',
+        postId: 'post-1',
+        userId: 'viewer-1',
+        reactionExisted: true,
+        deletedReaction: true,
+        removedEmojiValue: null,
+        emojiValueRemoved: false,
+      },
+      reaction: {
+        sentiment: 'like',
+        emojiValues: ['👍'],
+        gifValue: null,
+      },
+    })
+
+    const rendered = renderBar()
+    const likeButton = screen.getByRole('button', { name: 'Like reaction' })
+
+    fireEvent.click(likeButton)
+
+    await waitFor(() => {
+      expect(likeButton).toHaveClass('bg-emerald-300/15')
+    })
+
+    rendered.rerender(
+      <ReactionBar
+        canReact
+        dislikesCount={0}
+        emojiCount={0}
+        likeCount={1}
+        onCommitted={vi.fn()}
+        postId="post-1"
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Like reaction' })).toHaveClass(
+        'bg-emerald-300/15',
+      )
+    })
+  })
+
+  it('resets local reaction state when postId changes', async () => {
+    vi.mocked(createReaction).mockResolvedValue({
+      reaction: {
+        sentiment: 'like',
+        emojiValues: [],
+        gifValue: null,
+      },
+    })
+    vi.mocked(deleteReaction).mockResolvedValue({
+      unreact: {
+        id: 'reaction-1',
+        postId: 'post-2',
+        userId: 'viewer-1',
+        reactionExisted: true,
+        deletedReaction: true,
+        removedEmojiValue: null,
+        emojiValueRemoved: false,
+      },
+      reaction: {
+        sentiment: null,
+        emojiValues: [],
+        gifValue: null,
+      },
+    })
+
+    const rendered = render(
+      <ReactionBar
+        canReact
+        dislikesCount={0}
+        emojiCount={0}
+        likeCount={0}
+        onCommitted={vi.fn()}
+        postId="post-1"
+      />,
+    )
+    const likeButton = screen.getByRole('button', { name: 'Like reaction' })
+
+    fireEvent.click(likeButton)
+
+    await waitFor(() => {
+      expect(likeButton).toHaveClass('bg-emerald-300/15')
+    })
+
+    rendered.rerender(
+      <ReactionBar
+        canReact
+        dislikesCount={3}
+        emojiCount={1}
+        likeCount={2}
+        onCommitted={vi.fn()}
+        postId="post-2"
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Like reaction' })).toHaveTextContent('👍 2')
+      expect(screen.getByRole('button', { name: 'Like reaction' })).not.toHaveClass(
+        'bg-emerald-300/15',
+      )
+    })
+  })
+
   it('disables controls when reaction is not allowed', () => {
     render(
       <ReactionBar
