@@ -11,10 +11,20 @@ import type { UserDocument } from '../src/lib/users.js'
 
 class InMemoryFeedStore implements FeedStore {
   constructor(
-    private readonly result: {
-      entries: StoredFeedDocument[]
-      cursor?: string
-    },
+    private readonly pages: Record<
+      string,
+      {
+        entries: StoredFeedDocument[]
+        cursor?: string
+      }
+    >,
+    private readonly pullPages?: Record<
+      string,
+      {
+        entries: StoredFeedDocument[]
+        cursor?: string
+      }
+    >,
   ) {}
 
   async listFeedEntries(
@@ -28,8 +38,21 @@ class InMemoryFeedStore implements FeedStore {
     cursor?: string
   }> {
     void feedOwnerId
-    void options
-    return this.result
+    return this.pages[options.cursor ?? '__start__'] ?? { entries: [] }
+  }
+
+  async listPullOnReadFeedEntries(
+    feedOwnerId: string,
+    options: {
+      limit: number
+      cursor?: string
+    },
+  ): Promise<{
+    entries: StoredFeedDocument[]
+    cursor?: string
+  }> {
+    void feedOwnerId
+    return this.pullPages?.[options.cursor ?? '__start__'] ?? { entries: [] }
   }
 }
 
@@ -65,7 +88,54 @@ function createStore(result: {
   entries: StoredFeedDocument[]
   cursor?: string
 }) {
-  return new InMemoryFeedStore(result)
+  return new InMemoryFeedStore({
+    __start__: result,
+  })
+}
+
+function createMergedStore(options: {
+  feedEntries: StoredFeedDocument[]
+  feedCursor?: string
+  pullEntries: StoredFeedDocument[]
+  pullCursor?: string
+}) {
+  return new InMemoryFeedStore(
+    {
+      __start__: {
+        entries: options.feedEntries,
+        ...(options.feedCursor === undefined
+          ? {}
+          : { cursor: options.feedCursor }),
+      },
+    },
+    {
+      __start__: {
+        entries: options.pullEntries,
+        ...(options.pullCursor === undefined
+          ? {}
+          : { cursor: options.pullCursor }),
+      },
+    },
+  )
+}
+
+function createPagedMergedStore(options: {
+  feedPages: Record<
+    string,
+    {
+      entries: StoredFeedDocument[]
+      cursor?: string
+    }
+  >
+  pullPages: Record<
+    string,
+    {
+      entries: StoredFeedDocument[]
+      cursor?: string
+    }
+  >
+}) {
+  return new InMemoryFeedStore(options.feedPages, options.pullPages)
 }
 
 function createRequest(query = ''): HttpRequest {
@@ -257,6 +327,150 @@ describe('lookupFeed', () => {
             createdAt: '2026-04-15T09:00:00.000Z',
           },
         ],
+        cursor: null,
+        errors: [],
+      },
+    })
+  })
+
+  it('merges pull-on-read celebrity entries with the materialized feed and drops duplicates', async () => {
+    const result = await lookupFeed(
+      {
+        feedOwnerId: 'user-1',
+      },
+      createMergedStore({
+        feedEntries: [
+          createStoredFeedEntry({
+            id: 'user-1:post-2',
+            postId: 'post-2',
+            createdAt: '2026-04-15T10:00:00.000Z',
+            excerpt: 'Materialized celebrity post',
+          }),
+          createStoredFeedEntry({
+            id: 'user-1:post-1',
+            postId: 'post-1',
+            createdAt: '2026-04-15T09:00:00.000Z',
+            excerpt: 'Materialized non-celebrity post',
+          }),
+        ],
+        pullEntries: [
+          createStoredFeedEntry({
+            id: 'user-1:post-3',
+            postId: 'post-3',
+            createdAt: '2026-04-15T11:00:00.000Z',
+            excerpt: 'Pull-on-read celebrity post',
+          }),
+          createStoredFeedEntry({
+            id: 'user-1:post-2',
+            postId: 'post-2',
+            createdAt: '2026-04-15T10:00:00.000Z',
+            excerpt: 'Duplicate celebrity post',
+          }),
+        ],
+      }),
+    )
+
+    expect(result).toEqual({
+      status: 200,
+      body: {
+        data: [
+          expect.objectContaining({
+            id: 'user-1:post-3',
+            postId: 'post-3',
+            excerpt: 'Pull-on-read celebrity post',
+            createdAt: '2026-04-15T11:00:00.000Z',
+          }),
+          expect.objectContaining({
+            id: 'user-1:post-2',
+            postId: 'post-2',
+            excerpt: 'Materialized celebrity post',
+            createdAt: '2026-04-15T10:00:00.000Z',
+          }),
+          expect.objectContaining({
+            id: 'user-1:post-1',
+            postId: 'post-1',
+            excerpt: 'Materialized non-celebrity post',
+            createdAt: '2026-04-15T09:00:00.000Z',
+          }),
+        ],
+        cursor: null,
+        errors: [],
+      },
+    })
+  })
+
+  it('uses an opaque cursor to page merged materialized and pull-on-read results', async () => {
+    const combinedEntries = Array.from({ length: 24 }, (_, index) =>
+      createStoredFeedEntry({
+        id: `user-1:post-${index + 1}`,
+        postId: `post-${index + 1}`,
+        excerpt: `Post ${index + 1}`,
+        createdAt: `2026-04-15T${String(23 - index).padStart(2, '0')}:00:00.000Z`,
+      }),
+    )
+    const feedEntries = combinedEntries.filter((_, index) => index % 2 === 0)
+    const pullEntries = combinedEntries.filter((_, index) => index % 2 === 1)
+    const store = createPagedMergedStore({
+      feedPages: {
+        __start__: {
+          entries: feedEntries,
+        },
+      },
+      pullPages: {
+        __start__: {
+          entries: pullEntries,
+        },
+      },
+    })
+
+    const firstPage = await lookupFeed(
+      {
+        feedOwnerId: 'user-1',
+      },
+      store,
+    )
+
+    expect(firstPage.status).toBe(200)
+    expect(firstPage.body.data).not.toBeNull()
+    expect(firstPage.body.data ?? []).toHaveLength(DEFAULT_FEED_PAGE_SIZE)
+    expect((firstPage.body.data ?? []).map((entry) => entry.postId)).toEqual(
+      combinedEntries
+        .slice(0, DEFAULT_FEED_PAGE_SIZE)
+        .map((entry) => entry.postId),
+    )
+    expect(firstPage.body.cursor).toMatch(/^ac\.feed\.v1:/)
+
+    const secondPage = await lookupFeed(
+      {
+        feedOwnerId: 'user-1',
+        cursor: firstPage.body.cursor ?? undefined,
+      },
+      store,
+    )
+
+    expect(secondPage).toEqual({
+      status: 200,
+      body: {
+        data: combinedEntries.slice(DEFAULT_FEED_PAGE_SIZE).map((entry) => ({
+          id: entry.id,
+          postId: entry.postId,
+          authorId: entry.authorId,
+          authorHandle: entry.authorHandle,
+          authorDisplayName: entry.authorDisplayName,
+          authorAvatarUrl: entry.authorAvatarUrl,
+          excerpt: entry.excerpt,
+          media: [
+            {
+              kind: 'image',
+              thumbUrl: 'https://cdn.example.com/thumb.png',
+            },
+          ],
+          counters: {
+            likes: 4,
+            replies: 3,
+          },
+          createdAt: entry.createdAt,
+        })),
         cursor: null,
         errors: [],
       },
