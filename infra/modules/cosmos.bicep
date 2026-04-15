@@ -5,6 +5,7 @@ param tags object = {}
 var feedsContainerAutoscaleMaxThroughput = 10000
 var followersContainerAutoscaleMaxThroughput = 4000
 var followsContainerAutoscaleMaxThroughput = 4000
+var notificationsContainerAutoscaleMaxThroughput = 4000
 var postsContainerAutoscaleMaxThroughput = 10000
 var reactionsContainerAutoscaleMaxThroughput = 4000
 var usersContainerAutoscaleMaxThroughput = 4000
@@ -205,6 +206,30 @@ resource reactionsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/
   }
 }
 
+resource notificationsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
+  parent: sqlDatabase
+  name: names.notificationsContainer
+  properties: {
+    resource: {
+      id: names.notificationsContainer
+      partitionKey: {
+        kind: 'Hash'
+        paths: [
+          '/targetUserId'
+        ]
+        version: 2
+      }
+      defaultTtl: 7776000
+    }
+    options: {
+      // Cosmos autoscale uses the max RU/s ceiling only, so 4000 yields an effective 400-4000 RU/s range.
+      autoscaleSettings: {
+        maxThroughput: notificationsContainerAutoscaleMaxThroughput
+      }
+    }
+  }
+}
+
 resource mediaContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
   parent: sqlDatabase
   name: names.mediaContainer
@@ -232,6 +257,7 @@ output feedsContainerName string = feedsContainer.name
 output followersContainerName string = followersContainer.name
 output followsContainerName string = followsContainer.name
 output mediaContainerName string = mediaContainer.name
+output notificationsContainerName string = notificationsContainer.name
 output postsContainerName string = postsContainer.name
 output reactionsContainerName string = reactionsContainer.name
 output usersContainerName string = usersContainer.name
