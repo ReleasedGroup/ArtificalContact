@@ -36,6 +36,28 @@ resource sqlDatabase 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2024-05
   }
 }
 
+resource usersByHandleContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
+  parent: sqlDatabase
+  name: 'usersByHandle'
+  properties: {
+    options: {
+      autoscaleSettings: {
+        maxThroughput: 1000
+      }
+    }
+    resource: {
+      id: 'usersByHandle'
+      partitionKey: {
+        kind: 'Hash'
+        paths: [
+          '/handle'
+        ]
+        version: 2
+      }
+    }
+  }
+}
+
 output accountName string = cosmosAccount.name
 output databaseName string = sqlDatabase.name
 output endpoint string = cosmosAccount.properties.documentEndpoint
