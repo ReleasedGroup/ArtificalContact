@@ -1,4 +1,5 @@
 import { registerCreateModActionFunction } from './functions/create-mod-action.js'
+import { app } from '@azure/functions'
 import { registerCreateReplyFunction } from './functions/create-reply.js'
 import { registerCreateReportFunction } from './functions/create-report.js'
 import { registerCreateReactionFunction } from './functions/create-reaction.js'
@@ -34,6 +35,15 @@ import { registerSearchSyncFunctions } from './functions/search-sync.js'
 import { registerUpdateProfileFunction } from './functions/update-profile.js'
 import { registerUserPostAuthorSyncFunction } from './functions/user-post-author-sync.js'
 import { registerUsersByHandleMirrorFunction } from './functions/users-by-handle-mirror.js'
+import { withRequestMetricsContext } from './lib/request-metrics-context.js'
+
+const registerHttpFunction = app.http.bind(app)
+
+app.http = ((name, options) =>
+  registerHttpFunction(name, {
+    ...options,
+    handler: withRequestMetricsContext(options.handler, name),
+  })) as typeof app.http
 
 registerCreateModActionFunction()
 registerCreateReplyFunction()

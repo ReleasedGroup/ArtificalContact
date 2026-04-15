@@ -5,6 +5,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { AppImage } from './AppImage'
 import type { MeProfile } from '../lib/me'
 import { getOptionalMe } from '../lib/me'
 import { createReply, deletePost } from '../lib/post-write'
@@ -429,7 +430,7 @@ function PostMediaGallery({
             className="overflow-hidden rounded-[1.35rem] border border-white/10 bg-slate-950/60 transition hover:border-white/20 hover:bg-slate-950/80"
           >
             {isVisual ? (
-              <img
+              <AppImage
                 src={previewUrl ?? undefined}
                 alt={`${kind} attachment from ${authorName}`}
                 className="h-40 w-full object-cover"
@@ -545,7 +546,7 @@ function PostCard({
     <article className={`rounded-[1.6rem] border p-5 ${cardClassName}`}>
       <div className="flex gap-4">
         {post.authorAvatarUrl ? (
-          <img
+          <AppImage
             src={post.authorAvatarUrl}
             alt={`${authorName} avatar`}
             className="h-12 w-12 rounded-2xl border border-white/10 bg-slate-900 object-cover"
@@ -1296,7 +1297,11 @@ export function PostDetailScreen({ postId }: { postId: string }) {
   }
 
   const handleGifReplySelect = async (gif: GifSearchResult) => {
-    if (postState.status !== 'ready' || viewer?.status !== 'active' || !viewer.handle) {
+    if (
+      postState.status !== 'ready' ||
+      viewer?.status !== 'active' ||
+      !viewer.handle
+    ) {
       return
     }
 
@@ -1328,7 +1333,9 @@ export function PostDetailScreen({ postId }: { postId: string }) {
       setReplyState({
         status: 'error',
         message:
-          error instanceof Error ? error.message : 'Unable to publish the GIF reply.',
+          error instanceof Error
+            ? error.message
+            : 'Unable to publish the GIF reply.',
       })
     }
   }

@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { searchGifs, type GifSearchResult } from '../lib/gif-search'
+import { AppImage } from './AppImage'
 
 function getBrowserLocale(): string | undefined {
   if (typeof navigator !== 'undefined' && navigator.language.trim()) {
@@ -20,9 +21,7 @@ export function ReplyGifPicker({
   const [activeQuery, setActiveQuery] = useState('')
   const [results, setResults] = useState<GifSearchResult[]>([])
   const [mode, setMode] = useState<'featured' | 'search'>('featured')
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
-    'loading',
-  )
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
@@ -148,7 +147,7 @@ export function ReplyGifPicker({
                 disabled={disabled}
                 onClick={() => onSelect(gif)}
               >
-                <img
+                <AppImage
                   alt={gif.title ?? 'GIF result'}
                   className="h-40 w-full object-cover"
                   src={gif.previewUrl}

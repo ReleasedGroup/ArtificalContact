@@ -6,6 +6,7 @@ import {
   type NotificationItem,
 } from '../lib/notifications'
 import { signOut } from '../lib/auth'
+import { AppImage } from './AppImage'
 import { BrowserPushCard } from './BrowserPushCard'
 
 interface NotificationsScreenProps {
@@ -270,7 +271,7 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
       </div>
 
       {notification.actor?.avatarUrl ? (
-        <img
+        <AppImage
           src={notification.actor.avatarUrl}
           alt={`${actorName} avatar`}
           className="h-10 w-10 rounded-2xl object-cover ring-1 ring-white/10"

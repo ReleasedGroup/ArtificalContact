@@ -1,6 +1,8 @@
 import { TelemetryClient } from 'applicationinsights'
 
 const authSigninEventName = 'auth.signin'
+const cosmosRuMetricName = 'cosmos.ru.consumed'
+const searchQueryDurationMetricName = 'search.query.duration_ms'
 
 let cachedTelemetryClient: TelemetryClient | null | undefined
 
@@ -43,7 +45,30 @@ export interface AuthSigninTelemetryEvent {
 }
 
 export interface TelemetryMetricProperties {
-  [key: string]: boolean | number | string
+  [key: string]: TelemetryPropertyValue
+}
+
+export type TelemetryPropertyValue =
+  | boolean
+  | number
+  | string
+  | null
+  | undefined
+
+function normalizeTelemetryProperties(
+  properties: Record<string, TelemetryPropertyValue>,
+): Record<string, string> {
+  const normalizedProperties: Record<string, string> = {}
+
+  for (const [key, value] of Object.entries(properties)) {
+    if (value === null || value === undefined) {
+      continue
+    }
+
+    normalizedProperties[key] = String(value)
+  }
+
+  return normalizedProperties
 }
 
 export function trackAuthSigninEvent(event: AuthSigninTelemetryEvent): void {
@@ -66,6 +91,10 @@ export function trackMetric(
   value: number,
   properties: TelemetryMetricProperties = {},
 ): void {
+  if (!Number.isFinite(value)) {
+    return
+  }
+
   const client = getTelemetryClient()
   if (client === null) {
     return
@@ -74,6 +103,28 @@ export function trackMetric(
   client.trackMetric({
     name,
     value,
-    properties,
+    properties: normalizeTelemetryProperties(properties),
   })
+}
+
+export function trackCosmosRuConsumed(
+  requestCharge: number,
+  properties: TelemetryMetricProperties = {},
+): void {
+  if (requestCharge <= 0) {
+    return
+  }
+
+  trackMetric(cosmosRuMetricName, requestCharge, properties)
+}
+
+export function trackSearchQueryDuration(
+  durationMs: number,
+  properties: TelemetryMetricProperties = {},
+): void {
+  if (durationMs < 0) {
+    return
+  }
+
+  trackMetric(searchQueryDurationMetricName, durationMs, properties)
 }

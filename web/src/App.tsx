@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { AdminMetricsScreen } from './components/AdminMetricsScreen'
 import { ComposerPreviewPanel } from './components/ComposerPreviewPanel'
+import { AppImage } from './components/AppImage'
 import { DirectBlobUploadCard } from './components/DirectBlobUploadCard'
 import { HomeFeedScreen } from './components/HomeFeedScreen'
 import { ModerationQueueScreen } from './components/ModerationQueueScreen'
@@ -815,7 +816,9 @@ function ProfileEditorScreen() {
       setSaveState({ status: 'idle' })
 
       try {
-        const data = await updateMe(buildMediaUpdateInput(field, upload.blobUrl))
+        const data = await updateMe(
+          buildMediaUpdateInput(field, upload.blobUrl),
+        )
 
         startTransition(() => {
           setProfileState((currentState) => {
@@ -982,9 +985,10 @@ function ProfileEditorScreen() {
       <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/85 shadow-2xl shadow-sky-950/20 backdrop-blur">
         <div className="relative h-52 overflow-hidden bg-gradient-to-br from-indigo-600 via-sky-500 to-fuchsia-600">
           {draft.bannerUrl ? (
-            <img
+            <AppImage
               alt="Profile banner"
               className="h-full w-full object-cover"
+              loading="eager"
               src={draft.bannerUrl}
             />
           ) : (
@@ -1003,9 +1007,10 @@ function ProfileEditorScreen() {
             <div className="flex items-end gap-4">
               <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[1.75rem] border border-white/20 bg-gradient-to-br from-fuchsia-500 to-indigo-500 text-2xl font-semibold text-white shadow-xl shadow-fuchsia-950/30 ring-4 ring-slate-950 sm:h-28 sm:w-28 sm:text-3xl">
                 {draft.avatarUrl ? (
-                  <img
+                  <AppImage
                     alt="Profile avatar"
                     className="h-full w-full object-cover"
+                    loading="eager"
                     src={draft.avatarUrl}
                   />
                 ) : (
@@ -1311,9 +1316,10 @@ function ProfileEditorScreen() {
                   <div className="flex items-center gap-3">
                     <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-fuchsia-500 to-indigo-500 text-lg font-semibold text-white">
                       {draft.avatarUrl ? (
-                        <img
+                        <AppImage
                           alt="Draft avatar preview"
                           className="h-full w-full object-cover"
+                          loading="eager"
                           src={draft.avatarUrl}
                         />
                       ) : (
@@ -1436,10 +1442,11 @@ function PublicProfileScreen({ handle }: { handle: string }) {
       <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/90 shadow-2xl shadow-slate-950/35 backdrop-blur">
         <div className="relative h-48 overflow-hidden sm:h-56">
           {profileState.status === 'ready' && profileState.data.bannerUrl ? (
-            <img
+            <AppImage
               src={profileState.data.bannerUrl}
               alt={`Banner for @${profileState.data.handle}`}
               className="absolute inset-0 h-full w-full object-cover"
+              loading="eager"
             />
           ) : (
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(45,212,191,0.30),transparent_34%),radial-gradient(circle_at_top_right,_rgba(251,146,60,0.22),transparent_28%),linear-gradient(135deg,rgba(15,23,42,0.96),rgba(30,41,59,0.88))]" />
@@ -1498,10 +1505,11 @@ function ReadyPublicProfile({
       <div className="-mt-14 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end">
           {profile.avatarUrl ? (
-            <img
+            <AppImage
               src={profile.avatarUrl}
               alt={`${profile.displayName ?? profile.handle} avatar`}
               className="h-24 w-24 rounded-[1.75rem] border border-white/10 bg-slate-900 object-cover shadow-lg shadow-slate-950/35 ring-4 ring-slate-950 sm:h-28 sm:w-28"
+              loading="eager"
             />
           ) : (
             <div className="flex h-24 w-24 items-center justify-center rounded-[1.75rem] border border-white/10 bg-[linear-gradient(135deg,rgba(45,212,191,0.35),rgba(59,130,246,0.28),rgba(249,115,22,0.32))] text-3xl font-semibold tracking-[0.08em] text-white shadow-lg shadow-slate-950/35 ring-4 ring-slate-950 sm:h-28 sm:w-28">
