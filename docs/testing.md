@@ -15,13 +15,14 @@ npm run test
 
 ### `web`
 
-- Vitest + Testing Library validate that the foundation shell renders and displays a successful `/api/health` response
+- Vitest + Testing Library validate both the foundation shell `/api/health` experience and the authenticated `/me` profile editor flow, including `PUT /api/me` saves
 - ESLint enforces the TypeScript/React code style
 - Vite production build verifies the SPA compiles cleanly
 
 ### `api`
 
 - Vitest covers the health envelope generation and HTTP handler behavior
+- Vitest covers authenticated `GET /api/me` provisioning and `PUT /api/me` profile updates, including request validation and normalized expertise tags
 - Vitest covers the public profile lookup at `GET /api/users/{handle}`, including case-insensitive mirror resolution and safe not-found behavior
 - Vitest covers the `usersByHandle` change-feed mirror logic, including stale-handle cleanup and non-fatal collision handling
 - TypeScript compilation validates the Azure Functions source and module graph

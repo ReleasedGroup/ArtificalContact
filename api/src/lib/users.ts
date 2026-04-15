@@ -43,6 +43,7 @@ export interface UserDocument {
 export interface UserRepository {
   create(user: UserDocument): Promise<UserDocument>
   getById(userId: string): Promise<UserDocument | null>
+  replace(user: UserDocument): Promise<UserDocument>
 }
 
 export interface ResolvedMeProfile {
@@ -72,6 +73,14 @@ export interface MeProfile {
 export interface EnsureUserResult {
   user: UserDocument
   isNewUser: boolean
+}
+
+export interface UserProfileUpdate {
+  displayName: string
+  bio: string | null
+  avatarUrl: string | null
+  bannerUrl: string | null
+  expertise: string[]
 }
 
 function getErrorStatusCode(error: unknown): number | undefined {
@@ -125,6 +134,10 @@ function createCosmosUserRepository(container: Container): UserRepository {
     },
     async create(user: UserDocument) {
       const response = await container.items.create<UserDocument>(user)
+      return response.resource ?? user
+    },
+    async replace(user: UserDocument) {
+      const response = await container.item(user.id, user.id).replace(user)
       return response.resource ?? user
     },
   }
@@ -241,4 +254,36 @@ export function toMeProfile(user: UserDocument): MeProfile {
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   }
+}
+
+function writeNullableField(
+  user: UserDocument,
+  field: 'bio' | 'avatarUrl' | 'bannerUrl',
+  value: string | null,
+) {
+  if (value === null) {
+    delete user[field]
+    return
+  }
+
+  user[field] = value
+}
+
+export function applyProfileUpdate(
+  user: UserDocument,
+  update: UserProfileUpdate,
+  updatedAt: Date,
+): UserDocument {
+  const nextUser: UserDocument = {
+    ...user,
+    displayName: update.displayName,
+    expertise: [...update.expertise],
+    updatedAt: updatedAt.toISOString(),
+  }
+
+  writeNullableField(nextUser, 'bio', update.bio)
+  writeNullableField(nextUser, 'avatarUrl', update.avatarUrl)
+  writeNullableField(nextUser, 'bannerUrl', update.bannerUrl)
+
+  return nextUser
 }
