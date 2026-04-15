@@ -22,6 +22,7 @@ export type MediaKind = 'image' | 'gif' | 'audio' | 'video'
 type MediaKindRules = {
   defaultContainerName: string
   maxSizeBytes: number
+  maxDurationSeconds?: number
   allowedContentTypes: Record<string, string>
 }
 
@@ -46,6 +47,7 @@ const mediaKindRules: Record<MediaKind, MediaKindRules> = {
   audio: {
     defaultContainerName: 'audio',
     maxSizeBytes: 25 * mebibyte,
+    maxDurationSeconds: 5 * 60,
     allowedContentTypes: {
       'audio/mp4': 'm4a',
       'audio/mpeg': 'mp3',
@@ -57,6 +59,7 @@ const mediaKindRules: Record<MediaKind, MediaKindRules> = {
   video: {
     defaultContainerName: 'video',
     maxSizeBytes: 100 * mebibyte,
+    maxDurationSeconds: 2 * 60,
     allowedContentTypes: {
       'video/mp4': 'mp4',
       'video/quicktime': 'mov',
@@ -65,11 +68,24 @@ const mediaKindRules: Record<MediaKind, MediaKindRules> = {
   },
 }
 
-const createMediaUploadRequestSchema = z.object({
-  kind: z.enum(['image', 'gif', 'audio', 'video']),
-  contentType: z.string().trim().min(1),
-  sizeBytes: z.number().int().positive(),
-})
+const createMediaUploadRequestSchema = z
+  .object({
+    kind: z.enum(['image', 'gif', 'audio', 'video']),
+    contentType: z.string().trim().min(1),
+    sizeBytes: z.number().int().positive(),
+    durationSeconds: z.number().positive().finite().optional(),
+  })
+  .superRefine((value, context) => {
+    const rules = getMediaRules(value.kind)
+
+    if (rules.maxDurationSeconds && value.durationSeconds === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['durationSeconds'],
+        message: `durationSeconds is required for ${value.kind} uploads.`,
+      })
+    }
+  })
 
 let cachedMediaUploadUrlIssuer: MediaUploadUrlIssuer | undefined
 
@@ -77,6 +93,7 @@ export interface CreateMediaUploadRequest {
   kind: MediaKind
   contentType: string
   sizeBytes: number
+  durationSeconds?: number | undefined
 }
 
 export interface MediaUploadConfig {
@@ -141,6 +158,19 @@ export class MediaFileTooLargeError extends Error {
   constructor(readonly kind: MediaKind, readonly maxSizeBytes: number) {
     super(`The uploaded ${kind} exceeds the ${maxSizeBytes}-byte limit.`)
     this.name = 'MediaFileTooLargeError'
+  }
+}
+
+export class MediaDurationTooLongError extends Error {
+  readonly code = 'media.duration_too_long'
+  readonly field = 'durationSeconds'
+  readonly status = 413
+
+  constructor(readonly kind: MediaKind, readonly maxDurationSeconds: number) {
+    super(
+      `The uploaded ${kind} exceeds the ${maxDurationSeconds}-second duration limit.`,
+    )
+    this.name = 'MediaDurationTooLongError'
   }
 }
 
@@ -325,6 +355,17 @@ export function createMediaUploadUrlIssuer(
 
     if (request.sizeBytes > rules.maxSizeBytes) {
       throw new MediaFileTooLargeError(request.kind, rules.maxSizeBytes)
+    }
+
+    if (
+      rules.maxDurationSeconds !== undefined &&
+      request.durationSeconds !== undefined &&
+      request.durationSeconds > rules.maxDurationSeconds
+    ) {
+      throw new MediaDurationTooLongError(
+        request.kind,
+        rules.maxDurationSeconds,
+      )
     }
 
     const requestTime = now()

@@ -11,6 +11,7 @@ import {
 } from '../lib/api-envelope.js'
 import { withHttpAuth } from '../lib/http-auth.js'
 import {
+  MediaDurationTooLongError,
   MediaFileTooLargeError,
   UnsupportedMediaContentTypeError,
   buildCreateMediaUploadRequestSchema,
@@ -115,6 +116,14 @@ export function buildMediaUploadUrlHandler(
           code: error.code,
           field: error.field,
           message: `The uploaded ${error.kind} exceeds the ${error.maxSizeBytes}-byte limit.`,
+        })
+      }
+
+      if (error instanceof MediaDurationTooLongError) {
+        return createErrorResponse(error.status, {
+          code: error.code,
+          field: error.field,
+          message: `The uploaded ${error.kind} exceeds the ${error.maxDurationSeconds}-second duration limit.`,
         })
       }
 

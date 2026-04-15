@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { buildMediaUploadUrlHandler } from '../src/functions/media-upload-url.js'
 import {
   DEFAULT_MEDIA_UPLOAD_SAS_TTL_MINUTES,
+  MediaDurationTooLongError,
   MediaFileTooLargeError,
   UnsupportedMediaContentTypeError,
   createMediaUploadUrlIssuer,
@@ -67,7 +68,9 @@ function createContext(user: UserDocument | null = createStoredUser()) {
   } as unknown as InvocationContext
 }
 
-function createIssuedUpload(): IssuedMediaUploadUrl {
+function createIssuedUpload(
+  overrides: Partial<IssuedMediaUploadUrl> = {},
+): IssuedMediaUploadUrl {
   return {
     kind: 'image',
     contentType: 'image/png',
@@ -83,6 +86,7 @@ function createIssuedUpload(): IssuedMediaUploadUrl {
       'content-type': 'image/png',
       'x-ms-blob-type': 'BlockBlob',
     },
+    ...overrides,
   }
 }
 
@@ -251,6 +255,39 @@ describe('createMediaUploadUrlIssuer', () => {
       }),
     ).rejects.toEqual(new MediaFileTooLargeError('gif', 8 * 1024 * 1024))
   })
+
+  it.each([
+    ['audio', 'audio/mpeg', 301, 300],
+    ['video', 'video/mp4', 121, 120],
+  ] as const)(
+    'rejects %s payloads that exceed the per-kind duration limit',
+    async (kind, contentType, durationSeconds, maxDurationSeconds) => {
+      const issuer = createMediaUploadUrlIssuer(
+        {
+          BLOB_SERVICE_URL: 'https://storageacct.blob.core.windows.net',
+        },
+        {
+          blobServiceClientFactory: () =>
+            ({
+              getUserDelegationKey: async () => {
+                throw new Error('should not be called')
+              },
+            }) satisfies BlobServiceClientLike,
+        },
+      )
+
+      await expect(
+        issuer(createStoredUser(), {
+          kind,
+          contentType,
+          sizeBytes: 2048,
+          durationSeconds,
+        }),
+      ).rejects.toEqual(
+        new MediaDurationTooLongError(kind, maxDurationSeconds),
+      )
+    },
+  )
 })
 
 describe('mediaUploadUrlHandler', () => {
@@ -279,6 +316,41 @@ describe('mediaUploadUrlHandler', () => {
     expect(response.jsonBody).toEqual({
       data: issuedUpload,
       errors: [],
+    })
+  })
+
+  it('passes audio duration through to the upload issuer', async () => {
+    const issuedUpload = createIssuedUpload({
+      kind: 'audio',
+      contentType: 'audio/mpeg',
+      containerName: 'audio',
+      blobName: 'github:abc123/2026/04/01TESTULID.mp3',
+      blobUrl:
+        'https://cdn.example.com/audio/github%3Aabc123/2026/04/01TESTULID.mp3',
+      uploadUrl:
+        'https://storage.example/audio/github%3Aabc123/2026/04/01TESTULID.mp3?sig=test',
+    })
+    const issuer: MediaUploadUrlIssuer = vi.fn(async () => issuedUpload)
+    const handler = buildMediaUploadUrlHandler({
+      issuerFactory: () => issuer,
+    })
+
+    const response = await handler(
+      createRequest({
+        kind: 'audio',
+        contentType: 'audio/mpeg',
+        sizeBytes: 1024,
+        durationSeconds: 45,
+      }),
+      createContext(),
+    )
+
+    expect(response.status).toBe(200)
+    expect(issuer).toHaveBeenCalledWith(createStoredUser(), {
+      kind: 'audio',
+      contentType: 'audio/mpeg',
+      sizeBytes: 1024,
+      durationSeconds: 45,
     })
   })
 
@@ -340,6 +412,39 @@ describe('mediaUploadUrlHandler', () => {
     })
   })
 
+  it.each([
+    ['audio', 'audio/mpeg'],
+    ['video', 'video/mp4'],
+  ] as const)(
+    'requires durationSeconds for %s uploads',
+    async (kind, contentType) => {
+      const handler = buildMediaUploadUrlHandler({
+        issuerFactory: () => vi.fn(async () => createIssuedUpload()),
+      })
+
+      const response = await handler(
+        createRequest({
+          kind,
+          contentType,
+          sizeBytes: 1024,
+        }),
+        createContext(),
+      )
+
+      expect(response.status).toBe(400)
+      expect(response.jsonBody).toEqual({
+        data: null,
+        errors: [
+          {
+            code: 'invalid_media_upload',
+            field: 'durationSeconds',
+            message: `durationSeconds is required for ${kind} uploads.`,
+          },
+        ],
+      })
+    },
+  )
+
   it('returns 403 when the user profile is not ready for media uploads', async () => {
     const handler = buildMediaUploadUrlHandler({
       issuerFactory: () => vi.fn(async () => createIssuedUpload()),
@@ -386,6 +491,7 @@ describe('mediaUploadUrlHandler', () => {
         kind: 'audio',
         contentType: 'text/plain',
         sizeBytes: 1024,
+        durationSeconds: 30,
       }),
       createContext(),
     )
@@ -399,6 +505,38 @@ describe('mediaUploadUrlHandler', () => {
           field: 'contentType',
           message:
             'The content type "text/plain" is not allowed for audio uploads. Allowed types: audio/mpeg.',
+        },
+      ],
+    })
+  })
+
+  it('surfaces media duration validation as 413', async () => {
+    const handler = buildMediaUploadUrlHandler({
+      issuerFactory: () =>
+        (async () => {
+          throw new MediaDurationTooLongError('video', 120)
+        }) satisfies MediaUploadUrlIssuer,
+    })
+
+    const response = await handler(
+      createRequest({
+        kind: 'video',
+        contentType: 'video/mp4',
+        sizeBytes: 1024,
+        durationSeconds: 121,
+      }),
+      createContext(),
+    )
+
+    expect(response.status).toBe(413)
+    expect(response.jsonBody).toEqual({
+      data: null,
+      errors: [
+        {
+          code: 'media.duration_too_long',
+          field: 'durationSeconds',
+          message:
+            'The uploaded video exceeds the 120-second duration limit.',
         },
       ],
     })

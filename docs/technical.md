@@ -76,8 +76,8 @@ It does **not** specify UI visual design or detailed copy — those live in `des
 6. Followers exceeding the fan-out cap are served via a `pull-on-read` path that queries posts authored by their followees directly (a small fraction of users).
 
 ### 3.5 Media Upload Flow
-1. Browser requests `POST /api/media/upload-url` with `{ contentType, sizeBytes, kind }`.
-2. Function validates content type and size, picks the target container (`images`, `video`, `audio`, `gif`), generates a deterministic blob name (`{userId}/{yyyy}/{mm}/{ulid}.{ext}`), and returns a short-lived **user delegation SAS** (≤ 15 min, write-only) plus the eventual public URL.
+1. Browser requests `POST /api/media/upload-url` with `{ contentType, sizeBytes, kind }` and includes `durationSeconds` for audio/video uploads.
+2. Function validates content type, size, and duration (for audio/video), picks the target container (`images`, `video`, `audio`, `gif`), generates a deterministic blob name (`{userId}/{yyyy}/{mm}/{ulid}.{ext}`), and returns a short-lived **user delegation SAS** (≤ 15 min, write-only) plus the eventual public URL.
 3. Browser uploads the file directly to Blob Storage.
 4. A Blob-trigger function (`mediaPostProcessFn`) fires on creation, optionally generating thumbnails (images/video first frame), running content moderation (Azure AI Content Safety), and writing a `media` document into Cosmos DB.
 5. The user references the returned media id when publishing the post.
