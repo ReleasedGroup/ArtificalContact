@@ -1,10 +1,19 @@
 param location string
 param names object
 param tags object = {}
+param cosmosAccountName string
+param cosmosDatabaseName string
+param cosmosPostsContainerName string
 
 var postsV1IndexName = 'posts-v1'
 var hashtagsV1IndexName = 'hashtags-v1'
 var usersV1IndexName = 'users-v1'
+var postsV1DataSourceName = 'posts-v1-cosmosdb-ds'
+var postsV1IndexerName = 'posts-v1-cosmosdb-idx'
+
+resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' existing = {
+  name: cosmosAccountName
+}
 
 resource searchService 'Microsoft.Search/searchServices@2023-11-01' = {
   name: names.search
@@ -24,10 +33,12 @@ resource searchService 'Microsoft.Search/searchServices@2023-11-01' = {
   }
 }
 
+#disable-next-line BCP081
 resource postsV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = {
   name: postsV1IndexName
   parent: searchService
   properties: {
+    defaultScoringProfile: 'recencyAndEngagement'
     fields: [
       {
         name: 'id'
@@ -159,9 +170,49 @@ resource postsV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = {
         retrievable: true
       }
     ]
+    scoringProfiles: [
+      {
+        name: 'recencyAndEngagement'
+        functionAggregation: 'sum'
+        functions: [
+          {
+            type: 'freshness'
+            boost: 12
+            fieldName: 'createdAt'
+            freshness: {
+              boostingDuration: 'P7D'
+              interpolation: 'exponential'
+            }
+          }
+          {
+            type: 'magnitude'
+            boost: 3
+            fieldName: 'likeCount'
+            magnitude: {
+              boostingRangeStart: 0
+              boostingRangeEnd: 250
+              interpolation: 'linear'
+              constantBoostBeyondRange: true
+            }
+          }
+          {
+            type: 'magnitude'
+            boost: 2
+            fieldName: 'replyCount'
+            magnitude: {
+              boostingRangeStart: 0
+              boostingRangeEnd: 100
+              interpolation: 'linear'
+              constantBoostBeyondRange: true
+            }
+          }
+        ]
+      }
+    ]
   }
 }
 
+#disable-next-line BCP081
 resource usersV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = {
   name: usersV1IndexName
   parent: searchService
@@ -281,6 +332,36 @@ resource hashtagsV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = 
         retrievable: true
       }
     ]
+  }
+}
+
+resource postsV1DataSource 'Microsoft.Search/searchServices/dataSources@2024-07-01' = {
+  name: postsV1DataSourceName
+  parent: searchService
+  properties: {
+    type: 'cosmosdb'
+    credentials: {
+      connectionString: 'AccountEndpoint=${cosmosAccount.properties.documentEndpoint};AccountKey=${cosmosAccount.listKeys().primaryReadonlyMasterKey};Database=${cosmosDatabaseName}'
+    }
+    container: {
+      name: cosmosPostsContainerName
+    }
+    dataChangeDetectionPolicy: {
+      '@odata.type': '#Microsoft.Azure.Search.HighWaterMarkChangeDetectionPolicy'
+      highWaterMarkColumnName: '_ts'
+    }
+  }
+}
+
+resource postsV1Indexer 'Microsoft.Search/searchServices/indexers@2024-07-01' = {
+  name: postsV1IndexerName
+  parent: searchService
+  properties: {
+    dataSourceName: postsV1DataSource.name
+    targetIndexName: postsV1Index.name
+    schedule: {
+      interval: 'PT5M'
+    }
   }
 }
 
