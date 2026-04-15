@@ -115,9 +115,6 @@ module functions './modules/functions.bicep' = {
     searchUsersIndexName: search.outputs.usersIndexName
     searchResourceId: search.outputs.resourceId
   }
-  dependsOn: [
-    search
-  ]
 }
 
 module staticWebApp './modules/static-web-app.bicep' = {
@@ -145,6 +142,7 @@ output cosmosModActionsContainerName string = cosmos.outputs.modActionsContainer
 output cosmosNotificationPrefsContainerName string = cosmos.outputs.notificationPrefsContainerName
 output cosmosNotificationsContainerName string = cosmos.outputs.notificationsContainerName
 output cosmosPostsContainerName string = cosmos.outputs.postsContainerName
+output cosmosRateLimitsContainerName string = cosmos.outputs.rateLimitsContainerName
 output cosmosReactionsContainerName string = cosmos.outputs.reactionsContainerName
 output cosmosReportsContainerName string = cosmos.outputs.reportsContainerName
 output cosmosUsersContainerName string = cosmos.outputs.usersContainerName
