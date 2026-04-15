@@ -1,4 +1,10 @@
-import { expect, test, type BrowserContext, type Route } from '@playwright/test'
+import {
+  expect,
+  test,
+  type BrowserContext,
+  type Page,
+  type Route,
+} from '@playwright/test'
 
 interface MockUser {
   id: string
@@ -40,6 +46,35 @@ interface MockPost {
   createdAt: string
   updatedAt: string
   deletedAt: string | null
+}
+
+interface NotificationActorRecord {
+  id?: string | null
+  handle?: string | null
+  displayName?: string | null
+  avatarUrl?: string | null
+}
+
+interface NotificationRecord {
+  id: string
+  eventType: string
+  text: string | null
+  read: boolean
+  createdAt: string
+  postId: string | null
+  threadId: string | null
+  actor: NotificationActorRecord | null
+}
+
+interface NotificationsEnvelope {
+  data: NotificationRecord[] | null
+  cursor: string | null
+  unreadCount: number
+  errors: Array<{
+    code: string
+    message: string
+    field?: string
+  }>
 }
 
 const users: Record<'userA' | 'userB', MockUser> = {
@@ -132,6 +167,18 @@ function jsonResponse(route: Route, status: number, payload: unknown) {
   })
 }
 
+async function fetchNotifications(page: Page): Promise<NotificationsEnvelope> {
+  return page.evaluate(async () => {
+    const response = await fetch('/api/notifications', {
+      headers: {
+        Accept: 'application/json',
+      },
+    })
+
+    return (await response.json()) as NotificationsEnvelope
+  })
+}
+
 function createTenorSearchResponse(query: string) {
   return {
     mode: query.length > 0 ? 'search' : 'featured',
@@ -174,9 +221,7 @@ test('two users can post, reply, and hide a soft-deleted reply from the public t
 
   const visibleThread = (threadId: string) =>
     [...posts.values()]
-      .filter(
-        (post) => post.threadId === threadId && post.deletedAt === null,
-      )
+      .filter((post) => post.threadId === threadId && post.deletedAt === null)
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
 
   const attachApiMocks = async (
@@ -468,9 +513,7 @@ test('an authenticated viewer can publish a GIF-only reply from the Tenor picker
 
   const visibleThread = (threadId: string) =>
     [...posts.values()]
-      .filter(
-        (post) => post.threadId === threadId && post.deletedAt === null,
-      )
+      .filter((post) => post.threadId === threadId && post.deletedAt === null)
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
 
   const currentUser = users.userA
@@ -531,7 +574,10 @@ test('an authenticated viewer can publish a GIF-only reply from the Tenor picker
       return
     }
 
-    if (pathname === '/api/posts/post-1/replies' && request.method() === 'POST') {
+    if (
+      pathname === '/api/posts/post-1/replies' &&
+      request.method() === 'POST'
+    ) {
       const payload = request.postDataJSON() as {
         text?: string
         media?: MockPostMedia[]
@@ -596,4 +642,282 @@ test('an authenticated viewer can publish a GIF-only reply from the Tenor picker
   })
 
   await context.close()
+})
+
+test('a reply produces an in-app notification for the parent author within five seconds', async ({
+  baseURL,
+  browser,
+}) => {
+  const posts = new Map<string, MockPost>()
+  const notificationMaterializationDelayMs = 1_500
+  let replyNotificationReadyAt: number | null = null
+
+  const visiblePost = (postId: string) => {
+    const post = posts.get(postId)
+    return post && post.deletedAt === null ? post : null
+  }
+
+  const visibleThread = (threadId: string) =>
+    [...posts.values()]
+      .filter((post) => post.threadId === threadId && post.deletedAt === null)
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+
+  const listNotificationsForUser = (
+    userKey: keyof typeof users,
+  ): NotificationRecord[] => {
+    if (userKey !== 'userA') {
+      return []
+    }
+
+    const reply = posts.get('reply-1')
+
+    if (
+      !reply ||
+      reply.deletedAt !== null ||
+      replyNotificationReadyAt === null ||
+      Date.now() < replyNotificationReadyAt
+    ) {
+      return []
+    }
+
+    return [
+      {
+        id: 'notification-reply-1',
+        eventType: 'reply',
+        text: 'replied to your post in #evals.',
+        read: false,
+        createdAt: reply.createdAt,
+        postId: reply.threadId,
+        threadId: reply.threadId,
+        actor: {
+          id: reply.authorId,
+          handle: reply.authorHandle,
+          displayName: reply.authorDisplayName,
+          avatarUrl: reply.authorAvatarUrl,
+        },
+      },
+    ]
+  }
+
+  const attachApiMocks = async (
+    context: BrowserContext,
+    userKey: keyof typeof users,
+  ) => {
+    const currentUser = users[userKey]
+
+    await context.route('**/api/**', async (route) => {
+      const request = route.request()
+      const url = new URL(request.url())
+      const pathname = url.pathname
+
+      if (pathname === '/api/me' && request.method() === 'GET') {
+        await jsonResponse(route, 200, {
+          data: createMePayload(currentUser),
+          errors: [],
+        })
+        return
+      }
+
+      if (pathname === '/api/feed' && request.method() === 'GET') {
+        await jsonResponse(route, 200, {
+          data: [],
+          cursor: null,
+          errors: [],
+        })
+        return
+      }
+
+      if (pathname === '/api/gifs/search' && request.method() === 'GET') {
+        const query = url.searchParams.get('q')?.trim() ?? ''
+
+        await jsonResponse(route, 200, {
+          data: createTenorSearchResponse(query),
+          errors: [],
+        })
+        return
+      }
+
+      if (pathname === '/api/notifications' && request.method() === 'GET') {
+        const notifications = listNotificationsForUser(userKey)
+
+        await jsonResponse(route, 200, {
+          data: notifications,
+          cursor: null,
+          unreadCount: notifications.filter(
+            (notification) => !notification.read,
+          ).length,
+          errors: [],
+        })
+        return
+      }
+
+      if (pathname === '/api/posts' && request.method() === 'POST') {
+        const payload = request.postDataJSON() as { text: string }
+        const createdPost = createPostRecord(currentUser, {
+          id: 'post-1',
+          type: 'post',
+          threadId: 'post-1',
+          parentId: null,
+          text: payload.text.trim(),
+          createdAt: '2026-04-15T00:01:00.000Z',
+        })
+        posts.set(createdPost.id, createdPost)
+
+        await jsonResponse(route, 201, {
+          data: {
+            post: createdPost,
+          },
+          errors: [],
+        })
+        return
+      }
+
+      if (pathname === '/api/posts/post-1' && request.method() === 'GET') {
+        const post = visiblePost('post-1')
+
+        if (!post) {
+          await jsonResponse(route, 404, {
+            data: null,
+            errors: [
+              {
+                code: 'post_not_found',
+                message: 'No public post exists for the requested id.',
+              },
+            ],
+          })
+          return
+        }
+
+        await jsonResponse(route, 200, {
+          data: post,
+          errors: [],
+        })
+        return
+      }
+
+      if (pathname === '/api/threads/post-1' && request.method() === 'GET') {
+        await jsonResponse(route, 200, {
+          data: {
+            threadId: 'post-1',
+            posts: visibleThread('post-1'),
+            continuationToken: null,
+          },
+          errors: [],
+        })
+        return
+      }
+
+      if (
+        pathname === '/api/posts/post-1/replies' &&
+        request.method() === 'POST'
+      ) {
+        const payload = request.postDataJSON() as {
+          text?: string
+          media?: MockPostMedia[]
+        }
+        const createdReply = createPostRecord(currentUser, {
+          id: 'reply-1',
+          type: 'reply',
+          threadId: 'post-1',
+          parentId: 'post-1',
+          text: payload.text?.trim() ?? '',
+          createdAt: '2026-04-15T00:02:00.000Z',
+          media: payload.media ?? [],
+        })
+
+        posts.set(createdReply.id, createdReply)
+        replyNotificationReadyAt =
+          Date.now() + notificationMaterializationDelayMs
+
+        await jsonResponse(route, 201, {
+          data: {
+            post: createdReply,
+          },
+          errors: [],
+        })
+        return
+      }
+
+      throw new Error(`Unexpected API request: ${request.method()} ${pathname}`)
+    })
+  }
+
+  const contextA = await browser.newContext()
+  const contextB = await browser.newContext()
+
+  try {
+    await attachApiMocks(contextA, 'userA')
+    await attachApiMocks(contextB, 'userB')
+
+    const pageA = await contextA.newPage()
+    const pageB = await contextB.newPage()
+
+    await pageA.goto(`${baseURL}/me`)
+    await expect(
+      pageA.getByRole('heading', { name: 'Edit your profile' }),
+    ).toBeVisible()
+
+    const threadWorkspace = pageA.getByTestId('thread-workspace')
+    await threadWorkspace.scrollIntoViewIfNeeded()
+    await threadWorkspace
+      .locator('textarea')
+      .first()
+      .fill('User A root post for the reply notification flow.')
+    await threadWorkspace.getByRole('button', { name: 'Publish post' }).click()
+
+    await expect(pageA.getByText('Post published to /p/post-1.')).toBeVisible()
+
+    await pageB.goto(`${baseURL}/p/post-1`)
+    await expect(
+      pageB.getByText('User A root post for the reply notification flow.'),
+    ).toBeVisible()
+
+    await pageB
+      .getByPlaceholder('Reply to @ada…')
+      .fill('User B reply that should trigger a notification.')
+    await pageB.getByRole('button', { name: 'Reply in thread' }).click()
+
+    await expect(
+      pageB.getByText('Reply published and thread refreshed.'),
+    ).toBeVisible()
+
+    const replyConfirmedAt = Date.now()
+
+    await expect
+      .poll(
+        async () => {
+          const payload = await fetchNotifications(pageA)
+          return (
+            payload.data?.some(
+              (notification) =>
+                notification.eventType === 'reply' &&
+                notification.actor?.handle === 'grace' &&
+                notification.postId === 'post-1',
+            ) ?? false
+          )
+        },
+        {
+          timeout: 5_000,
+          intervals: [250, 500, 1_000],
+        },
+      )
+      .toBe(true)
+
+    expect(Date.now() - replyConfirmedAt).toBeLessThanOrEqual(5_000)
+
+    await pageA.goto(`${baseURL}/`)
+    await expect(
+      pageA.getByRole('button', { name: 'Notifications, 1 unread' }),
+    ).toBeVisible()
+
+    await pageA.getByRole('button', { name: 'Notifications, 1 unread' }).click()
+
+    await expect(pageA.getByText('Grace Hopper')).toBeVisible()
+    await expect(
+      pageA.getByText('replied to your post in #evals.'),
+    ).toBeVisible()
+  } finally {
+    await contextA.close()
+    await contextB.close()
+  }
 })
