@@ -18,6 +18,7 @@ import {
   createReactionRepository,
   getErrorStatusCode,
   mapReactionValidationIssues,
+  ReactionPolicyConflictError,
   type ReactionPolicy,
   type ReactionRepository,
 } from '../lib/reactions.js'
@@ -240,6 +241,18 @@ export function buildCreateReactionHandler(
         status,
       )
     } catch (error) {
+      if (error instanceof ReactionPolicyConflictError) {
+        return createJsonEnvelopeResponse(409, {
+          data: null,
+          errors: [
+            {
+              code: 'reaction_conflict',
+              message: error.message,
+            },
+          ],
+        })
+      }
+
       context.log('Failed to record the requested reaction.', {
         error:
           error instanceof Error
