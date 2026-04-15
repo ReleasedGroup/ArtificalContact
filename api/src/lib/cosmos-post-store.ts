@@ -232,30 +232,32 @@ export class CosmosPostStore
         { name: '@type', value: 'reaction' },
       ],
     }
-    const { resources } = await this.getReactionsContainer()
-      .items.query<{
-        sentiment?: string | null
-        emojiValues?: string[] | null
-      }>(querySpec, {
-        partitionKey: postId,
-      })
-      .fetchAll()
+    const queryIterator = this.getReactionsContainer().items.query<{
+      sentiment?: string | null
+      emojiValues?: string[] | null
+    }>(querySpec, {
+      partitionKey: postId,
+    })
 
     let likes = 0
     let dislikes = 0
     let emoji = 0
 
-    for (const reaction of resources) {
-      if (reaction.sentiment === 'like') {
-        likes += 1
-      } else if (reaction.sentiment === 'dislike') {
-        dislikes += 1
-      }
+    while (queryIterator.hasMoreResults()) {
+      const { resources } = await queryIterator.fetchNext()
 
-      if (Array.isArray(reaction.emojiValues)) {
-        emoji += reaction.emojiValues.filter(
-          (value) => typeof value === 'string' && value.trim().length > 0,
-        ).length
+      for (const reaction of resources) {
+        if (reaction.sentiment === 'like') {
+          likes += 1
+        } else if (reaction.sentiment === 'dislike') {
+          dislikes += 1
+        }
+
+        if (Array.isArray(reaction.emojiValues)) {
+          emoji += reaction.emojiValues.filter(
+            (value) => typeof value === 'string' && value.trim().length > 0,
+          ).length
+        }
       }
     }
 
