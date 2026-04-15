@@ -14,6 +14,13 @@ function readOptionalValue(value?: string) {
   return trimmed ? trimmed : undefined
 }
 
+function readCosmosEndpoint(env: NodeJS.ProcessEnv) {
+  return (
+    readOptionalValue(env.COSMOS_CONNECTION__accountEndpoint) ??
+    readOptionalValue(env.COSMOS_ENDPOINT)
+  )
+}
+
 export function getEnvironmentConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): EnvironmentConfig {
@@ -23,6 +30,6 @@ export function getEnvironmentConfig(
     region: readOptionalValue(env.AZURE_REGION) ?? 'local',
     cosmosConnectionString: readOptionalValue(env.COSMOS_CONNECTION_STRING),
     cosmosDatabaseName: readOptionalValue(env.COSMOS_DATABASE_NAME),
-    cosmosEndpoint: readOptionalValue(env.COSMOS_ENDPOINT),
+    cosmosEndpoint: readCosmosEndpoint(env),
   }
 }

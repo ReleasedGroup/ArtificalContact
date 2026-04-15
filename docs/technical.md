@@ -164,6 +164,7 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 #### Cosmos DB change-feed-triggered
 | Function | Source container | Purpose |
 |---|---|---|
+| `usersByHandleMirrorFn` | `users` | Maintain the `usersByHandle` lookup mirror with deterministic ids and per-user sync state |
 | `feedFanOutFn` | `posts` | Materialise feed entries into followers' `feeds` partitions |
 | `searchSyncFn` | `posts`, `users` | Upsert/delete documents in AI Search indexes |
 | `counterFn` | `posts`, `reactions`, `follows` | Update aggregate counters on parent documents |

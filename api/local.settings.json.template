@@ -7,6 +7,8 @@
     "AZURE_REGION": "local",
     "COSMOS_DATABASE_NAME": "acn",
     "COSMOS_CONNECTION_STRING": "",
-    "COSMOS_ENDPOINT": ""
+    "COSMOS_ENDPOINT": "",
+    "COSMOS_CONNECTION__accountEndpoint": "",
+    "COSMOS_CONNECTION__credential": ""
   }
 }
