@@ -12,6 +12,37 @@ npm run test
 npm run test:a11y --workspace @artificialcontact/web
 ```
 
+Run the Sprint 8 synthetic golden-path load test with `k6` against the linked
+Functions origin, not the Static Web Apps edge. The load harness authenticates
+with the documented `x-ms-client-principal` header, which is injected by SWA in
+production and therefore must be supplied directly when load testing the API.
+
+```bash
+k6 run \
+  -e LOAD_BASE_URL=http://127.0.0.1:7071 \
+  -e LOAD_RUN_ID=s8local \
+  -e LOAD_VUS=500 \
+  -e LOAD_DURATION=30m \
+  load-tests/golden-path.k6.js
+```
+
+Optional overrides:
+
+- `LOAD_SKIP_MEDIA_PROFILE_STEP=true` when the target environment does not have
+  blob/media settings configured yet
+- `LOAD_POLL_INTERVAL_MS`, `LOAD_SEARCH_TIMEOUT_MS`, and
+  `LOAD_NOTIFICATION_TIMEOUT_MS` to tune eventual-consistency polling during
+  smoke runs
+- `LOAD_THINK_TIME_SECONDS` to slow the loop when validating safely in shared
+  environments
+
+The k6 thresholds are derived from `docs/technical.md` §11:
+
+- overall HTTP failure rate under `1%`
+- `429` rate under `0.5%`
+- `/api/search` p95 request latency under `500 ms`
+- post search visibility and reply notification materialization within `60 s`
+
 ## Workspace coverage
 
 ### `web`
@@ -61,6 +92,10 @@ npm run test:a11y --workspace @artificialcontact/web
 - Vitest covers the `feedFanOutFn` worker, including duplicate deliveries, follower cap enforcement, and safe skips for replies, GitHub posts, and deleted posts
 - Vitest covers the Sprint 4 synthetic 10k-follower load scenario, including the capped fan-out RU budget model and the pull-on-read fallback for overflow followers
 - Vitest covers the media post-processing logic, default visual generation, and function dependency wiring, including deterministic `media` upserts, content-safety flagging, derived-blob recursion guards, public media URL rewriting, and image thumbnail variant generation
+- `k6` covers the Sprint 8 golden path through direct Functions-host load:
+  authenticated profile resolution, media upload URL issuance for profile setup,
+  root-post creation, follow, reaction, reply, search polling, and notification
+  polling under the §11 observability thresholds
 - TypeScript compilation validates the Azure Functions source and module graph
 - ESLint checks the Node/TypeScript implementation
 
