@@ -156,7 +156,7 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 | `notificationPrefs` | GET/PUT `/api/me/notifications` | |
 | `report` | POST `/api/reports` | `{ targetType: "post" \| "reply" \| "media" \| "user", targetId, reason, details? }` |
 | `modQueue` | GET `/api/mod/queue` | Moderator role only |
-| `modAction` | POST `/api/mod/actions` | Moderator role only |
+| `modAction` | POST `/api/mod/actions` | Moderator role only — `{ action: "hidePost" \| "removePost" \| "suspendAccount" \| "dismissReport", targetId, reportId?, notes? }` |
 | `adminMetrics` | GET `/api/admin/metrics` | Administrator role only |
 | `listSyncedRepos` | GET `/api/admin/github/repos` | Administrator only — lists curated GitHub repositories with sync health |
 | `addSyncedRepo` | POST `/api/admin/github/repos` | Administrator only — `{ owner, name, eventTypes[] }` |
@@ -330,6 +330,39 @@ A GitHub-sourced post uses the same container but sets `kind: "github"` and adds
   "counters": { "likes": 0, "replies": 0 },
   "createdAt": "...",
   "ttl": 2592000   // 30 days
+}
+```
+
+#### reports
+```jsonc
+{
+  "id": "report_01HXYZ...",
+  "type": "report",
+  "status": "open",                // open | triaged | resolved
+  "targetType": "post",            // post | reply | media | user
+  "targetId": "p_01HXYZ...",
+  "reporterId": "u_01HABC...",
+  "reporterHandle": "lin",
+  "reason": "Spam",
+  "details": "Repeated unsolicited promotions.",
+  "createdAt": "2026-04-15T09:15:00Z",
+  "updatedAt": "2026-04-15T09:15:00Z"
+}
+```
+
+#### modActions
+```jsonc
+{
+  "id": "ma_01HXYZ...",
+  "type": "modAction",
+  "action": "hidePost",            // hidePost | removePost | suspendAccount | dismissReport
+  "targetType": "post",            // post | reply | user | report
+  "targetId": "p_01HXYZ...",
+  "reportId": "report_01HABC...",  // optional linked queue/report row
+  "moderatorId": "u_01HMOD...",
+  "moderatorHandle": "casey",
+  "notes": "Confirmed commercial spam pattern.",
+  "createdAt": "2026-04-15T10:05:00Z"
 }
 ```
 
