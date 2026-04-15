@@ -9,6 +9,7 @@ var postsContainerAutoscaleMaxThroughput = 10000
 var reactionsContainerAutoscaleMaxThroughput = 4000
 var usersContainerAutoscaleMaxThroughput = 4000
 var mediaContainerThroughput = 400
+var notificationPrefsContainerThroughput = 400
 
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
   name: names.cosmosAccount
@@ -225,6 +226,26 @@ resource mediaContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/cont
   }
 }
 
+resource notificationPrefsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
+  parent: sqlDatabase
+  name: names.notificationPrefsContainer
+  properties: {
+    options: {
+      throughput: notificationPrefsContainerThroughput
+    }
+    resource: {
+      id: names.notificationPrefsContainer
+      partitionKey: {
+        kind: 'Hash'
+        paths: [
+          '/userId'
+        ]
+        version: 2
+      }
+    }
+  }
+}
+
 output accountName string = cosmosAccount.name
 output databaseName string = sqlDatabase.name
 output endpoint string = cosmosAccount.properties.documentEndpoint
@@ -232,6 +253,7 @@ output feedsContainerName string = feedsContainer.name
 output followersContainerName string = followersContainer.name
 output followsContainerName string = followsContainer.name
 output mediaContainerName string = mediaContainer.name
+output notificationPrefsContainerName string = notificationPrefsContainer.name
 output postsContainerName string = postsContainer.name
 output reactionsContainerName string = reactionsContainer.name
 output usersContainerName string = usersContainer.name

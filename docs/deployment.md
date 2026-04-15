@@ -6,7 +6,7 @@ Sprint 0 provisions the Azure and GitHub scaffolding required to start feature d
 
 - Azure Static Web Apps (Standard)
 - Azure Functions (Flex Consumption)
-- Azure Cosmos DB for NoSQL + `acn` database with `users`, `usersByHandle`, `posts`, `follows`, `followers`, `reactions`, `feeds`, and `media` containers
+- Azure Cosmos DB for NoSQL + `acn` database with `users`, `usersByHandle`, `posts`, `follows`, `followers`, `reactions`, `feeds`, `media`, and `notificationPrefs` containers
 - Azure Storage account + placeholder blob containers
 - Azure AI Search (Basic)
 - Azure Front Door (Standard) with cache rules for blob delivery
