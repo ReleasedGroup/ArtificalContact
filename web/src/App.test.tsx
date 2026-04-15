@@ -455,6 +455,32 @@ describe('App', () => {
     expect(screen.getByText(/1 unread/i)).toBeInTheDocument()
   })
 
+  it('renders the /moderation route with the moderator queue preview', async () => {
+    window.history.replaceState({}, '', '/moderation')
+
+    mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(200, {
+          data: createResolvedMeProfile({
+            roles: ['moderator', 'user'],
+          }),
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    renderApp()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Moderation queue' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Queue depth (24h)')).toBeInTheDocument()
+    expect(screen.getByText('Auto-flagged by Content Safety')).toBeInTheDocument()
+    expect(screen.getByText('Viewer roles: moderator + user')).toBeInTheDocument()
+  })
+
   it('renders the /me error state when the profile request fails', async () => {
     window.history.replaceState({}, '', '/me')
 
