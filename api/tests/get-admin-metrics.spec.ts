@@ -1,13 +1,13 @@
 import type { HttpRequest, InvocationContext } from '@azure/functions'
 import { describe, expect, it, vi } from 'vitest'
 import { buildGetAdminMetricsHandler } from '../src/functions/get-admin-metrics.js'
+import { CLIENT_PRINCIPAL_HEADER } from '../src/lib/auth.js'
 import {
   lookupAdminMetrics,
   type AdminMetricsActorRecord,
   type AdminMetricsReadStore,
   type AdminMetricsReportRecord,
 } from '../src/lib/admin-metrics.js'
-import { CLIENT_PRINCIPAL_HEADER } from '../src/lib/auth.js'
 import type { UserDocument, UserRepository } from '../src/lib/users.js'
 
 function createPrincipalRequest(
@@ -71,7 +71,7 @@ function createStoredUser(overrides: Partial<UserDocument> = {}): UserDocument {
   }
 }
 
-function createRepository(user: UserDocument): UserRepository {
+function createRepository(user: UserDocument | null): UserRepository {
   return {
     create: async (createdUser) => createdUser,
     getById: vi.fn(async () => user),
@@ -261,6 +261,31 @@ describe('getAdminMetricsHandler', () => {
           message:
             "The range query parameter must be one of '24h', '7d', or '30d'.",
           field: 'range',
+        },
+      ],
+    })
+  })
+
+  it('returns 500 when the store cannot be configured', async () => {
+    const handler = buildGetAdminMetricsHandler({
+      repositoryFactory: () => createRepository(createStoredUser()),
+      storeFactory: () => {
+        throw new Error('missing config')
+      },
+    })
+
+    const response = await handler(
+      createPrincipalRequest(createAuthenticatedPrincipal()),
+      createContext(),
+    )
+
+    expect(response.status).toBe(500)
+    expect(response.jsonBody).toEqual({
+      data: null,
+      errors: [
+        {
+          code: 'server.configuration_error',
+          message: 'The admin metrics store is not configured.',
         },
       ],
     })

@@ -13,7 +13,7 @@ import {
   parseAdminMetricsRange,
   type AdminMetricsReadStore,
 } from '../lib/admin-metrics.js'
-import { CosmosAdminMetricsStore } from '../lib/cosmos-admin-metrics-store.js'
+import { createAdminMetricsStore } from '../lib/cosmos-admin-metrics-store.js'
 import { withHttpAuth } from '../lib/http-auth.js'
 import { createUserRepository, type UserRepository } from '../lib/users.js'
 
@@ -23,20 +23,14 @@ export interface GetAdminMetricsHandlerDependencies {
   storeFactory?: () => AdminMetricsReadStore
 }
 
-let cachedStore: CosmosAdminMetricsStore | undefined
-
-function getStore(): CosmosAdminMetricsStore {
-  cachedStore ??= CosmosAdminMetricsStore.fromEnvironment()
-  return cachedStore
-}
-
 export function buildGetAdminMetricsHandler(
   dependencies: GetAdminMetricsHandlerDependencies = {},
 ) {
   const now = dependencies.now ?? (() => new Date())
   const repositoryFactory =
     dependencies.repositoryFactory ?? (() => createUserRepository())
-  const storeFactory = dependencies.storeFactory ?? (() => getStore())
+  const storeFactory =
+    dependencies.storeFactory ?? (() => createAdminMetricsStore())
 
   async function getAdminMetricsHandler(
     request: HttpRequest,
@@ -71,9 +65,10 @@ export function buildGetAdminMetricsHandler(
 
     const authenticatedUser = context.auth?.user
     if (!authenticatedUser) {
-      return createErrorResponse(500, {
-        code: 'server.auth_context_missing',
-        message: 'The authenticated user context was not available.',
+      return createErrorResponse(403, {
+        code: 'auth.forbidden',
+        message:
+          'The authenticated user must have a provisioned admin profile before reading admin metrics.',
       })
     }
 

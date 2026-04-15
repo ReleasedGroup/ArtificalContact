@@ -1,39 +1,20 @@
-import { CosmosClient, type Container, type SqlQuerySpec } from '@azure/cosmos'
-import { DefaultAzureCredential } from '@azure/identity'
-import { getEnvironmentConfig } from './config.js'
+import type { Container, SqlQuerySpec } from '@azure/cosmos'
 import {
   type AdminMetricsActorRecord,
   type AdminMetricsReadStore,
   type AdminMetricsReportRecord,
 } from './admin-metrics.js'
+import { getEnvironmentConfig } from './config.js'
+import { createCosmosClient } from './cosmos-client.js'
 import { DEFAULT_FOLLOWS_CONTAINER_NAME } from './follows.js'
 import { DEFAULT_POSTS_CONTAINER_NAME } from './posts.js'
 import { DEFAULT_REACTIONS_CONTAINER_NAME } from './reactions.js'
 import { DEFAULT_REPORTS_CONTAINER_NAME } from './reports.js'
 import { readOptionalValue } from './strings.js'
-import {
-  DEFAULT_COSMOS_DATABASE_NAME,
-  DEFAULT_USERS_CONTAINER_NAME,
-} from './users-by-handle-mirror.js'
 
-function createCosmosClientFromEnvironment(): CosmosClient {
-  const config = getEnvironmentConfig()
+const DEFAULT_USERS_CONTAINER_NAME = 'users'
 
-  if (config.cosmosConnectionString) {
-    return new CosmosClient(config.cosmosConnectionString)
-  }
-
-  if (!config.cosmosEndpoint) {
-    throw new Error(
-      'COSMOS_CONNECTION_STRING or COSMOS_CONNECTION__accountEndpoint must be configured.',
-    )
-  }
-
-  return new CosmosClient({
-    endpoint: config.cosmosEndpoint,
-    aadCredentials: new DefaultAzureCredential(),
-  })
-}
+let cachedAdminMetricsStore: CosmosAdminMetricsStore | undefined
 
 async function fetchAllResources<T>(
   container: Container,
@@ -84,11 +65,16 @@ export class CosmosAdminMetricsStore implements AdminMetricsReadStore {
     private readonly reportsContainer: Container,
   ) {}
 
-  static fromEnvironment(client?: CosmosClient): CosmosAdminMetricsStore {
+  static fromEnvironment(): CosmosAdminMetricsStore {
     const config = getEnvironmentConfig()
-    const resolvedClient = client ?? createCosmosClientFromEnvironment()
-    const databaseName = config.cosmosDatabaseName ?? DEFAULT_COSMOS_DATABASE_NAME
-    const database = resolvedClient.database(databaseName)
+    const databaseName = readOptionalValue(config.cosmosDatabaseName)
+
+    if (!databaseName) {
+      throw new Error('COSMOS_DATABASE_NAME is required to resolve admin metrics.')
+    }
+
+    const client = createCosmosClient(config)
+    const database = client.database(databaseName)
 
     return new CosmosAdminMetricsStore(
       database.container(
@@ -233,4 +219,9 @@ export class CosmosAdminMetricsStore implements AdminMetricsReadStore {
       ],
     })
   }
+}
+
+export function createAdminMetricsStore(): CosmosAdminMetricsStore {
+  cachedAdminMetricsStore ??= CosmosAdminMetricsStore.fromEnvironment()
+  return cachedAdminMetricsStore
 }

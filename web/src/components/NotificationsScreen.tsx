@@ -6,6 +6,7 @@ import {
   type NotificationItem,
 } from '../lib/notifications'
 import { signOut } from '../lib/auth'
+import { BrowserPushCard } from './BrowserPushCard'
 
 interface NotificationsScreenProps {
   viewer: MeProfile
@@ -24,7 +25,10 @@ const notificationTabs: Array<{
   { label: 'Follows', value: 'follows' },
 ]
 
-function buildMonogram(source: string | null | undefined, fallback: string): string {
+function buildMonogram(
+  source: string | null | undefined,
+  fallback: string,
+): string {
   const resolvedSource = source?.trim() || fallback
   const words = resolvedSource.split(/\s+/).filter(Boolean)
 
@@ -92,7 +96,9 @@ function getNotificationHref(notification: NotificationItem): string | null {
   return null
 }
 
-function getNotificationTab(eventType: string): Exclude<NotificationTab, 'all'> | null {
+function getNotificationTab(
+  eventType: string,
+): Exclude<NotificationTab, 'all'> | null {
   switch (eventType.trim().toLowerCase()) {
     case 'mention':
     case 'mentions':
@@ -236,11 +242,7 @@ function NotificationIcon({ eventType }: { eventType: string }) {
           stroke="currentColor"
           strokeWidth="1.8"
         >
-          <path
-            d="M12 6v6l4 2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          <path d="M12 6v6l4 2" strokeLinecap="round" strokeLinejoin="round" />
           <circle cx="12" cy="12" r="9" />
         </svg>
       )
@@ -332,7 +334,9 @@ export function NotificationsScreen({ viewer }: NotificationsScreenProps) {
   })
 
   const loadedNotifications = useDeferredValue(
-    (notificationsQuery.data?.pages ?? []).flatMap((page) => page.notifications),
+    (notificationsQuery.data?.pages ?? []).flatMap(
+      (page) => page.notifications,
+    ),
   )
   const visibleNotifications = loadedNotifications.filter((notification) => {
     if (activeTab === 'all') {
@@ -372,8 +376,9 @@ export function NotificationsScreen({ viewer }: NotificationsScreenProps) {
                   Notifications
                 </h1>
                 <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300 sm:text-base">
-                  In-app delivery via the Cosmos DB change-feed worker. Filter by
-                  the event you care about without leaving the notification feed.
+                  In-app delivery via the Cosmos DB change-feed worker. Filter
+                  by the event you care about without leaving the notification
+                  feed.
                 </p>
               </div>
             </div>
@@ -384,6 +389,12 @@ export function NotificationsScreen({ viewer }: NotificationsScreenProps) {
                 className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
               >
                 Home feed
+              </a>
+              <a
+                href="/moderation"
+                className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
+              >
+                Moderation queue
               </a>
               <a
                 href="/me"
@@ -397,7 +408,10 @@ export function NotificationsScreen({ viewer }: NotificationsScreenProps) {
                   void notificationsQuery.refetch()
                 }}
                 className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/35 hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-slate-400"
-                disabled={notificationsQuery.isPending || notificationsQuery.isRefetching}
+                disabled={
+                  notificationsQuery.isPending ||
+                  notificationsQuery.isRefetching
+                }
               >
                 Refresh notifications
               </button>
@@ -413,9 +427,11 @@ export function NotificationsScreen({ viewer }: NotificationsScreenProps) {
         </header>
 
         <section className="rounded-[2rem] border border-white/10 bg-slate-950/60 px-4 py-5 shadow-2xl shadow-slate-950/30 backdrop-blur sm:px-6">
+          <BrowserPushCard />
+
           <div
             aria-label="Notification filters"
-            className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-4 text-sm"
+            className="mt-5 flex flex-wrap items-center gap-2 border-b border-white/10 pb-4 text-sm"
           >
             {notificationTabs.map((tab) => {
               const selected = tab.value === activeTab
@@ -465,15 +481,17 @@ export function NotificationsScreen({ viewer }: NotificationsScreenProps) {
 
           {notificationsQuery.isError && (
             <article className="mt-5 rounded-[1.75rem] border border-rose-400/20 bg-rose-400/10 p-6 text-rose-50">
-              <h2 className="text-xl font-semibold">Notification feed unavailable</h2>
+              <h2 className="text-xl font-semibold">
+                Notification feed unavailable
+              </h2>
               <p className="mt-3 text-sm leading-7 text-rose-100/90">
                 {notificationsQuery.error instanceof Error
                   ? notificationsQuery.error.message
                   : 'Unable to load the in-app notification feed.'}
               </p>
               <p className="mt-3 text-sm leading-7 text-rose-100/90">
-                The UI is wired to the documented `/api/notifications` contract and
-                will populate here once the API is available.
+                The UI is wired to the documented `/api/notifications` contract
+                and will populate here once the API is available.
               </p>
               <button
                 type="button"

@@ -1,3 +1,4 @@
+import { registerCreateModActionFunction } from './functions/create-mod-action.js'
 import { registerCreateReplyFunction } from './functions/create-reply.js'
 import { registerCreateReportFunction } from './functions/create-report.js'
 import { registerCreateReactionFunction } from './functions/create-reaction.js'
@@ -7,8 +8,8 @@ import { registerDeletePostFunction } from './functions/delete-post.js'
 import { registerDeleteReactionFunction } from './functions/delete-reaction.js'
 import { registerFeedFanOutFunction } from './functions/feed-fanout.js'
 import { registerFollowUserFunction } from './functions/follow-user.js'
-import { registerFollowersMirrorFunction } from './functions/followers-mirror.js'
 import { registerGetAdminMetricsFunction } from './functions/get-admin-metrics.js'
+import { registerFollowersMirrorFunction } from './functions/followers-mirror.js'
 import { registerGetFeedFunction } from './functions/get-feed.js'
 import { registerGetModerationQueueFunction } from './functions/get-moderation-queue.js'
 import { registerGetPublicFeedFunction } from './functions/get-public-feed.js'
@@ -34,6 +35,7 @@ import { registerUpdateProfileFunction } from './functions/update-profile.js'
 import { registerUserPostAuthorSyncFunction } from './functions/user-post-author-sync.js'
 import { registerUsersByHandleMirrorFunction } from './functions/users-by-handle-mirror.js'
 
+registerCreateModActionFunction()
 registerCreateReplyFunction()
 registerCreateReportFunction()
 registerCreateReactionFunction()
@@ -43,8 +45,8 @@ registerDeletePostFunction()
 registerDeleteReactionFunction()
 registerFeedFanOutFunction()
 registerFollowUserFunction()
-registerFollowersMirrorFunction()
 registerGetAdminMetricsFunction()
+registerFollowersMirrorFunction()
 registerGetFeedFunction()
 registerGetModerationQueueFunction()
 registerGetPublicFeedFunction()

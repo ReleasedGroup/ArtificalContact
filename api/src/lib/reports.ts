@@ -38,6 +38,8 @@ export interface CreateReportRequest {
 
 export interface ReportRepository {
   create(report: ReportDocument): Promise<ReportDocument>
+  getById(reportId: string): Promise<ReportDocument | null>
+  upsert(report: ReportDocument): Promise<ReportDocument>
 }
 
 function normalizeRequiredString(value: unknown): unknown {
@@ -61,6 +63,20 @@ function createReportRepositoryForContainer(container: Container): ReportReposit
   return {
     async create(report) {
       const response = await container.items.create<ReportDocument>(report)
+      return response.resource ?? report
+    },
+    async getById(reportId) {
+      const response = await container.items
+        .query<ReportDocument>({
+          query: 'SELECT TOP 1 * FROM c WHERE c.id = @id',
+          parameters: [{ name: '@id', value: reportId }],
+        })
+        .fetchAll()
+
+      return response.resources[0] ?? null
+    },
+    async upsert(report) {
+      const response = await container.items.upsert<ReportDocument>(report)
       return response.resource ?? report
     },
   }
