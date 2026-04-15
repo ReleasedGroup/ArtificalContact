@@ -39,10 +39,10 @@ export interface NotificationDocument {
   readAt: string | null
   createdAt: string
   updatedAt: string
-  eventCount: number
-  coalesced: boolean
-  coalescedWindowStart: string | null
-  coalescedRelatedEntityIds: string[]
+  eventCount?: number
+  coalesced?: boolean
+  coalescedWindowStart?: string | null
+  coalescedRelatedEntityIds?: string[]
   ttl: number
 }
 
@@ -528,7 +528,10 @@ export function buildNotificationEntry(
     readAt: toNonEmptyString(document.readAt),
     createdAt,
     updatedAt,
-    eventCount: toNonNegativeInteger(document.eventCount),
+    eventCount:
+      toNonNegativeInteger(document.eventCount) > 0
+        ? toNonNegativeInteger(document.eventCount)
+        : 1,
     coalesced: document.coalesced === true,
     coalescedWindowStart: toNonEmptyString(document.coalescedWindowStart),
   }
