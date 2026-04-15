@@ -81,8 +81,9 @@ export class CosmosPostStore implements MutablePostStore, PostRepository {
   }
 
   async create(post: UserPostDocument): Promise<UserPostDocument> {
-    await this.postsContainer.items.create<UserPostDocument>(post)
-    return post
+    const { resource } =
+      await this.postsContainer.items.create<UserPostDocument>(post)
+    return resource ?? post
   }
 
   async upsertPost(post: StoredPostDocument): Promise<StoredPostDocument> {

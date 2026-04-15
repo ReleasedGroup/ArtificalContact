@@ -279,6 +279,51 @@ describe('createReplyHandler', () => {
     })
   })
 
+  it('returns 500 when the reply validation configuration is invalid', async () => {
+    const originalMaxLength = process.env.POST_MAX_LENGTH
+    process.env.POST_MAX_LENGTH = 'invalid'
+
+    try {
+      const context = createContext()
+      const handler = buildCreateReplyHandler({
+        repositoryFactory: () => ({
+          getPostById: async () => createStoredPost(),
+          create: async (post) => post,
+        }),
+      })
+
+      const response = await handler(
+        createRequest({
+          text: 'hello world',
+        }),
+        context,
+      )
+
+      expect(response.status).toBe(500)
+      expect(response.jsonBody).toEqual({
+        data: null,
+        errors: [
+          {
+            code: 'server.configuration_error',
+            message: 'The reply validation configuration is invalid.',
+          },
+        ],
+      })
+      expect(context.log).toHaveBeenCalledWith(
+        'Failed to configure the reply validation rules.',
+        {
+          error: 'POST_MAX_LENGTH must be a positive integer.',
+        },
+      )
+    } finally {
+      if (originalMaxLength === undefined) {
+        delete process.env.POST_MAX_LENGTH
+      } else {
+        process.env.POST_MAX_LENGTH = originalMaxLength
+      }
+    }
+  })
+
   it('returns 404 when the parent post is missing or not publicly visible', async () => {
     const hiddenParent = createStoredPost({
       moderationState: 'hidden',

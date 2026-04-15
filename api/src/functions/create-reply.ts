@@ -44,10 +44,8 @@ export function buildCreateReplyHandler(
   dependencies: CreateReplyHandlerDependencies = {},
 ) {
   const idFactory = dependencies.idFactory ?? randomUUID
-  const maxTextLength = dependencies.maxTextLength ?? resolvePostMaxLength()
   const now = dependencies.now ?? (() => new Date())
   const repositoryFactory = dependencies.repositoryFactory ?? (() => getStore())
-  const requestSchema = buildCreatePostRequestSchema(maxTextLength)
 
   return async function createReplyHandler(
     request: HttpRequest,
@@ -80,6 +78,25 @@ export function buildCreateReplyHandler(
             field: 'id',
           },
         ],
+      })
+    }
+
+    let requestSchema: ReturnType<typeof buildCreatePostRequestSchema>
+
+    try {
+      const maxTextLength = dependencies.maxTextLength ?? resolvePostMaxLength()
+      requestSchema = buildCreatePostRequestSchema(maxTextLength)
+    } catch (error) {
+      context.log('Failed to configure the reply validation rules.', {
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Unknown reply validation configuration error.',
+      })
+
+      return createErrorResponse(500, {
+        code: 'server.configuration_error',
+        message: 'The reply validation configuration is invalid.',
       })
     }
 
