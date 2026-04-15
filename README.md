@@ -5,7 +5,7 @@ ArtificialContact is an Azure-native social network for AI practitioners. This r
 ## Repository layout
 
 - `web/`: React 19, TypeScript, Vite, Tailwind CSS v4.1, Vitest
-- `api/`: Azure Functions (Node 20, TypeScript) with `/api/health`, `/api/users/{handle}`, and the `usersByHandle` change-feed worker
+- `api/`: Azure Functions (Node 20, TypeScript) with `/api/health`, `/api/users/{handle}`, `/api/posts/{id}`, and the `usersByHandle` change-feed worker
 - `infra/`: Bicep modules and `azure.yaml` orchestration for Azure Developer CLI
 - `docs/`: requirements, technical design, deployment, and testing documentation
 
@@ -23,6 +23,7 @@ npm run test
 - Monorepo scaffold for `web/`, `api/`, and `infra/`
 - `/api/health` returns build metadata, region information, and a Cosmos ping result
 - SPA public profile route `/u/{handle}` renders the public identity shell from `GET /api/users/{handle}`
+- `GET /api/posts/{id}` returns a single public post from the Cosmos `posts` container
 - Application Insights wiring for the SPA and Functions
 - GitHub Actions for validation and deployment
 - Repo governance files: PR template and CODEOWNERS
