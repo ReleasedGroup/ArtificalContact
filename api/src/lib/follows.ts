@@ -78,7 +78,9 @@ function createCosmosFollowRepository(
       const id = buildFollowDocumentId(followerId, followedId)
 
       try {
-        const response = await container.item(id, followerId).read<FollowDocument>()
+        const response = await container
+          .item(id, followerId)
+          .read<FollowDocument>()
         return response.resource ?? null
       } catch (error) {
         if (isExpectedCosmosStatusCode(error, 404)) {

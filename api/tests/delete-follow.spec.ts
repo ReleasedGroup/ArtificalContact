@@ -107,7 +107,9 @@ describe('deleteFollowHandler', () => {
     }
     const store = createStore({
       mirrors: [{ id: 'ada', handle: 'ada', userId: 'u2' }],
-      users: [{ id: 'u2', handle: 'Ada', handleLower: 'ada', status: 'active' }],
+      users: [
+        { id: 'u2', handle: 'Ada', handleLower: 'ada', status: 'active' },
+      ],
     })
     const handler = buildDeleteFollowHandler({
       repositoryFactory: () => repository,
@@ -150,7 +152,9 @@ describe('deleteFollowHandler', () => {
     }
     const store = createStore({
       mirrors: [{ id: 'ada', handle: 'ada', userId: 'u2' }],
-      users: [{ id: 'u2', handle: 'Ada', handleLower: 'ada', status: 'active' }],
+      users: [
+        { id: 'u2', handle: 'Ada', handleLower: 'ada', status: 'active' },
+      ],
     })
     const handler = buildDeleteFollowHandler({
       repositoryFactory: () => repository,
@@ -184,7 +188,9 @@ describe('deleteFollowHandler', () => {
     }
     const store = createStore({
       mirrors: [{ id: 'ada', handle: 'ada', userId: 'u2' }],
-      users: [{ id: 'u2', handle: 'Ada', handleLower: 'ada', status: 'active' }],
+      users: [
+        { id: 'u2', handle: 'Ada', handleLower: 'ada', status: 'active' },
+      ],
     })
     const pendingUser = createStoredUser({
       status: 'pending',
@@ -197,7 +203,10 @@ describe('deleteFollowHandler', () => {
       targetStoreFactory: () => store,
     })
 
-    const response = await handler(createRequest('Ada'), createContext(pendingUser))
+    const response = await handler(
+      createRequest('Ada'),
+      createContext(pendingUser),
+    )
 
     expect(response.status).toBe(403)
     expect(response.jsonBody).toEqual({
@@ -288,7 +297,10 @@ describe('deleteFollowHandler', () => {
       targetStoreFactory: () => store,
     })
 
-    const response = await handler(createRequest('nick'), createContext(currentUser))
+    const response = await handler(
+      createRequest('nick'),
+      createContext(currentUser),
+    )
 
     expect(response.status).toBe(400)
     expect(response.jsonBody).toEqual({
@@ -378,7 +390,9 @@ describe('deleteFollowHandler', () => {
     }
     const store = createStore({
       mirrors: [{ id: 'ada', handle: 'ada', userId: 'u2' }],
-      users: [{ id: 'u2', handle: 'Ada', handleLower: 'ada', status: 'active' }],
+      users: [
+        { id: 'u2', handle: 'Ada', handleLower: 'ada', status: 'active' },
+      ],
     })
     const handler = buildDeleteFollowHandler({
       repositoryFactory: () => repository,
