@@ -32,6 +32,7 @@
     "COSMOS_CONNECTION__credential": "",
     "SEARCH_ENDPOINT": "",
     "SEARCH_INDEX_POSTS_NAME": "posts-v1",
-    "SEARCH_INDEX_USERS_NAME": "users-v1"
+    "SEARCH_INDEX_USERS_NAME": "users-v1",
+    "SEARCH_INDEX_HASHTAGS_NAME": "hashtags-v1"
   }
 }

@@ -17,6 +17,7 @@ export interface EnvironmentConfig {
   searchEndpoint: string | undefined
   searchPostsIndexName: string
   searchUsersIndexName: string
+  searchHashtagsIndexName: string
 }
 
 function readCosmosEndpoint(env: NodeJS.ProcessEnv) {
@@ -62,11 +63,20 @@ export function getEnvironmentConfig(
     contentSafetyThreshold: readInteger(env.CONTENT_SAFETY_THRESHOLD, 4, 0, 7),
     searchEndpoint:
       readOptionalValue(env.SEARCH_ENDPOINT) ??
-      readOptionalValue(env.SEARCH_SERVICE_ENDPOINT),
+      readOptionalValue(env.SEARCH_SERVICE_ENDPOINT) ??
+      readOptionalValue(env.AZURE_AI_SEARCH_ENDPOINT),
     searchPostsIndexName:
-      readOptionalValue(env.SEARCH_INDEX_POSTS_NAME) ?? 'posts-v1',
+      readOptionalValue(env.SEARCH_INDEX_POSTS_NAME) ??
+      readOptionalValue(env.AZURE_AI_SEARCH_POSTS_INDEX) ??
+      'posts-v1',
     searchUsersIndexName:
-      readOptionalValue(env.SEARCH_INDEX_USERS_NAME) ?? 'users-v1',
+      readOptionalValue(env.SEARCH_INDEX_USERS_NAME) ??
+      readOptionalValue(env.AZURE_AI_SEARCH_USERS_INDEX) ??
+      'users-v1',
+    searchHashtagsIndexName:
+      readOptionalValue(env.SEARCH_INDEX_HASHTAGS_NAME) ??
+      readOptionalValue(env.AZURE_AI_SEARCH_HASHTAGS_INDEX) ??
+      'hashtags-v1',
     ffmpegPath:
       readOptionalValue(env.FFMPEG_PATH) ??
       readOptionalValue(env.MEDIA_FFMPEG_PATH),

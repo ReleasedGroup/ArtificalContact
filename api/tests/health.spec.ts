@@ -22,6 +22,7 @@ describe('createHealthReport', () => {
         searchEndpoint: undefined,
         searchPostsIndexName: 'posts-v1',
         searchUsersIndexName: 'users-v1',
+        searchHashtagsIndexName: 'hashtags-v1',
         ffmpegPath: undefined,
       },
       cosmosPing: async () => ({
