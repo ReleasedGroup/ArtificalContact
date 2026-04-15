@@ -1,4 +1,8 @@
-import type { ApiEnvelope } from './api-envelope.js'
+import type { Container } from '@azure/cosmos'
+import { z, type ZodIssue } from 'zod'
+import type { ApiEnvelope, ApiError } from './api-envelope.js'
+import { getEnvironmentConfig, type EnvironmentConfig } from './config.js'
+import { createCosmosClient } from './cosmos-client.js'
 import type { FollowDocument } from './follows.js'
 import {
   isPubliclyVisiblePost,
@@ -10,12 +14,20 @@ import {
   type ReactionDocument,
   type ReactionType,
 } from './reactions.js'
+import { readOptionalValue } from './strings.js'
 import type { StoredUserDocument, UserProfileStore } from './user-profile.js'
 
 export const DEFAULT_NOTIFICATIONS_CONTAINER_NAME = 'notifications'
 export const NOTIFICATION_TTL_SECONDS = 60 * 60 * 24 * 90
 export const DEFAULT_NOTIFICATIONS_PAGE_SIZE = 20
 export const MAX_NOTIFICATIONS_PAGE_SIZE = 100
+
+let cachedNotificationRepository: NotificationRepository | undefined
+
+type CosmosLikeError = Error & {
+  code?: number | string
+  statusCode?: number | string
+}
 
 export type NotificationEventType = 'follow' | 'reply' | 'reaction' | 'mention'
 
@@ -59,6 +71,29 @@ export interface NotificationReadStore {
     cursor?: string
   }>
   countUnreadNotifications(targetUserId: string): Promise<number>
+}
+
+export interface NotificationRepository {
+  getByTargetUserAndId(
+    targetUserId: string,
+    notificationId: string,
+  ): Promise<NotificationDocument | null>
+  listUnreadByTargetUserId(targetUserId: string): Promise<NotificationDocument[]>
+  upsert(notification: NotificationDocument): Promise<NotificationDocument>
+}
+
+export type MarkNotificationsReadRequest =
+  | {
+      scope: 'all'
+    }
+  | {
+      scope: 'single'
+      notificationId: string
+    }
+
+export interface NotificationReadMutationResult {
+  changed: boolean
+  notification: NotificationDocument
 }
 
 export type NotificationProfileStore = Pick<
@@ -129,6 +164,30 @@ const nullLogger: LoggerLike = {
   error: noop,
 }
 
+function isExpectedCosmosStatusCode(
+  error: unknown,
+  expectedStatusCode: number,
+): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  const cosmosError = error as CosmosLikeError
+  const statusCodeValues = [cosmosError.statusCode, cosmosError.code]
+
+  return statusCodeValues.some((value) => {
+    if (typeof value === 'number') {
+      return value === expectedStatusCode
+    }
+
+    if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+      return Number.parseInt(value, 10) === expectedStatusCode
+    }
+
+    return false
+  })
+}
+
 function toNonEmptyString(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null
@@ -136,6 +195,15 @@ function toNonEmptyString(value: unknown): string | null {
 
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : null
+}
+
+function normalizeOptionalString(value: unknown): unknown {
+  if (typeof value !== 'string') {
+    return value
+  }
+
+  const trimmed = value.trim()
+  return trimmed ? trimmed : undefined
 }
 
 function toStringArray(value: unknown): string[] {
@@ -317,6 +385,75 @@ function buildActorFromPost(
   }
 }
 
+export function createNotificationRepositoryForContainer(
+  container: Container,
+): NotificationRepository {
+  return {
+    async getByTargetUserAndId(targetUserId, notificationId) {
+      try {
+        const response = await container
+          .item(notificationId, targetUserId)
+          .read<NotificationDocument>()
+
+        return response.resource ?? null
+      } catch (error) {
+        if (isExpectedCosmosStatusCode(error, 404)) {
+          return null
+        }
+
+        throw error
+      }
+    },
+
+    async listUnreadByTargetUserId(targetUserId) {
+      const queryIterator = container.items.query<NotificationDocument>(
+        {
+          query: `
+            SELECT * FROM c
+            WHERE c.type = @type
+            AND (
+              NOT IS_DEFINED(c.read)
+              OR IS_NULL(c.read)
+              OR c.read = false
+            )
+            AND (
+              NOT IS_DEFINED(c.readAt)
+              OR IS_NULL(c.readAt)
+              OR LENGTH(TRIM(c.readAt)) = 0
+            )
+            ORDER BY c.createdAt DESC, c.id DESC
+          `,
+          parameters: [{ name: '@type', value: 'notification' }],
+        },
+        {
+          maxItemCount: 100,
+          partitionKey: targetUserId,
+        },
+      )
+
+      const resources: NotificationDocument[] = []
+
+      while (queryIterator.hasMoreResults()) {
+        const { resources: pageResources } = await queryIterator.fetchNext()
+
+        if (pageResources?.length) {
+          resources.push(...pageResources)
+        }
+      }
+
+      return resources
+    },
+
+    async upsert(notification) {
+      const response = await container.items.upsert<NotificationDocument>(
+        notification,
+      )
+
+      return response.resource ?? notification
+    },
+  }
+}
+
 function buildInvalidTargetUserIdResult(): NotificationsLookupResult {
   return {
     status: 400,
@@ -461,6 +598,127 @@ export async function lookupNotifications(
       errors: [],
     },
   }
+}
+
+export function buildMarkNotificationsReadRequestSchema() {
+  return z
+    .object({
+      all: z.boolean().optional(),
+      notificationId: z.preprocess(
+        normalizeOptionalString,
+        z.string().optional(),
+      ),
+    })
+    .strict()
+    .superRefine((value, context) => {
+      if (value.all !== undefined && value.all !== true) {
+        context.addIssue({
+          code: 'custom',
+          message: 'The all field must be true when provided.',
+          path: ['all'],
+        })
+      }
+
+      const hasAll = value.all === true
+      const hasNotificationId = value.notificationId !== undefined
+
+      if (hasAll && hasNotificationId) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Specify either all=true or notificationId, but not both.',
+          path: ['notificationId'],
+        })
+        return
+      }
+
+      if (!hasAll && !hasNotificationId) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Specify either all=true or notificationId.',
+          path: ['notificationId'],
+        })
+      }
+    })
+    .transform((value): MarkNotificationsReadRequest => {
+      if (value.notificationId !== undefined) {
+        return {
+          scope: 'single',
+          notificationId: value.notificationId,
+        }
+      }
+
+      return {
+        scope: 'all',
+      }
+    })
+}
+
+export function mapMarkNotificationsReadValidationIssues(
+  issues: readonly ZodIssue[],
+): ApiError[] {
+  return issues.map((issue) => ({
+    code: 'invalid_notification_read',
+    message: issue.message,
+    ...(issue.path.length > 0 ? { field: issue.path.join('.') } : {}),
+  }))
+}
+
+export function isNotificationRead(
+  notification: Pick<NotificationDocument, 'readAt'>,
+): boolean {
+  return readOptionalValue(notification.readAt ?? undefined) !== undefined
+}
+
+export function applyNotificationRead(
+  notification: NotificationDocument,
+  now: Date,
+): NotificationReadMutationResult {
+  if (isNotificationRead(notification)) {
+    return {
+      changed: false,
+      notification,
+    }
+  }
+
+  const timestamp = now.toISOString()
+
+  return {
+    changed: true,
+    notification: {
+      ...notification,
+      readAt: timestamp,
+      updatedAt: timestamp,
+    },
+  }
+}
+
+export function createNotificationRepositoryFromConfig(
+  config: EnvironmentConfig,
+  env: NodeJS.ProcessEnv = process.env,
+): NotificationRepository {
+  if (!config.cosmosDatabaseName) {
+    throw new Error(
+      'COSMOS_DATABASE_NAME is required to resolve notifications.',
+    )
+  }
+
+  const notificationsContainerName =
+    readOptionalValue(env.NOTIFICATIONS_CONTAINER_NAME) ??
+    DEFAULT_NOTIFICATIONS_CONTAINER_NAME
+  const client = createCosmosClient(config)
+  const container = client
+    .database(config.cosmosDatabaseName)
+    .container(notificationsContainerName)
+
+  return createNotificationRepositoryForContainer(container)
+}
+
+export function createNotificationRepository(): NotificationRepository {
+  cachedNotificationRepository ??= createNotificationRepositoryFromConfig(
+    getEnvironmentConfig(),
+  )
+
+  return cachedNotificationRepository
 }
 
 export async function syncFollowNotificationsBatch(

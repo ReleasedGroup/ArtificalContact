@@ -20,6 +20,7 @@ import { registerCreatePostFunction } from './functions/create-post.js'
 import { registerListFollowingFunction } from './functions/list-following.js'
 import { registerGetUserFunction } from './functions/get-user.js'
 import { registerHealthFunction } from './functions/health.js'
+import { registerMarkNotificationsReadFunction } from './functions/mark-notifications-read.js'
 import { registerMediaUploadUrlFunction } from './functions/media-upload-url.js'
 import { registerMediaPostProcessFunctions } from './functions/media-post-process.js'
 import { registerNotificationFunctions } from './functions/notification.js'
@@ -52,6 +53,7 @@ registerCreatePostFunction()
 registerListFollowingFunction()
 registerGetUserFunction()
 registerHealthFunction()
+registerMarkNotificationsReadFunction()
 registerMediaUploadUrlFunction()
 registerMediaPostProcessFunctions()
 registerNotificationFunctions()
