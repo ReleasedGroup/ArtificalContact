@@ -1,11 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { createQueryClient } from './lib/query-client'
@@ -301,12 +295,38 @@ describe('App', () => {
         })
       }
 
+      if (String(input) === '/api/notifications') {
+        return createJsonResponse(200, {
+          data: [
+            {
+              id: 'notification-1',
+              eventType: 'reply',
+              actor: {
+                id: 'github:u2',
+                handle: 'grace',
+                displayName: 'Grace Hopper',
+                avatarUrl: null,
+              },
+              text: 'replied to your post in #evals.',
+              read: false,
+              createdAt: '2026-04-15T00:10:00.000Z',
+              postId: 'post-1',
+            },
+          ],
+          unreadCount: 3,
+          cursor: null,
+          errors: [],
+        })
+      }
+
       throw new Error(`Unexpected fetch request: ${String(input)}`)
     })
 
     renderApp()
 
-    expect(await screen.findByRole('heading', { name: 'Home feed' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Home feed' }),
+    ).toBeInTheDocument()
     expect(
       await screen.findByText(
         'A fresh feed entry from the personalised timeline.',
@@ -316,6 +336,9 @@ describe('App', () => {
       'href',
       '/me',
     )
+    expect(
+      screen.getByRole('button', { name: 'Notifications, 3 unread' }),
+    ).toBeInTheDocument()
   })
 
   it('loads the /me profile editor with existing profile data', async () => {
@@ -1276,9 +1299,9 @@ describe('App', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Like reaction' })).toHaveTextContent(
-        '👍 13',
-      )
+      expect(
+        screen.getByRole('button', { name: 'Like reaction' }),
+      ).toHaveTextContent('👍 13')
     })
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/posts/post-1/reactions',
@@ -1292,10 +1315,14 @@ describe('App', () => {
       }),
     )
     expect(
-      mockFetch.mock.calls.filter(([request]) => request === '/api/posts/post-1'),
+      mockFetch.mock.calls.filter(
+        ([request]) => request === '/api/posts/post-1',
+      ),
     ).toHaveLength(2)
     expect(
-      mockFetch.mock.calls.filter(([request]) => request === '/api/threads/post-1'),
+      mockFetch.mock.calls.filter(
+        ([request]) => request === '/api/threads/post-1',
+      ),
     ).toHaveLength(2)
   })
 
@@ -1672,10 +1699,12 @@ describe('App', () => {
       if (String(input).startsWith('/api/gifs/search')) {
         return createJsonResponse(200, {
           data: {
-            mode:
-              String(input).includes('q=party+parrot') ? 'search' : 'featured',
-            query:
-              String(input).includes('q=party+parrot') ? 'party parrot' : '',
+            mode: String(input).includes('q=party+parrot')
+              ? 'search'
+              : 'featured',
+            query: String(input).includes('q=party+parrot')
+              ? 'party parrot'
+              : '',
             results: [
               {
                 id: 'tenor-123',
