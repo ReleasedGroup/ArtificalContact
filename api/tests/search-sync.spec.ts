@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { trackMetric } from '../src/lib/telemetry.js'
 import type {
   SearchPostIndexDocument,
   SearchSyncStore,
@@ -7,6 +8,20 @@ import type {
 import { syncSearchPostsBatch, syncSearchUsersBatch } from '../src/lib/search-sync.js'
 import type { StoredPostDocument } from '../src/lib/posts.js'
 import type { UserDocument } from '../src/lib/users.js'
+
+vi.mock('../src/lib/telemetry.js', () => ({
+  trackMetric: vi.fn(),
+}))
+
+beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-04-15T10:00:00.000Z'))
+  vi.mocked(trackMetric).mockReset()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 class InMemorySearchSyncStore implements SearchSyncStore {
   public readonly upsertedPosts: SearchPostIndexDocument[] = []
@@ -77,8 +92,8 @@ function createUser(overrides: Partial<UserDocument> = {}): UserDocument {
       followers: 0,
       following: 0,
     },
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
+    createdAt: '2026-04-15T10:00:00.000Z',
+    updatedAt: '2026-04-15T10:00:00.000Z',
     ...overrides,
   }
 }
@@ -118,6 +133,13 @@ describe('syncSearchPostsBatch', () => {
     expect(logger.info).toHaveBeenCalledWith(
       'Deleted %d posts from Azure AI Search.',
       1,
+    )
+    expect(trackMetric).toHaveBeenCalledWith(
+      'search.sync.lag_seconds',
+      0,
+      {
+        entityType: 'post',
+      },
     )
   })
 
@@ -185,6 +207,13 @@ describe('syncSearchUsersBatch', () => {
     expect(store.deletedUserIds).toEqual(['u_no_handle'])
     expect(logger.warn).toHaveBeenCalledWith(
       'Skipping user without a valid id for search sync.',
+    )
+    expect(trackMetric).toHaveBeenCalledWith(
+      'search.sync.lag_seconds',
+      0,
+      {
+        entityType: 'user',
+      },
     )
   })
 

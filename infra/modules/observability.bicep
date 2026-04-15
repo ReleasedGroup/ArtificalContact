@@ -32,7 +32,8 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
 }
 
 var pagerDutyActionGroupName = take('${names.applicationInsights}-pd', 260)
-var pagerDutyActionGroupShortName = take(replace('acn-pd-${uniqueString(resourceGroup().id)}', '-', ''), 12)
+var pagerDutyActionGroupShortNamePrefix = take(replace(names.applicationInsights, '-', ''), 5)
+var pagerDutyActionGroupShortName = take('${pagerDutyActionGroupShortNamePrefix}pd${uniqueString(resourceGroup().id)}', 12)
 var hasPagerDutyIntegration = !empty(trim(pagerDutyIntegrationUrl))
 var cosmosTargetHost = replace(replace(cosmosAccountName, 'https://', ''), '/', '')
 var searchTargetHost = replace(replace(replace(searchEndpoint, 'https://', ''), 'http://', ''), '/', '')
