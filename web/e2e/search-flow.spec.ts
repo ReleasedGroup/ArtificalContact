@@ -134,115 +134,117 @@ async function fetchSearchResults(page: Page, query: string): Promise<SearchEnve
   }, query)
 }
 
-test('a published post becomes searchable within five seconds', async ({
+test('a published post becomes searchable within five simulated seconds', async ({
   baseURL,
   browser,
 }) => {
   const posts = new Map<string, MockPost>()
+  // Simulate asynchronous indexing while keeping the browser flow local and deterministic.
   const searchableAt = new Map<string, number>()
   const indexingDelayMs = 1_500
   const postText =
     'Azure AI Search should surface this Playwright post inside five seconds.'
 
   const context = await browser.newContext()
+  try {
+    await context.route('**/api/**', async (route) => {
+      const request = route.request()
+      const url = new URL(request.url())
+      const pathname = url.pathname
 
-  await context.route('**/api/**', async (route) => {
-    const request = route.request()
-    const url = new URL(request.url())
-    const pathname = url.pathname
+      if (pathname === '/api/me' && request.method() === 'GET') {
+        await jsonResponse(route, 200, {
+          data: createMePayload(currentUser),
+          errors: [],
+        })
+        return
+      }
 
-    if (pathname === '/api/me' && request.method() === 'GET') {
-      await jsonResponse(route, 200, {
-        data: createMePayload(currentUser),
-        errors: [],
-      })
-      return
-    }
+      if (pathname === '/api/posts' && request.method() === 'POST') {
+        const payload = request.postDataJSON() as { text: string }
+        const createdPost = createPostRecord(currentUser, payload.text.trim())
+        posts.set(createdPost.id, createdPost)
+        searchableAt.set(createdPost.id, Date.now() + indexingDelayMs)
 
-    if (pathname === '/api/posts' && request.method() === 'POST') {
-      const payload = request.postDataJSON() as { text: string }
-      const createdPost = createPostRecord(currentUser, payload.text.trim())
-      posts.set(createdPost.id, createdPost)
-      searchableAt.set(createdPost.id, Date.now() + indexingDelayMs)
+        await jsonResponse(route, 201, {
+          data: {
+            post: createdPost,
+          },
+          errors: [],
+        })
+        return
+      }
 
-      await jsonResponse(route, 201, {
-        data: {
-          post: createdPost,
+      if (pathname === '/api/search' && request.method() === 'GET') {
+        const query = url.searchParams.get('q')?.trim().toLowerCase() ?? ''
+        const now = Date.now()
+        const matchedPosts = [...posts.values()].filter((post) => {
+          const readyAt = searchableAt.get(post.id) ?? Number.POSITIVE_INFINITY
+          return (
+            readyAt <= now &&
+            post.deletedAt === null &&
+            (query.length === 0 || post.text.toLowerCase().includes(query))
+          )
+        })
+
+        await jsonResponse(route, 200, {
+          data: {
+            '@odata.count': matchedPosts.length,
+            value: matchedPosts,
+          },
+          errors: [],
+        })
+        return
+      }
+
+      throw new Error(`Unexpected API request: ${request.method()} ${pathname}`)
+    })
+
+    const page = await context.newPage()
+
+    await page.goto(`${baseURL}/me`)
+    await expect(
+      page.getByRole('heading', { name: 'Edit your profile' }),
+    ).toBeVisible()
+
+    const threadWorkspace = page.getByTestId('thread-workspace')
+    await threadWorkspace.scrollIntoViewIfNeeded()
+    await threadWorkspace.locator('textarea').first().fill(postText)
+    await threadWorkspace.getByRole('button', { name: 'Publish post' }).click()
+
+    await expect(page.getByText('Post published to /p/post-1.')).toBeVisible()
+
+    const publishConfirmedAt = Date.now()
+
+    await expect
+      .poll(
+        async () => {
+          const payload = await fetchSearchResults(page, 'Playwright post')
+          return payload.data?.value.some((post) => post.id === 'post-1') ?? false
         },
-        errors: [],
-      })
-      return
-    }
-
-    if (pathname === '/api/search' && request.method() === 'GET') {
-      const query = url.searchParams.get('q')?.trim().toLowerCase() ?? ''
-      const now = Date.now()
-      const matchedPosts = [...posts.values()].filter((post) => {
-        const readyAt = searchableAt.get(post.id) ?? Number.POSITIVE_INFINITY
-        return (
-          readyAt <= now &&
-          post.deletedAt === null &&
-          (query.length === 0 || post.text.toLowerCase().includes(query))
-        )
-      })
-
-      await jsonResponse(route, 200, {
-        data: {
-          '@odata.count': matchedPosts.length,
-          value: matchedPosts,
+        {
+          timeout: 5_000,
+          intervals: [250, 500, 1_000],
         },
-        errors: [],
-      })
-      return
-    }
+      )
+      .toBe(true)
 
-    throw new Error(`Unexpected API request: ${request.method()} ${pathname}`)
-  })
+    const elapsedMs = Date.now() - publishConfirmedAt
+    expect(elapsedMs).toBeLessThanOrEqual(5_000)
 
-  const page = await context.newPage()
-
-  await page.goto(`${baseURL}/me`)
-  await expect(
-    page.getByRole('heading', { name: 'Edit your profile' }),
-  ).toBeVisible()
-
-  const threadWorkspace = page.getByTestId('thread-workspace')
-  await threadWorkspace.scrollIntoViewIfNeeded()
-  await threadWorkspace.locator('textarea').first().fill(postText)
-  await threadWorkspace.getByRole('button', { name: 'Publish post' }).click()
-
-  await expect(page.getByText('Post published to /p/post-1.')).toBeVisible()
-
-  const publishConfirmedAt = Date.now()
-
-  await expect
-    .poll(
-      async () => {
-        const payload = await fetchSearchResults(page, 'Playwright post')
-        return payload.data?.value.some((post) => post.id === 'post-1') ?? false
-      },
-      {
-        timeout: 5_000,
-        intervals: [250, 500, 1_000],
-      },
-    )
-    .toBe(true)
-
-  const elapsedMs = Date.now() - publishConfirmedAt
-  expect(elapsedMs).toBeLessThanOrEqual(5_000)
-
-  const payload = await fetchSearchResults(page, 'Playwright post')
-  expect(payload.errors).toEqual([])
-  expect(payload.data).toMatchObject({
-    '@odata.count': 1,
-    value: [
-      {
-        id: 'post-1',
-        text: postText,
-        authorHandle: 'searcher',
-      },
-    ],
-  })
-
-  await context.close()
+    const payload = await fetchSearchResults(page, 'Playwright post')
+    expect(payload.errors).toEqual([])
+    expect(payload.data).toMatchObject({
+      '@odata.count': 1,
+      value: [
+        {
+          id: 'post-1',
+          text: postText,
+          authorHandle: 'searcher',
+        },
+      ],
+    })
+  } finally {
+    await context.close()
+  }
 })
