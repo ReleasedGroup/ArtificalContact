@@ -44,6 +44,7 @@ export interface UserDocument {
 export interface UserRepository {
   create(user: UserDocument): Promise<UserDocument>
   getById(userId: string): Promise<UserDocument | null>
+  upsert(user: UserDocument): Promise<UserDocument>
 }
 
 export interface ResolvedMeProfile {
@@ -126,6 +127,10 @@ function createCosmosUserRepository(container: Container): UserRepository {
     },
     async create(user: UserDocument) {
       const response = await container.items.create<UserDocument>(user)
+      return response.resource ?? user
+    },
+    async upsert(user: UserDocument) {
+      const response = await container.items.upsert<UserDocument>(user)
       return response.resource ?? user
     },
   }
