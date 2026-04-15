@@ -1,5 +1,6 @@
 import { z, type ZodIssue } from 'zod'
 import type { ApiError } from './api-envelope.js'
+import { normalizeHandleLower } from './users-by-handle-mirror.js'
 import type { UserDocument } from './users.js'
 
 function normalizeOptionalText(value: unknown): unknown {
@@ -20,6 +21,8 @@ const optionalUrlFieldSchema = z.preprocess(
   normalizeOptionalText,
   z.string().trim().url().nullable(),
 )
+
+const handleFieldSchema = z.string().trim().min(1)
 
 const expertiseSchema = z
   .array(z.string().trim().min(1))
@@ -73,6 +76,7 @@ const linksSchema = z
 
 export const updateProfileRequestSchema = z
   .object({
+    handle: handleFieldSchema.optional(),
     displayName: z.string().trim().min(1).optional(),
     bio: optionalTextFieldSchema.optional(),
     avatarUrl: optionalUrlFieldSchema.optional(),
@@ -95,6 +99,17 @@ export function mapValidationIssues(issues: readonly ZodIssue[]): ApiError[] {
   }))
 }
 
+function resolveNextStatus(
+  currentStatus: UserDocument['status'],
+  nextHandleLower: string | null,
+): UserDocument['status'] {
+  if (nextHandleLower !== null && currentStatus === 'pending') {
+    return 'active'
+  }
+
+  return currentStatus
+}
+
 export function applyProfileUpdate(
   user: UserDocument,
   update: UpdateProfileRequest,
@@ -103,6 +118,16 @@ export function applyProfileUpdate(
   const nextUser: UserDocument = {
     ...user,
     updatedAt: updatedAt.toISOString(),
+  }
+
+  if (update.handle !== undefined) {
+    nextUser.handle = update.handle
+
+    const nextHandleLower = normalizeHandleLower({ handle: update.handle })
+    if (nextHandleLower !== null) {
+      nextUser.handleLower = nextHandleLower
+      nextUser.status = resolveNextStatus(user.status, nextHandleLower)
+    }
   }
 
   if (update.displayName !== undefined) {

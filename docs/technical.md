@@ -463,6 +463,7 @@ Fields:
 ## 11. Observability
 
 - **Application Insights** wired to every Function via the Functions runtime.
+- **Custom events:** `GET /api/me` emits `auth.signin` with `idp` and `isNewUser` properties after the authenticated principal resolves successfully.
 - **Custom metrics:**
   - `feed.fanout.followers` (per post)
   - `feed.fanout.duration_ms`

@@ -10,6 +10,10 @@ import {
 } from '../lib/api-envelope.js'
 import { resolveAuthenticatedPrincipal } from '../lib/auth.js'
 import {
+  trackAuthSigninEvent,
+  type AuthSigninTelemetryEvent,
+} from '../lib/telemetry.js'
+import {
   createUserRepository,
   ensureUserForPrincipal,
   toMeProfile,
@@ -18,6 +22,7 @@ import {
 } from '../lib/users.js'
 
 export interface AuthMeHandlerDependencies {
+  emitSigninTelemetry?: (event: AuthSigninTelemetryEvent) => void
   now?: () => Date
   repositoryFactory?: () => UserRepository
 }
@@ -25,6 +30,8 @@ export interface AuthMeHandlerDependencies {
 export function buildAuthMeHandler(
   dependencies: AuthMeHandlerDependencies = {},
 ) {
+  const emitSigninTelemetry =
+    dependencies.emitSigninTelemetry ?? trackAuthSigninEvent
   const now = dependencies.now ?? (() => new Date())
   const repositoryFactory =
     dependencies.repositoryFactory ?? (() => createUserRepository())
@@ -73,6 +80,20 @@ export function buildAuthMeHandler(
         status: resolvedUser.user.status,
         userId: resolvedUser.user.id,
       })
+
+      try {
+        emitSigninTelemetry({
+          identityProvider: resolvedUser.user.identityProvider,
+          isNewUser: resolvedUser.isNewUser,
+        })
+      } catch (error) {
+        context.log('Failed to emit auth.signin telemetry.', {
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Unknown auth.signin telemetry error.',
+        })
+      }
 
       const responsePayload: ResolvedMeProfile = {
         user: toMeProfile(resolvedUser.user),

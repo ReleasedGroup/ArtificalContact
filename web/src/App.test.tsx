@@ -1,6 +1,8 @@
+import { QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { createQueryClient } from './lib/query-client'
 
 const mockFetch = vi.fn()
 
@@ -10,6 +12,16 @@ function createJsonResponse(body: unknown, ok = true, status = 200) {
     status,
     json: async () => body,
   }
+}
+
+function renderApp() {
+  const queryClient = createQueryClient()
+
+  render(
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>,
+  )
 }
 
 describe('App', () => {
@@ -42,7 +54,7 @@ describe('App', () => {
       }),
     )
 
-    render(<App />)
+    renderApp()
 
     expect(
       screen.getByRole('heading', {
@@ -62,6 +74,9 @@ describe('App', () => {
       'href',
       '/.auth/login/github?post_login_redirect_uri=%2F',
     )
+    expect(
+      screen.getByRole('button', { name: /sign out/i }),
+    ).toBeInTheDocument()
 
     expect(await screen.findByText('Healthy')).toBeInTheDocument()
     expect(screen.getByText(/sha-1234/)).toBeInTheDocument()
@@ -101,7 +116,7 @@ describe('App', () => {
       }),
     )
 
-    render(<App />)
+    renderApp()
 
     expect(
       await screen.findByRole('heading', { name: 'Edit your profile' }),
@@ -132,7 +147,7 @@ describe('App', () => {
       ),
     )
 
-    render(<App />)
+    renderApp()
 
     expect(
       await screen.findByRole('heading', {
@@ -207,7 +222,7 @@ describe('App', () => {
         }),
       )
 
-    render(<App />)
+    renderApp()
 
     expect(
       await screen.findByRole('heading', { name: 'Edit your profile' }),
