@@ -255,7 +255,7 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
   "authorAvatarUrl": "https://cdn...",
   "text": "Trying out a new eval harness...",
   "hashtags": ["evals", "llm"],
-  "mentions": ["u_..."],
+  "mentions": ["ada", "grace"],      // normalized handles parsed from @mentions
   "media": [
     { "id": "m_...", "kind": "image", "url": "https://cdn.../...", "thumbUrl": "...", "width": 1280, "height": 720 }
   ],

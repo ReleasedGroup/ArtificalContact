@@ -1,6 +1,11 @@
+import { z } from 'zod'
 import type { ApiEnvelope } from './api-envelope.js'
 
 export const DEFAULT_POSTS_CONTAINER_NAME = 'posts'
+export const DEFAULT_POST_MAX_LENGTH = 280
+
+const hashtagPattern = /(?<![A-Za-z0-9_])#([A-Za-z0-9_]+)/g
+const mentionPattern = /(?<![A-Za-z0-9_])@([A-Za-z0-9_-]+)/g
 
 export interface StoredPostMediaDocument {
   id?: string | null
@@ -55,6 +60,12 @@ export interface StoredPostDocument {
   updatedAt?: string | null
   deletedAt?: string | null
   github?: StoredGitHubPostMetadataDocument | null
+}
+
+export interface PostContent {
+  text: string
+  hashtags: string[]
+  mentions: string[]
 }
 
 export interface PublicPostMedia {
@@ -122,6 +133,11 @@ export interface PostLookupResult {
   body: ApiEnvelope<PublicPost | null>
 }
 
+function readOptionalValue(value?: string): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : undefined
+}
+
 function toNullableString(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null
@@ -161,6 +177,29 @@ function toCount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
     ? value
     : 0
+}
+
+function normalizePostText(value: unknown): unknown {
+  if (typeof value !== 'string') {
+    return value
+  }
+
+  return value.trim()
+}
+
+function readUniqueMatches(text: string, pattern: RegExp): string[] {
+  const values = new Set<string>()
+
+  for (const match of text.matchAll(pattern)) {
+    const value = match[1]?.trim().toLowerCase()
+    if (!value) {
+      continue
+    }
+
+    values.add(value)
+  }
+
+  return [...values]
 }
 
 function toStringArray(value: unknown): string[] {
@@ -239,6 +278,54 @@ function isPubliclyVisiblePost(post: StoredPostDocument): boolean {
 
   const moderationState = toNullableString(post.moderationState) ?? 'ok'
   return moderationState !== 'hidden' && moderationState !== 'removed'
+}
+
+export function resolvePostMaxLength(
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  const configuredValue = readOptionalValue(env.POST_MAX_LENGTH)
+  if (!configuredValue) {
+    return DEFAULT_POST_MAX_LENGTH
+  }
+
+  if (!/^\d+$/.test(configuredValue)) {
+    throw new Error('POST_MAX_LENGTH must be a positive integer.')
+  }
+
+  const parsedValue = Number(configuredValue)
+  if (!Number.isInteger(parsedValue) || parsedValue <= 0) {
+    throw new Error('POST_MAX_LENGTH must be a positive integer.')
+  }
+
+  return parsedValue
+}
+
+export function extractHashtags(text: string): string[] {
+  return readUniqueMatches(text, hashtagPattern)
+}
+
+export function extractMentions(text: string): string[] {
+  return readUniqueMatches(text, mentionPattern)
+}
+
+export function buildPostContentSchema(
+  maxTextLength: number = DEFAULT_POST_MAX_LENGTH,
+) {
+  return z
+    .object({
+      text: z.preprocess(
+        normalizePostText,
+        z.string().min(1).max(maxTextLength),
+      ),
+    })
+    .strict()
+    .transform(
+      (value): PostContent => ({
+        text: value.text,
+        hashtags: extractHashtags(value.text),
+        mentions: extractMentions(value.text),
+      }),
+    )
 }
 
 export function buildPublicPost(post: StoredPostDocument): PublicPost {
