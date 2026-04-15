@@ -87,6 +87,11 @@ describe('web push helpers', () => {
               subscribe,
             },
           })),
+          ready: Promise.resolve({
+            active: {
+              scriptURL: 'https://example.com/web-push-sw.js',
+            },
+          }),
           register: vi.fn(),
         },
       },
@@ -126,5 +131,40 @@ describe('web push helpers', () => {
 
     await expect(unsubscribeFromBrowserPush()).resolves.toBe(true)
     expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('throws a clear error when the VAPID public key cannot be decoded', async () => {
+    vi.stubGlobal('window', {
+      Notification: {
+        permission: 'granted',
+        requestPermission: vi.fn(async () => 'granted'),
+      },
+      PushManager: class PushManager {},
+      atob: vi.fn(() => {
+        throw new DOMException('Invalid character')
+      }),
+    })
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: {
+        serviceWorker: {
+          getRegistration: vi.fn(async () => ({
+            pushManager: {
+              getSubscription: vi.fn(async () => null),
+            },
+          })),
+          ready: Promise.resolve({
+            active: {
+              scriptURL: 'https://example.com/web-push-sw.js',
+            },
+          }),
+          register: vi.fn(),
+        },
+      },
+    })
+
+    await expect(subscribeToBrowserPush('not-base64url')).rejects.toThrow(
+      'Invalid VAPID public key.',
+    )
   })
 })

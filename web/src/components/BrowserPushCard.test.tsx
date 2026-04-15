@@ -154,4 +154,50 @@ describe('BrowserPushCard', () => {
       await screen.findByText(/Browser push is enabled for this account/i),
     ).toBeInTheDocument()
   })
+
+  it('disables browser push and clears the stored subscription', async () => {
+    mocks.getBrowserPushSupport.mockReturnValue({
+      available: true,
+      canManageSubscription: true,
+      permission: 'granted',
+      reason: 'supported',
+    })
+    mocks.getNotificationPreferences.mockResolvedValue(
+      createPreferences({
+        webPush: {
+          supported: true,
+          subscription: {
+            endpoint: 'https://push.example.com/subscriptions/123',
+            expirationTime: null,
+            keys: {
+              p256dh: 'p256dh-key',
+              auth: 'auth-key',
+            },
+          },
+        },
+      }),
+    )
+    mocks.unsubscribeFromBrowserPush.mockResolvedValue(true)
+    mocks.updateNotificationPreferences.mockResolvedValue(createPreferences())
+
+    renderBrowserPushCard()
+
+    const disableButton = await screen.findByRole('button', {
+      name: 'Disable browser push',
+    })
+
+    await act(async () => {
+      fireEvent.click(disableButton)
+    })
+
+    expect(mocks.unsubscribeFromBrowserPush).toHaveBeenCalledTimes(1)
+    expect(mocks.updateNotificationPreferences).toHaveBeenCalledWith({
+      webPush: {
+        supported: false,
+      },
+    })
+    expect(
+      await screen.findByText(/Browser push is disabled for this account/i),
+    ).toBeInTheDocument()
+  })
 })

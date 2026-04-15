@@ -56,7 +56,11 @@ function decodeBase64Url(value: string): string {
     '=',
   )
 
-  return window.atob(paddedValue)
+  try {
+    return window.atob(paddedValue)
+  } catch {
+    throw new Error('Invalid VAPID public key.')
+  }
 }
 
 function vapidPublicKeyToUint8Array(value: string): Uint8Array {
@@ -71,12 +75,18 @@ function vapidPublicKeyToUint8Array(value: string): Uint8Array {
 }
 
 async function getPushRegistration(): Promise<ServiceWorkerRegistration> {
-  const existingRegistration = await navigator.serviceWorker.getRegistration()
+  const existingRegistration =
+    await navigator.serviceWorker.getRegistration(serviceWorkerPath)
   if (existingRegistration) {
     return existingRegistration
   }
 
-  return navigator.serviceWorker.register(serviceWorkerPath)
+  const registration = await navigator.serviceWorker.register(serviceWorkerPath)
+  const readyRegistration = await navigator.serviceWorker.ready
+
+  return readyRegistration.active?.scriptURL.endsWith(serviceWorkerPath)
+    ? readyRegistration
+    : registration
 }
 
 function normalizePushSubscription(
@@ -130,8 +140,9 @@ export async function subscribeToBrowserPush(
 
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey:
-      vapidPublicKeyToUint8Array(vapidPublicKey) as BufferSource,
+    applicationServerKey: vapidPublicKeyToUint8Array(
+      vapidPublicKey,
+    ) as BufferSource,
   })
 
   return normalizePushSubscription(subscription)
