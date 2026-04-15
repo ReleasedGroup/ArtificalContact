@@ -16,6 +16,7 @@ npm run test
 ### `web`
 
 - Vitest + Testing Library validate that the sign-in screen renders both Static Web Apps auth provider links, clears the TanStack Query cache on sign-out, and displays a successful `/api/health` response
+- Vitest + Testing Library validate that `/u/{handle}` renders the public profile shell, surfaces the API-backed not-found state, and returns to loading immediately when the handle changes
 - ESLint enforces the TypeScript/React code style
 - Vite production build verifies the SPA compiles cleanly
 
