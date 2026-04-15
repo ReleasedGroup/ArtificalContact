@@ -9,6 +9,7 @@ npm install
 npm run build
 npm run lint
 npm run test
+npm run test:a11y --workspace @artificialcontact/web
 ```
 
 ## Workspace coverage
@@ -23,6 +24,8 @@ npm run test
 - Vitest + Testing Library validate that authenticated `/p/{id}` viewers can search Tenor-backed GIFs and publish GIF-only replies into the thread
 - Vitest + Testing Library validate the authenticated `/me` profile editor flow, including initial profile loading, error rendering, and `PUT /api/me` saves
 - Vitest + Testing Library validate the authenticated `/me` thread workspace publish flow, plus authenticated reply and delete actions on `/p/{id}`
+- Vitest + Testing Library include a screen-reader smoke test for the reusable composer, covering keyboard-accessible attachment controls, descriptive guidance, and per-image alt-text prompts
+- `jest-axe` scans the reusable composer in CI via `npm run test:a11y --workspace @artificialcontact/web`
 - Playwright covers the Sprint 1 golden path: GitHub sign-in handoff to `/me`, initial handle claim, and navigation to the resulting public profile at `/u/{handle}`
 - Playwright covers the mixed-media `/p/{id}` route on desktop and mobile viewports, including image, GIF, video, and audio attachments
 - Playwright covers the Sprint 2 thread path: user A publishes a root post, user B replies on the standalone thread page, both users see the shared thread, and a soft-deleted reply disappears from view while the backing document remains in the mocked store

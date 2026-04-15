@@ -17,11 +17,17 @@ import {
 type ComposerVariant = 'post' | 'reply'
 
 export interface PostComposerSubmission {
-  mediaFiles: File[]
+  mediaFiles: PostComposerSubmissionMediaFile[]
   value: string
 }
 
+export interface PostComposerSubmissionMediaFile {
+  altText: string
+  file: File
+}
+
 export interface PostComposerMediaFile {
+  altText: string
   file: File
   previewUrl: string | null
   signature: string
@@ -125,6 +131,7 @@ function mergeUniqueImageFiles(
 
     signatures.add(signature)
     nextFiles.push({
+      altText: '',
       file,
       previewUrl: createPreviewUrl(file),
       signature,
@@ -136,6 +143,25 @@ function mergeUniqueImageFiles(
 
 function formatImageCount(count: number): string {
   return `${count} ${count === 1 ? 'image' : 'images'} ready`
+}
+
+function buildImagePreviewAltText(item: PostComposerMediaFile): string {
+  const trimmedAltText = item.altText.trim()
+
+  if (trimmedAltText.length > 0) {
+    return trimmedAltText
+  }
+
+  return `Selected image preview for ${item.file.name}`
+}
+
+function buildMediaFieldId(
+  baseId: string,
+  signature: string,
+  suffix: string,
+): string {
+  const sanitizedSignature = signature.replace(/[^a-zA-Z0-9_-]+/g, '-')
+  return `${baseId}-${sanitizedSignature}-${suffix}`
 }
 
 export function PostComposer({
@@ -157,8 +183,13 @@ export function PostComposer({
 }: PostComposerProps) {
   const textAreaId = useId()
   const counterId = useId()
+  const composerHelpId = useId()
   const mediaInputId = useId()
+  const mediaInputLabelId = useId()
+  const mediaInputHintId = useId()
+  const mediaInputStatusId = useId()
   const mirrorRef = useRef<HTMLDivElement | null>(null)
+  const mediaInputRef = useRef<HTMLInputElement | null>(null)
   const previousMediaFilesRef = useRef<PostComposerMediaFile[]>(mediaFiles)
   const dragDepthRef = useRef(0)
   const [isDragActive, setIsDragActive] = useState(false)
@@ -174,6 +205,9 @@ export function PostComposer({
 
   const isReplyComposer = variant === 'reply'
   const isDropZoneActive = isDragActive && !isMediaInputDisabled
+  const mediaSectionTitle = isReplyComposer
+    ? 'Reply image attachments'
+    : 'Post image attachments'
 
   useEffect(() => {
     const previousMediaFiles = previousMediaFilesRef.current
@@ -204,7 +238,10 @@ export function PostComposer({
     }
 
     onSubmit({
-      mediaFiles: mediaFiles.map((item) => item.file),
+      mediaFiles: mediaFiles.map((item) => ({
+        altText: item.altText.trim(),
+        file: item.file,
+      })),
       value,
     })
   }
@@ -292,6 +329,23 @@ export function PostComposer({
     )
   }
 
+  const handleBrowseImages = () => {
+    mediaInputRef.current?.click()
+  }
+
+  const handleAltTextChange = (fileSignature: string, nextAltText: string) => {
+    onMediaFilesChange(
+      mediaFiles.map((item) =>
+        item.signature === fileSignature
+          ? {
+              ...item,
+              altText: nextAltText,
+            }
+          : item,
+      ),
+    )
+  }
+
   return (
     <form className="flex gap-3" onSubmit={handleSubmit}>
       <div
@@ -307,11 +361,11 @@ export function PostComposer({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-white">{authorName}</p>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-400">
               {authorHandle ? `@${authorHandle}` : 'Handle pending'}
             </p>
           </div>
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400">
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-300">
             {isReplyComposer ? 'Reply box' : 'Post composer'}
           </span>
         </div>
@@ -319,7 +373,12 @@ export function PostComposer({
         <label className="sr-only" htmlFor={textAreaId}>
           {label}
         </label>
-        <div className="relative mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-slate-950/85 shadow-inner shadow-slate-950/40">
+        <p className="sr-only" id={composerHelpId}>
+          Type your message, use the image attachments section to browse or drag
+          image files, and add alternative text so people using screen readers
+          can understand the attachment content.
+        </p>
+        <div className="relative mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-slate-950/85 shadow-inner shadow-slate-950/40 transition focus-within:border-sky-300/50 focus-within:ring-2 focus-within:ring-sky-300/40 focus-within:ring-offset-2 focus-within:ring-offset-slate-950">
           <div
             ref={mirrorRef}
             aria-hidden="true"
@@ -347,13 +406,13 @@ export function PostComposer({
                 <span className="select-none"> </span>
               </>
             ) : (
-              <span className="text-slate-500">{placeholder}</span>
+              <span className="text-slate-400">{placeholder}</span>
             )}
           </div>
 
           <textarea
             id={textAreaId}
-            aria-describedby={counterId}
+            aria-describedby={`${counterId} ${composerHelpId}`}
             className={`relative z-10 block w-full resize-none bg-transparent px-4 py-3 text-[15px] text-transparent caret-white outline-none placeholder:text-transparent focus:outline-none ${
               isReplyComposer ? 'min-h-24 leading-6' : 'min-h-36 leading-7'
             }`}
@@ -370,11 +429,9 @@ export function PostComposer({
 
         <div className="mt-3 rounded-[1.5rem] border border-dashed border-white/10 bg-slate-950/55 p-4">
           <div
-            aria-label={
-              isReplyComposer
-                ? 'Reply image attachments'
-                : 'Post image attachments'
-            }
+            aria-describedby={`${mediaInputHintId} ${mediaInputStatusId}`}
+            aria-disabled={isMediaInputDisabled}
+            aria-labelledby={mediaInputLabelId}
             className={`rounded-[1.25rem] border border-dashed px-4 py-4 transition ${
               isDropZoneActive
                 ? 'border-sky-300/70 bg-sky-400/10'
@@ -386,14 +443,31 @@ export function PostComposer({
             onDrop={handleDrop}
             role="group"
           >
+            <p
+              aria-live="polite"
+              className="sr-only"
+              id={mediaInputStatusId}
+              role="status"
+            >
+              {mediaFiles.length > 0
+                ? `${formatImageCount(mediaFiles.length)} attached. Add alt text for each image before publishing.`
+                : 'No image attachments selected yet.'}
+            </p>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-white">
-                  Image attachments
+                <p
+                  className="text-sm font-medium text-white"
+                  id={mediaInputLabelId}
+                >
+                  {mediaSectionTitle}
                 </p>
-                <p className="mt-1 text-xs leading-6 text-slate-400">
-                  Drag images here or browse to preview them locally before the
-                  Sprint 3 upload flow is wired in.
+                <p
+                  className="mt-1 text-xs leading-6 text-slate-300"
+                  id={mediaInputHintId}
+                >
+                  Drag images here or browse from the keyboard to preview them
+                  locally. Add alt text for each image so screen readers can
+                  describe the attachment before the upload flow is wired in.
                 </p>
               </div>
 
@@ -404,30 +478,37 @@ export function PostComposer({
                   </span>
                 )}
                 {isMediaInputDisabled ? (
-                  <span
+                  <button
                     aria-disabled="true"
                     className="cursor-not-allowed rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-slate-500 transition"
+                    disabled
+                    type="button"
                   >
                     Browse images
-                  </span>
+                  </button>
                 ) : (
-                  <label
-                    className="cursor-pointer rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-slate-200 transition hover:border-sky-300/40 hover:bg-sky-400/10 hover:text-sky-100"
-                    htmlFor={mediaInputId}
+                  <button
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-slate-200 transition hover:border-sky-300/40 hover:bg-sky-400/10 hover:text-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                    onClick={handleBrowseImages}
+                    type="button"
                   >
                     Browse images
-                  </label>
+                  </button>
                 )}
               </div>
             </div>
 
             <input
               accept="image/*"
+              aria-label={
+                isReplyComposer ? 'Choose reply images' : 'Choose post images'
+              }
               className="sr-only"
               disabled={isMediaInputDisabled}
               id={mediaInputId}
               multiple
               onChange={handleMediaInputChange}
+              ref={mediaInputRef}
               type="file"
             />
           </div>
@@ -438,52 +519,96 @@ export function PostComposer({
                 mediaFiles.length === 1 ? 'sm:grid-cols-1' : 'sm:grid-cols-2'
               }`}
             >
-              {mediaFiles.map((item) => (
-                <li
-                  key={item.signature}
-                  className="overflow-hidden rounded-[1.25rem] border border-white/10 bg-slate-900/80 shadow-lg shadow-slate-950/30"
-                >
-                  {item.previewUrl ? (
-                    <img
-                      alt={`Selected media preview: ${item.file.name}`}
-                      className="h-40 w-full object-cover"
-                      src={item.previewUrl}
-                    />
-                  ) : (
-                    <div className="flex h-40 items-center justify-center bg-slate-950 text-sm text-slate-400">
-                      Preview unavailable in this environment
-                    </div>
-                  )}
+              {mediaFiles.map((item) => {
+                const altInputId = buildMediaFieldId(
+                  textAreaId,
+                  item.signature,
+                  'alt',
+                )
+                const altInputHelpId = buildMediaFieldId(
+                  textAreaId,
+                  item.signature,
+                  'alt-help',
+                )
 
-                  <div className="flex items-start justify-between gap-3 px-4 py-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-white">
-                        {item.file.name}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-400">
-                        {formatFileSize(item.file.size)}
-                      </p>
-                    </div>
+                return (
+                  <li
+                    key={item.signature}
+                    className="overflow-hidden rounded-[1.25rem] border border-white/10 bg-slate-900/80 shadow-lg shadow-slate-950/30"
+                  >
+                    {item.previewUrl ? (
+                      <img
+                        alt={buildImagePreviewAltText(item)}
+                        className="h-40 w-full object-cover"
+                        src={item.previewUrl}
+                      />
+                    ) : (
+                      <div className="flex h-40 items-center justify-center bg-slate-950 text-sm text-slate-400">
+                        Preview unavailable in this environment
+                      </div>
+                    )}
 
-                    <button
-                      aria-label={`Remove ${item.file.name}`}
-                      className="rounded-full border border-rose-300/20 bg-rose-400/10 px-3 py-1 text-xs font-medium text-rose-100 transition hover:border-rose-300/40 hover:bg-rose-400/20"
-                      onClick={() => handleRemoveMediaFile(item.signature)}
-                      type="button"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </li>
-              ))}
+                    <div className="flex items-start justify-between gap-3 px-4 py-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-white">
+                          {item.file.name}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          {formatFileSize(item.file.size)}
+                        </p>
+                        <div className="mt-3">
+                          <label
+                            className="text-xs font-medium uppercase tracking-[0.18em] text-slate-300"
+                            htmlFor={altInputId}
+                          >
+                            Alt text
+                          </label>
+                          <p
+                            className="mt-1 text-xs leading-6 text-slate-400"
+                            id={altInputHelpId}
+                          >
+                            Describe the important visual details for people
+                            using screen readers.
+                          </p>
+                          <input
+                            aria-describedby={altInputHelpId}
+                            className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-sky-300/60 focus:ring-2 focus:ring-sky-300/30"
+                            id={altInputId}
+                            maxLength={240}
+                            onChange={(event) =>
+                              handleAltTextChange(
+                                item.signature,
+                                event.target.value,
+                              )
+                            }
+                            placeholder="Describe the image for screen readers"
+                            type="text"
+                            value={item.altText}
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        aria-label={`Remove ${item.file.name}`}
+                        className="rounded-full border border-rose-300/20 bg-rose-400/10 px-3 py-1 text-xs font-medium text-rose-100 transition hover:border-rose-300/40 hover:bg-rose-400/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                        onClick={() => handleRemoveMediaFile(item.signature)}
+                        type="button"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>
 
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
             Highlighting mirrors backend hashtag and mention parsing. Image
-            previews stay local until upload wiring lands.
+            previews stay local until upload wiring lands, and attachment alt
+            text stays with the selected files.
           </p>
           <div className="flex items-center gap-3">
             <span
@@ -495,7 +620,7 @@ export function PostComposer({
               {formatCounter(characterCount, maxLength)}
             </span>
             <button
-              className="rounded-full bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 transition enabled:hover:bg-sky-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-300"
+              className="rounded-full bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 transition enabled:hover:bg-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-200/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-300"
               disabled={!canSubmit}
               type="submit"
             >
