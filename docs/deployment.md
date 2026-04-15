@@ -74,6 +74,9 @@ The following repository variables are required:
 - `AZURE_RESOURCE_GROUP`
 - `AZURE_FUNCTION_APP_NAME`
 - `FRONTDOOR_CUSTOM_DOMAIN` (set to a real delegated host name such as `cdn.yourdomain.com` to enable the managed-cert custom domain; `.example.com` placeholders keep Front Door on the default hostname only)
+
+The following repository variables are optional:
+
 - `COMMUNICATION_SERVICES_CONNECTION_STRING_SECRET_URI` (optional Key Vault secret URI for ACS SMTP-style auth when managed identity is unavailable)
 - `CONTENT_SAFETY_KEY_SECRET_URI` (optional Key Vault secret URI for local or fallback Content Safety key usage)
 - `TENOR_API_KEY_SECRET_URI` (optional Key Vault secret URI for the Tenor API key used by the reply GIF picker)
