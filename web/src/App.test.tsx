@@ -198,6 +198,7 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'agents ×' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'evals ×' })).toBeInTheDocument()
     expect(screen.getByText('Composer preview')).toBeInTheDocument()
+    expect(screen.getByText('Direct upload pipeline')).toBeInTheDocument()
     expect(
       screen.getByRole('textbox', {
         name: 'Post body',

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { PostComposer } from './PostComposer'
+import { UploadPipelinePreview } from './UploadPipelinePreview'
 
 interface ComposerPreviewPanelProps {
   authorBadge: string
@@ -31,9 +32,9 @@ export function ComposerPreviewPanel({
           </p>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-400">
             Issue #47 lands the reusable post composer shell ahead of the feed
-            and thread pages. These submissions stay local for now so later
-            slices can reuse the same UI once the post and reply mutations are
-            wired into their real screens.
+            and thread pages. These text submissions stay local for now so
+            later slices can reuse the same UI once the post and reply
+            mutations are wired into their real screens.
           </p>
         </div>
 
@@ -104,6 +105,8 @@ export function ComposerPreviewPanel({
           </div>
         </div>
       </div>
+
+      <UploadPipelinePreview />
     </section>
   )
 }
