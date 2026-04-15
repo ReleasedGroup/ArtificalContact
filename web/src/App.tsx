@@ -5,6 +5,7 @@ import {
   useState,
   type FormEvent,
   type KeyboardEvent,
+  type ReactElement,
 } from 'react'
 import { ComposerPreviewPanel } from './components/ComposerPreviewPanel'
 import { DirectBlobUploadCard } from './components/DirectBlobUploadCard'
@@ -341,7 +342,23 @@ function App() {
   return <HomeRouteScreen />
 }
 
-function NotificationsRouteScreen() {
+interface OptionalMeGateProps {
+  loadingLabel: string
+  loadingTitle: string
+  loadingBody: string
+  errorLabel: string
+  errorTitle: string
+  render: (viewer: MeProfile) => ReactElement
+}
+
+function OptionalMeGate({
+  loadingLabel,
+  loadingTitle,
+  loadingBody,
+  errorLabel,
+  errorTitle,
+  render,
+}: OptionalMeGateProps) {
   const viewerQuery = useQuery<ResolvedMeProfile | null>({
     queryKey: ['optional-me'],
     queryFn: ({ signal }) => getOptionalMe(signal),
@@ -356,14 +373,13 @@ function NotificationsRouteScreen() {
       <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center px-6 py-8 sm:px-8 lg:px-12">
         <section className="w-full rounded-[2rem] border border-white/10 bg-slate-950/85 px-8 py-16 text-center shadow-2xl shadow-cyan-950/30 backdrop-blur">
           <p className="text-sm font-medium uppercase tracking-[0.24em] text-cyan-100/80">
-            Notifications
+            {loadingLabel}
           </p>
           <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-            Loading your notification feed
+            {loadingTitle}
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
-            Checking the current Static Web Apps session before loading the
-            authenticated in-app notification view.
+            {loadingBody}
           </p>
         </section>
       </main>
@@ -380,10 +396,10 @@ function NotificationsRouteScreen() {
       <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center px-6 py-8 sm:px-8 lg:px-12">
         <section className="w-full rounded-[2rem] border border-rose-400/20 bg-slate-950/85 px-8 py-16 text-center shadow-2xl shadow-rose-950/20 backdrop-blur">
           <p className="text-sm font-medium uppercase tracking-[0.24em] text-rose-100/80">
-            Notification feed unavailable
+            {errorLabel}
           </p>
           <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-            The session check failed
+            {errorTitle}
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
             {errorMessage}
@@ -404,73 +420,33 @@ function NotificationsRouteScreen() {
     return <SignInScreen />
   }
 
-  return <NotificationsScreen viewer={viewerQuery.data.user} />
+  return render(viewerQuery.data.user)
+}
+
+function NotificationsRouteScreen() {
+  return (
+    <OptionalMeGate
+      loadingLabel="Notifications"
+      loadingTitle="Loading your notification feed"
+      loadingBody="Checking the current Static Web Apps session before loading the authenticated in-app notification view."
+      errorLabel="Notification feed unavailable"
+      errorTitle="The session check failed"
+      render={(viewer) => <NotificationsScreen viewer={viewer} />}
+    />
+  )
 }
 
 function HomeRouteScreen() {
-  const viewerQuery = useQuery<ResolvedMeProfile | null>({
-    queryKey: ['optional-me'],
-    queryFn: ({ signal }) => getOptionalMe(signal),
-    retry: false,
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-  })
-
-  if (viewerQuery.isPending) {
-    return (
-      <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center px-6 py-8 sm:px-8 lg:px-12">
-        <section className="w-full rounded-[2rem] border border-white/10 bg-slate-950/85 px-8 py-16 text-center shadow-2xl shadow-cyan-950/30 backdrop-blur">
-          <p className="text-sm font-medium uppercase tracking-[0.24em] text-cyan-100/80">
-            Home feed
-          </p>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-            Loading your home feed
-          </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
-            Checking the current Static Web Apps session before deciding whether
-            to show the authenticated feed or the public sign-in shell.
-          </p>
-        </section>
-      </main>
-    )
-  }
-
-  if (viewerQuery.isError) {
-    const errorMessage =
-      viewerQuery.error instanceof Error
-        ? viewerQuery.error.message
-        : 'Unable to verify the authenticated profile session.'
-
-    return (
-      <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center px-6 py-8 sm:px-8 lg:px-12">
-        <section className="w-full rounded-[2rem] border border-rose-400/20 bg-slate-950/85 px-8 py-16 text-center shadow-2xl shadow-rose-950/20 backdrop-blur">
-          <p className="text-sm font-medium uppercase tracking-[0.24em] text-rose-100/80">
-            Home feed unavailable
-          </p>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-            The session check failed
-          </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
-            {errorMessage}
-          </p>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="mt-8 rounded-full border border-white/12 px-5 py-3 text-sm font-medium text-white transition hover:border-white/25 hover:bg-white/6 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/80"
-          >
-            Retry session check
-          </button>
-        </section>
-      </main>
-    )
-  }
-
-  if (viewerQuery.data === null) {
-    return <SignInScreen />
-  }
-
-  return <HomeFeedScreen viewer={viewerQuery.data.user} />
+  return (
+    <OptionalMeGate
+      loadingLabel="Home feed"
+      loadingTitle="Loading your home feed"
+      loadingBody="Checking the current Static Web Apps session before deciding whether to show the authenticated feed or the public sign-in shell."
+      errorLabel="Home feed unavailable"
+      errorTitle="The session check failed"
+      render={(viewer) => <HomeFeedScreen viewer={viewer} />}
+    />
+  )
 }
 
 function SignInScreen() {

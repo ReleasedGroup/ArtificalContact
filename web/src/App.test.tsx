@@ -427,8 +427,8 @@ describe('App', () => {
       await screen.findByRole('link', { name: 'Grace Hopper' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('tab', { name: 'Replies' }),
-    ).toHaveAttribute('aria-selected', 'false')
+      screen.getByRole('button', { name: 'Replies' }),
+    ).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByText(/1 unread/i)).toBeInTheDocument()
   })
 

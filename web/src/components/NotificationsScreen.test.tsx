@@ -101,7 +101,7 @@ describe('NotificationsScreen', () => {
     expect(screen.getByText(/Linus Torvalds/i)).toBeInTheDocument()
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('tab', { name: 'Mentions' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Mentions' }))
     })
 
     expect(screen.getByText(/Grace Hopper/i)).toBeInTheDocument()
@@ -110,7 +110,7 @@ describe('NotificationsScreen', () => {
     ).not.toBeInTheDocument()
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('tab', { name: 'Replies' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Replies' }))
     })
 
     expect(screen.getByText(/Linus Torvalds/i)).toBeInTheDocument()
@@ -148,11 +148,42 @@ describe('NotificationsScreen', () => {
     ).toBeInTheDocument()
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('tab', { name: 'Mentions' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Mentions' }))
     })
 
     expect(
       screen.getByRole('heading', { name: 'No mention notifications yet' }),
     ).toBeInTheDocument()
+  })
+
+  it('falls back to derived in-app links when targetUrl is not a safe relative path', async () => {
+    mockFetch.mockResolvedValue(
+      createJsonResponse(200, {
+        data: [
+          {
+            id: 'notif-reaction',
+            eventType: 'reaction',
+            text: 'reacted to your post.',
+            read: false,
+            createdAt: '2026-04-15T06:30:00.000Z',
+            targetUrl: 'javascript:alert(1)',
+            postId: 'post-safe',
+            actor: {
+              handle: 'sora',
+              displayName: 'Sora',
+            },
+          },
+        ],
+        cursor: null,
+        unreadCount: 1,
+        errors: [],
+      }),
+    )
+
+    renderNotificationsScreen()
+
+    expect(
+      await screen.findByRole('link', { name: 'reacted to your post.' }),
+    ).toHaveAttribute('href', '/p/post-safe')
   })
 })

@@ -55,9 +55,26 @@ function getProfileHref(handle: string | null): string | null {
   return handle ? `/u/${encodeURIComponent(handle)}` : null
 }
 
+function sanitizeNotificationTargetUrl(
+  targetUrl: string | null | undefined,
+): string | null {
+  const trimmedTargetUrl = targetUrl?.trim()
+
+  if (!trimmedTargetUrl) {
+    return null
+  }
+
+  if (!trimmedTargetUrl.startsWith('/') || trimmedTargetUrl.startsWith('//')) {
+    return null
+  }
+
+  return trimmedTargetUrl
+}
+
 function getNotificationHref(notification: NotificationItem): string | null {
-  if (notification.targetUrl?.trim()) {
-    return notification.targetUrl
+  const safeTargetUrl = sanitizeNotificationTargetUrl(notification.targetUrl)
+  if (safeTargetUrl) {
+    return safeTargetUrl
   }
 
   if (notification.postId) {
@@ -397,7 +414,6 @@ export function NotificationsScreen({ viewer }: NotificationsScreenProps) {
 
         <section className="rounded-[2rem] border border-white/10 bg-slate-950/60 px-4 py-5 shadow-2xl shadow-slate-950/30 backdrop-blur sm:px-6">
           <div
-            role="tablist"
             aria-label="Notification filters"
             className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-4 text-sm"
           >
@@ -408,8 +424,7 @@ export function NotificationsScreen({ viewer }: NotificationsScreenProps) {
                 <button
                   key={tab.value}
                   type="button"
-                  role="tab"
-                  aria-selected={selected}
+                  aria-pressed={selected}
                   className={`rounded-full border px-4 py-2 font-medium transition ${
                     selected
                       ? 'border-cyan-300/30 bg-cyan-300/10 text-cyan-100'
