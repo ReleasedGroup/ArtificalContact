@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { ComposerPreviewPanel } from './components/ComposerPreviewPanel'
 import { DirectBlobUploadCard } from './components/DirectBlobUploadCard'
+import { HomeFeedScreen } from './components/HomeFeedScreen'
 import { PostDetailScreen } from './components/PostDetailScreen'
 import { ThreadWorkspacePanel } from './components/ThreadWorkspacePanel'
 import { WEB_BUILD_SHA } from './build-meta.generated'
@@ -15,6 +16,7 @@ import { signOut } from './lib/auth'
 import { getHealth, type HealthPayload } from './lib/health'
 import {
   getMe,
+  getOptionalMe,
   updateMe,
   type MeProfile,
   type ResolvedMeProfile,
@@ -29,7 +31,7 @@ import type { UploadedBlobResult } from './lib/media-upload'
 import { initializeTelemetry } from './lib/telemetry'
 
 type AppRoute =
-  | { kind: 'signin' }
+  | { kind: 'home' }
   | { kind: 'me' }
   | { kind: 'post'; postId: string }
   | { kind: 'profile'; handle: string }
@@ -67,7 +69,7 @@ interface ProfileDraft {
 
 type ProfileMediaField = 'avatarUrl' | 'bannerUrl'
 
-const postLoginRedirectUri = encodeURIComponent('/me')
+const postLoginRedirectUri = encodeURIComponent('/')
 const maxExpertiseTags = 12
 const compactCountFormatter = new Intl.NumberFormat(undefined, {
   notation: 'compact',
@@ -86,7 +88,7 @@ const authProviders = [
       'Use Microsoft Entra ID through Static Web Apps built-in authentication.',
     gradientClass: 'from-cyan-300/30 via-sky-300/15 to-transparent',
     badge: 'MS',
-    helperText: 'Returns to the /me editor after Microsoft authentication.',
+    helperText: 'Returns to the home feed after Microsoft authentication.',
   },
   {
     label: 'Continue with GitHub',
@@ -95,14 +97,14 @@ const authProviders = [
       'Use GitHub sign-in for the practitioner identity and repository-connected workflows.',
     gradientClass: 'from-amber-300/30 via-orange-300/15 to-transparent',
     badge: 'GH',
-    helperText: 'Returns to the /me editor after GitHub authentication.',
+    helperText: 'Returns to the home feed after GitHub authentication.',
   },
 ]
 
 const profileMilestones = [
-  'Claim a unique handle for your public profile.',
-  'Set a display name, bio, avatar, and banner from the /me editor.',
-  'Return to the /me profile editor after provider authentication completes.',
+  'Land in the authenticated home feed after the Static Web Apps handshake.',
+  'Open /me to claim a unique public handle and complete your profile.',
+  'Follow people so their next posts materialise in your personalised feed.',
 ]
 
 function decodePathSegment(segment: string): string {
@@ -134,7 +136,7 @@ function getCurrentRoute(pathname = window.location.pathname): AppRoute {
     }
   }
 
-  return { kind: 'signin' }
+  return { kind: 'home' }
 }
 
 function formatProfileCount(value: number): string {
@@ -297,7 +299,73 @@ function App() {
     return <ProfileEditorScreen />
   }
 
-  return <SignInScreen />
+  return <HomeRouteScreen />
+}
+
+function HomeRouteScreen() {
+  const viewerQuery = useQuery<ResolvedMeProfile | null>({
+    queryKey: ['optional-me'],
+    queryFn: ({ signal }) => getOptionalMe(signal),
+    retry: false,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  })
+
+  if (viewerQuery.isPending) {
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center px-6 py-8 sm:px-8 lg:px-12">
+        <section className="w-full rounded-[2rem] border border-white/10 bg-slate-950/85 px-8 py-16 text-center shadow-2xl shadow-cyan-950/30 backdrop-blur">
+          <p className="text-sm font-medium uppercase tracking-[0.24em] text-cyan-100/80">
+            Home feed
+          </p>
+          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+            Loading your home feed
+          </h1>
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
+            Checking the current Static Web Apps session before deciding whether
+            to show the authenticated feed or the public sign-in shell.
+          </p>
+        </section>
+      </main>
+    )
+  }
+
+  if (viewerQuery.isError) {
+    const errorMessage =
+      viewerQuery.error instanceof Error
+        ? viewerQuery.error.message
+        : 'Unable to verify the authenticated profile session.'
+
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center px-6 py-8 sm:px-8 lg:px-12">
+        <section className="w-full rounded-[2rem] border border-rose-400/20 bg-slate-950/85 px-8 py-16 text-center shadow-2xl shadow-rose-950/20 backdrop-blur">
+          <p className="text-sm font-medium uppercase tracking-[0.24em] text-rose-100/80">
+            Home feed unavailable
+          </p>
+          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+            The session check failed
+          </h1>
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
+            {errorMessage}
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-8 rounded-full border border-white/12 px-5 py-3 text-sm font-medium text-white transition hover:border-white/25 hover:bg-white/6 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/80"
+          >
+            Retry session check
+          </button>
+        </section>
+      </main>
+    )
+  }
+
+  if (viewerQuery.data === null) {
+    return <SignInScreen />
+  }
+
+  return <HomeFeedScreen viewer={viewerQuery.data.user} />
 }
 
 function SignInScreen() {
@@ -414,13 +482,12 @@ function SignInScreen() {
               </p>
               <div className="mt-4 space-y-3 text-sm leading-7 text-slate-300">
                 <p>
-                  Anonymous routes stay public, but authenticated features move
-                  behind the Static Web Apps auth gate once the profile and feed
-                  screens land.
+                  Anonymous routes stay public, while the personalised home feed
+                  and profile editor stay behind the Static Web Apps auth gate.
                 </p>
                 <p>
-                  Both providers return to the authenticated profile editor
-                  after successful authentication so the sign-in handoff is
+                  Both providers return to the authenticated home route after
+                  successful authentication so the sign-in handoff is
                   predictable in every preview environment.
                 </p>
               </div>
