@@ -2,7 +2,7 @@ param location string
 param names object
 param tags object = {}
 
-var postsV1IndexName = '${names.search}-posts-v1'
+var postsV1IndexName = 'posts-v1'
 
 resource searchService 'Microsoft.Search/searchServices@2023-11-01' = {
   name: names.search
@@ -31,9 +31,9 @@ resource postsV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = {
         name: 'id'
         type: 'Edm.String'
         key: true
-        filterable: false
+        filterable: true
         searchable: false
-        sortable: false
+        sortable: true
         facetable: false
         retrievable: true
       }
@@ -68,23 +68,21 @@ resource postsV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = {
       }
       {
         name: 'hashtags'
-        type: 'Edm.String'
+        type: 'Collection(Edm.String)'
         searchable: true
         filterable: true
         sortable: false
         facetable: true
         retrievable: true
-        collection: true
       }
       {
         name: 'mediaKinds'
-        type: 'Edm.String'
+        type: 'Collection(Edm.String)'
         searchable: false
         filterable: true
         sortable: false
         facetable: true
         retrievable: true
-        collection: true
       }
       {
         name: 'createdAt'
