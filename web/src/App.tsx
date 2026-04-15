@@ -10,6 +10,7 @@ import {
 import { ComposerPreviewPanel } from './components/ComposerPreviewPanel'
 import { DirectBlobUploadCard } from './components/DirectBlobUploadCard'
 import { HomeFeedScreen } from './components/HomeFeedScreen'
+import { ModerationQueueScreen } from './components/ModerationQueueScreen'
 import { NotificationsScreen } from './components/NotificationsScreen'
 import { PostDetailScreen } from './components/PostDetailScreen'
 import { SearchResultsScreen } from './components/SearchResultsScreen'
@@ -37,6 +38,7 @@ import { initializeTelemetry } from './lib/telemetry'
 type AppRoute =
   | { kind: 'home' }
   | { kind: 'me' }
+  | { kind: 'moderation' }
   | { kind: 'notifications' }
   | { kind: 'post'; postId: string }
   | { kind: 'profile'; handle: string }
@@ -144,6 +146,10 @@ function getCurrentRoute(
 
   if (/^\/notifications\/?$/.test(pathname)) {
     return { kind: 'notifications' }
+  }
+
+  if (/^\/moderation\/?$/.test(pathname)) {
+    return { kind: 'moderation' }
   }
 
   const postDetailMatch = /^\/p\/([^/]+)\/?$/.exec(pathname)
@@ -339,6 +345,10 @@ function App() {
     return <NotificationsRouteScreen />
   }
 
+  if (route.kind === 'moderation') {
+    return <ModerationRouteScreen />
+  }
+
   return <HomeRouteScreen />
 }
 
@@ -432,6 +442,19 @@ function NotificationsRouteScreen() {
       errorLabel="Notification feed unavailable"
       errorTitle="The session check failed"
       render={(viewer) => <NotificationsScreen viewer={viewer} />}
+    />
+  )
+}
+
+function ModerationRouteScreen() {
+  return (
+    <OptionalMeGate
+      loadingLabel="Moderation"
+      loadingTitle="Loading the moderator queue"
+      loadingBody="Checking the current Static Web Apps session before loading the moderator queue preview."
+      errorLabel="Moderator queue unavailable"
+      errorTitle="The session check failed"
+      render={(viewer) => <ModerationQueueScreen viewer={viewer} />}
     />
   )
 }

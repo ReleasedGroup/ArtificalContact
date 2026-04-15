@@ -386,6 +386,12 @@ export function NotificationsScreen({ viewer }: NotificationsScreenProps) {
                 Home feed
               </a>
               <a
+                href="/moderation"
+                className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
+              >
+                Moderation queue
+              </a>
+              <a
                 href="/me"
                 className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
               >
