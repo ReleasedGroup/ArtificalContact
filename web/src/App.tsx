@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
 } from 'react'
 import { ComposerPreviewPanel } from './components/ComposerPreviewPanel'
+import { DirectBlobUploadCard } from './components/DirectBlobUploadCard'
 import { PostDetailScreen } from './components/PostDetailScreen'
 import { WEB_BUILD_SHA } from './build-meta.generated'
 import { signOut } from './lib/auth'
@@ -23,6 +24,7 @@ import {
   PublicProfileNotFoundError,
   type PublicUserProfile,
 } from './lib/public-profile'
+import type { UploadedBlobResult } from './lib/media-upload'
 import { initializeTelemetry } from './lib/telemetry'
 
 type AppRoute =
@@ -62,6 +64,8 @@ interface ProfileDraft {
   expertise: string[]
 }
 
+type ProfileMediaField = 'avatarUrl' | 'bannerUrl'
+
 const postLoginRedirectUri = encodeURIComponent('/me')
 const maxExpertiseTags = 12
 const compactCountFormatter = new Intl.NumberFormat(undefined, {
@@ -96,7 +100,7 @@ const authProviders = [
 
 const profileMilestones = [
   'Claim a unique handle for your public profile.',
-  'Set a display name, bio, and avatar once profile editing is live.',
+  'Set a display name, bio, avatar, and banner from the /me editor.',
   'Return to the /me profile editor after provider authentication completes.',
 ]
 
@@ -177,6 +181,29 @@ function createDraft(user: MeProfile): ProfileDraft {
     bannerUrl: user.bannerUrl,
     expertise: [...user.expertise],
   }
+}
+
+function buildMediaUpdateInput(
+  field: ProfileMediaField,
+  value: string | null,
+): UpdateMeInput {
+  return field === 'avatarUrl' ? { avatarUrl: value } : { bannerUrl: value }
+}
+
+function updateDraftMediaField(
+  draft: ProfileDraft,
+  field: ProfileMediaField,
+  value: string | null,
+): ProfileDraft {
+  return field === 'avatarUrl'
+    ? {
+        ...draft,
+        avatarUrl: value,
+      }
+    : {
+        ...draft,
+        bannerUrl: value,
+      }
 }
 
 function normalizeHandleInput(value: string): string | null {
@@ -578,6 +605,63 @@ function ProfileEditorScreen() {
     addExpertiseTag()
   }
 
+  const handleProfileMediaUploaded =
+    (field: ProfileMediaField) => async (upload: UploadedBlobResult) => {
+      const previousMediaValue = currentUser?.[field] ?? null
+
+      setDraft((currentDraft) => {
+        if (currentDraft === null) {
+          return currentDraft
+        }
+
+        return updateDraftMediaField(currentDraft, field, upload.blobUrl)
+      })
+      setSaveState({ status: 'idle' })
+
+      try {
+        const data = await updateMe(buildMediaUpdateInput(field, upload.blobUrl))
+
+        startTransition(() => {
+          setProfileState((currentState) => {
+            if (currentState.status !== 'ready') {
+              return currentState
+            }
+
+            return {
+              status: 'ready',
+              data: {
+                user: data.user,
+                isNewUser: currentState.data.isNewUser,
+              },
+            }
+          })
+          setDraft((currentDraft) => {
+            if (currentDraft === null) {
+              return createDraft(data.user)
+            }
+
+            return {
+              ...currentDraft,
+              avatarUrl: data.user.avatarUrl,
+              bannerUrl: data.user.bannerUrl,
+            }
+          })
+        })
+      } catch (error) {
+        setDraft((currentDraft) => {
+          if (currentDraft === null) {
+            return currentDraft
+          }
+
+          return updateDraftMediaField(currentDraft, field, previousMediaValue)
+        })
+
+        throw error instanceof Error
+          ? error
+          : new Error('Unable to update the profile media right now.')
+      }
+    }
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
@@ -701,18 +785,18 @@ function ProfileEditorScreen() {
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-10">
       <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/85 shadow-2xl shadow-sky-950/20 backdrop-blur">
         <div className="relative h-52 overflow-hidden bg-gradient-to-br from-indigo-600 via-sky-500 to-fuchsia-600">
-          {currentUser.bannerUrl ? (
+          {draft.bannerUrl ? (
             <img
               alt="Profile banner"
               className="h-full w-full object-cover"
-              src={currentUser.bannerUrl}
+              src={draft.bannerUrl}
             />
           ) : (
             <>
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.22),transparent_35%),linear-gradient(135deg,rgba(15,23,42,0.14),transparent_55%)]" />
               <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/20 bg-slate-950/25 px-4 py-3 text-sm text-slate-100 backdrop-blur">
-                Banner upload is a placeholder in Sprint 1. Real media upload
-                lands in Sprint 3.
+                Upload a banner from the profile media panel to replace this
+                gradient preview.
               </div>
             </>
           )}
@@ -722,11 +806,11 @@ function ProfileEditorScreen() {
           <div className="-mt-14 flex flex-wrap items-end justify-between gap-4">
             <div className="flex items-end gap-4">
               <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[1.75rem] border border-white/20 bg-gradient-to-br from-fuchsia-500 to-indigo-500 text-2xl font-semibold text-white shadow-xl shadow-fuchsia-950/30 ring-4 ring-slate-950 sm:h-28 sm:w-28 sm:text-3xl">
-                {currentUser.avatarUrl ? (
+                {draft.avatarUrl ? (
                   <img
                     alt="Profile avatar"
                     className="h-full w-full object-cover"
-                    src={currentUser.avatarUrl}
+                    src={draft.avatarUrl}
                   />
                 ) : (
                   getEditorInitials(draft.displayName)
@@ -797,8 +881,8 @@ function ProfileEditorScreen() {
             profileState.data.isNewUser) && (
             <div className="mt-6 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
               Choose a public handle and finish the rest of the public-facing
-              profile fields here. Avatar and banner uploads stay in placeholder
-              mode until Sprint 3.
+              profile fields here. Avatar and banner uploads save immediately
+              once each file finishes uploading.
             </div>
           )}
 
@@ -996,25 +1080,30 @@ function ProfileEditorScreen() {
             <aside className="grid gap-6">
               <section className="rounded-[1.75rem] border border-white/10 bg-slate-900/60 p-6">
                 <p className="text-sm font-medium uppercase tracking-[0.24em] text-fuchsia-200/75">
-                  Media placeholders
+                  Profile media
+                </p>
+                <p className="mt-3 text-sm leading-7 text-slate-400">
+                  Avatar and banner uploads reuse the shared signed SAS pipeline
+                  from the composer preview, then persist the resulting Blob URL
+                  into <code>/api/me</code> as soon as the upload completes.
                 </p>
                 <div className="mt-5 grid gap-4">
-                  <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/70 p-4">
-                    <p className="text-sm font-medium text-white">Avatar</p>
-                    <p className="mt-2 text-sm leading-7 text-slate-400">
-                      Upload is intentionally disabled in Sprint 1. The current
-                      monogram preview keeps the profile layout stable until the
-                      blob upload pipeline lands.
-                    </p>
-                  </div>
-                  <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/70 p-4">
-                    <p className="text-sm font-medium text-white">Banner</p>
-                    <p className="mt-2 text-sm leading-7 text-slate-400">
-                      The banner slot is wired as a placeholder panel only. When
-                      media upload arrives, this surface can switch to the
-                      shared asset flow without a layout rewrite.
-                    </p>
-                  </div>
+                  <DirectBlobUploadCard
+                    accept="image/avif,image/jpeg,image/png,image/webp"
+                    description="Uploads a still image through the shared direct-to-blob flow, then saves it as your profile avatar."
+                    helperText="AVIF, JPEG, PNG, or WebP up to 8 MB. Upload completion saves immediately."
+                    kind="image"
+                    onUploaded={handleProfileMediaUploaded('avatarUrl')}
+                    title="Avatar upload"
+                  />
+                  <DirectBlobUploadCard
+                    accept="image/avif,image/jpeg,image/png,image/webp"
+                    description="Streams a wide image through the same upload pipeline and saves it as your public profile banner."
+                    helperText="AVIF, JPEG, PNG, or WebP up to 8 MB. Upload completion saves immediately."
+                    kind="image"
+                    onUploaded={handleProfileMediaUploaded('bannerUrl')}
+                    title="Banner upload"
+                  />
                 </div>
               </section>
 
@@ -1024,8 +1113,16 @@ function ProfileEditorScreen() {
                 </p>
                 <div className="mt-5 rounded-[1.5rem] border border-white/10 bg-slate-950/70 p-5">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-fuchsia-500 to-indigo-500 text-lg font-semibold text-white">
-                      {getEditorInitials(draft.displayName)}
+                    <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-fuchsia-500 to-indigo-500 text-lg font-semibold text-white">
+                      {draft.avatarUrl ? (
+                        <img
+                          alt="Draft avatar preview"
+                          className="h-full w-full object-cover"
+                          src={draft.avatarUrl}
+                        />
+                      ) : (
+                        getEditorInitials(draft.displayName)
+                      )}
                     </div>
                     <div>
                       <p className="text-lg font-semibold text-white">

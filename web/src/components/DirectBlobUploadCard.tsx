@@ -12,12 +12,18 @@ interface DirectBlobUploadCardProps {
   helperText: string
   kind: MediaKind
   title: string
-  onUploaded?: (upload: UploadedBlobResult) => void
+  onUploaded?: (upload: UploadedBlobResult) => Promise<void> | void
   uploadFile?: UploadMediaFileFn
 }
 
 interface UploadState {
-  status: 'idle' | 'requesting' | 'uploading' | 'success' | 'error'
+  status:
+    | 'idle'
+    | 'requesting'
+    | 'uploading'
+    | 'persisting'
+    | 'success'
+    | 'error'
   fileName: string | null
   message: string | null
   progress: number
@@ -64,6 +70,7 @@ function getStatusBadgeClassName(status: UploadState['status']): string {
       return 'border-rose-400/25 bg-rose-400/12 text-rose-100'
     case 'requesting':
     case 'uploading':
+    case 'persisting':
       return 'border-sky-300/25 bg-sky-300/12 text-sky-100'
     default:
       return 'border-white/10 bg-white/5 text-slate-300'
@@ -82,8 +89,11 @@ export function DirectBlobUploadCard({
   const inputId = useId()
   const [uploadState, setUploadState] = useState<UploadState>(idleState)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
   const isUploading =
-    uploadState.status === 'requesting' || uploadState.status === 'uploading'
+    uploadState.status === 'requesting' ||
+    uploadState.status === 'uploading' ||
+    uploadState.status === 'persisting'
 
   useEffect(() => {
     return () => {
@@ -121,18 +131,44 @@ export function DirectBlobUploadCard({
             return
           }
 
-          setUploadState({
-            status: 'uploading',
-            fileName: file.name,
-            message: `Uploading directly to Blob Storage (${progress.percent}%).`,
-            progress: progress.percent,
-            result: null,
+          setUploadState((currentState) => {
+            if (
+              currentState.status === 'uploading' &&
+              currentState.fileName === file.name &&
+              currentState.progress === progress.percent
+            ) {
+              return currentState
+            }
+
+            return {
+              status: 'uploading',
+              fileName: file.name,
+              message: `Uploading directly to Blob Storage (${progress.percent}%).`,
+              progress: progress.percent,
+              result: null,
+            }
           })
         },
       })
 
       if (abortControllerRef.current !== abortController) {
         return
+      }
+
+      if (onUploaded) {
+        setUploadState({
+          status: 'persisting',
+          fileName: file.name,
+          message: 'Finalising the upload flow…',
+          progress: 100,
+          result,
+        })
+
+        await onUploaded(result)
+
+        if (abortControllerRef.current !== abortController) {
+          return
+        }
       }
 
       setUploadState({
@@ -142,7 +178,6 @@ export function DirectBlobUploadCard({
         progress: 100,
         result,
       })
-      onUploaded?.(result)
     } catch (error) {
       if (abortController.signal.aborted) {
         return
@@ -184,6 +219,7 @@ export function DirectBlobUploadCard({
           {uploadState.status === 'idle' && 'Ready'}
           {uploadState.status === 'requesting' && 'Signing'}
           {uploadState.status === 'uploading' && 'Uploading'}
+          {uploadState.status === 'persisting' && 'Saving'}
           {uploadState.status === 'success' && 'Uploaded'}
           {uploadState.status === 'error' && 'Retry'}
         </span>
@@ -203,19 +239,22 @@ export function DirectBlobUploadCard({
           className="sr-only"
           disabled={isUploading}
           onChange={handleFileChange}
+          ref={inputRef}
           type="file"
         />
 
-        <label
-          className={`inline-flex cursor-pointer items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition ${
+        <button
+          className={`inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
             isUploading
               ? 'cursor-not-allowed bg-slate-800 text-slate-400'
               : 'bg-sky-400 text-slate-950 hover:bg-sky-300'
           }`}
-          htmlFor={inputId}
+          disabled={isUploading}
+          onClick={() => inputRef.current?.click()}
+          type="button"
         >
           {isUploading ? 'Uploading…' : 'Choose file'}
-        </label>
+        </button>
 
         {uploadState.fileName && (
           <p className="text-sm text-slate-300">

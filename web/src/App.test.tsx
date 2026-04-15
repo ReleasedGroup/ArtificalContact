@@ -23,6 +23,76 @@ function createDeferredResponse<T>() {
   return { promise, resolve }
 }
 
+class MockXMLHttpRequest {
+  static instances: MockXMLHttpRequest[] = []
+
+  static reset() {
+    MockXMLHttpRequest.instances = []
+  }
+
+  method: string | null = null
+  url: string | null = null
+  body: Document | XMLHttpRequestBodyInit | null = null
+  status = 0
+  private readonly headers = new Map<string, string>()
+  private readonly listeners = new Map<string, (event: Event) => void>()
+  private readonly uploadListeners = new Map<
+    string,
+    (event: ProgressEvent) => void
+  >()
+  private readonly responseHeaders = new Map<string, string>()
+
+  upload = {
+    addEventListener: (type: string, listener: (event: ProgressEvent) => void) =>
+      this.uploadListeners.set(type, listener),
+  }
+
+  constructor() {
+    MockXMLHttpRequest.instances.push(this)
+  }
+
+  open(method: string, url: string) {
+    this.method = method
+    this.url = url
+  }
+
+  setRequestHeader(name: string, value: string) {
+    this.headers.set(name.toLowerCase(), value)
+  }
+
+  addEventListener(type: string, listener: (event: Event) => void) {
+    this.listeners.set(type, listener)
+  }
+
+  send(body: Document | XMLHttpRequestBodyInit | null = null) {
+    this.body = body
+  }
+
+  abort() {
+    this.listeners.get('abort')?.(new Event('abort'))
+  }
+
+  getResponseHeader(name: string) {
+    return this.responseHeaders.get(name.toLowerCase()) ?? null
+  }
+
+  triggerProgress(loaded: number, total: number) {
+    this.uploadListeners.get('progress')?.({
+      loaded,
+      total,
+      lengthComputable: true,
+    } as ProgressEvent)
+  }
+
+  respond(status: number, headers: Record<string, string> = {}) {
+    this.status = status
+    Object.entries(headers).forEach(([name, value]) => {
+      this.responseHeaders.set(name.toLowerCase(), value)
+    })
+    this.listeners.get('load')?.(new Event('load'))
+  }
+}
+
 function createPublicPost(overrides?: Record<string, unknown>) {
   return {
     id: 'post-1',
@@ -90,6 +160,11 @@ describe('App', () => {
   beforeEach(() => {
     window.history.replaceState({}, '', '/')
     vi.stubGlobal('fetch', mockFetch)
+    vi.stubGlobal(
+      'XMLHttpRequest',
+      MockXMLHttpRequest as unknown as typeof XMLHttpRequest,
+    )
+    MockXMLHttpRequest.reset()
     mockFetch.mockReset()
   })
 
@@ -360,6 +435,173 @@ describe('App', () => {
     expect(
       screen.getByRole('link', { name: 'View public profile' }),
     ).toHaveAttribute('href', '/u/ada')
+  })
+
+  it('uploads an avatar through the shared media pipeline and persists it to /api/me', async () => {
+    window.history.replaceState({}, '', '/me')
+
+    const uploadedAvatarUrl =
+      'https://cdn.example.com/media/images/github%3Aabc123/2026/04/15/avatar.png'
+    const uploadDescriptor = {
+      kind: 'image',
+      contentType: 'image/png',
+      sizeBytes: 1024,
+      containerName: 'images',
+      blobName: 'github:abc123/2026/04/15/avatar.png',
+      blobUrl: uploadedAvatarUrl,
+      uploadUrl:
+        'https://storage.example.blob.core.windows.net/images/github%3Aabc123/2026/04/15/avatar.png?sig=test',
+      expiresAt: '2026-04-15T04:10:00.000Z',
+      method: 'PUT',
+      requiredHeaders: {
+        'content-type': 'image/png',
+        'x-ms-blob-type': 'BlockBlob',
+      },
+    }
+
+    mockFetch.mockImplementation(async (input, init) => {
+      if (String(input) === '/api/me' && (!init || !init.method)) {
+        return createJsonResponse(200, {
+          data: {
+            isNewUser: false,
+            user: {
+              id: 'github:abc123',
+              identityProvider: 'github',
+              identityProviderUserId: 'abc123',
+              email: 'nick@example.com',
+              handle: 'nick',
+              displayName: 'Nick Beaugeard',
+              bio: 'Building agent-first systems.',
+              avatarUrl: null,
+              bannerUrl: null,
+              expertise: ['agents', 'evals'],
+              links: {},
+              status: 'active',
+              roles: ['user'],
+              counters: {
+                posts: 3,
+                followers: 8,
+                following: 5,
+              },
+              createdAt: '2026-04-15T00:00:00.000Z',
+              updatedAt: '2026-04-15T01:00:00.000Z',
+            },
+          },
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/media/upload-url') {
+        return createJsonResponse(200, {
+          data: uploadDescriptor,
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/me' && init?.method === 'PUT') {
+        return createJsonResponse(200, {
+          data: {
+            user: {
+              id: 'github:abc123',
+              identityProvider: 'github',
+              identityProviderUserId: 'abc123',
+              email: 'nick@example.com',
+              handle: 'nick',
+              displayName: 'Nick Beaugeard',
+              bio: 'Building agent-first systems.',
+              avatarUrl: uploadedAvatarUrl,
+              bannerUrl: null,
+              expertise: ['agents', 'evals'],
+              links: {},
+              status: 'active',
+              roles: ['user'],
+              counters: {
+                posts: 3,
+                followers: 8,
+                following: 5,
+              },
+              createdAt: '2026-04-15T00:00:00.000Z',
+              updatedAt: '2026-04-15T02:00:00.000Z',
+            },
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    renderApp()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Edit your profile' }),
+    ).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Avatar upload file'), {
+      target: {
+        files: [
+          new File(['avatar-bytes'], 'avatar.png', {
+            type: 'image/png',
+          }),
+        ],
+      },
+    })
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        '/api/media/upload-url',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            kind: 'image',
+            contentType: 'image/png',
+            sizeBytes: 12,
+          }),
+        }),
+      )
+    })
+
+    const xhr = MockXMLHttpRequest.instances[0]
+    expect(xhr).toBeDefined()
+    expect(xhr?.method).toBe('PUT')
+    expect(xhr?.url).toBe(uploadDescriptor.uploadUrl)
+
+    await act(async () => {
+      xhr?.triggerProgress(64, 128)
+    })
+
+    expect(
+      await screen.findByText('Uploading directly to Blob Storage (50%).'),
+    ).toBeInTheDocument()
+
+    await act(async () => {
+      xhr?.respond(201, {
+        etag: '"etag-1"',
+        'x-ms-request-id': 'request-1',
+      })
+    })
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        3,
+        '/api/me',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({
+            avatarUrl: uploadedAvatarUrl,
+          }),
+        }),
+      )
+    })
+
+    expect(
+      await screen.findByText('Uploaded directly to Blob Storage.'),
+    ).toBeInTheDocument()
+    expect(screen.getByAltText('Profile avatar')).toHaveAttribute(
+      'src',
+      uploadedAvatarUrl,
+    )
   })
 
   it('renders a public profile when the current route matches /u/{handle}', async () => {
