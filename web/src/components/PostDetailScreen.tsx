@@ -344,26 +344,52 @@ function PostMediaGallery({
   }
 
   return (
-    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+    <div data-post-media-gallery="" className="mt-4 grid gap-3 sm:grid-cols-2">
       {media.map((item, index) => {
         const key = item.id ?? `${item.kind ?? 'media'}-${index}`
-        const href = item.url ?? item.thumbUrl ?? '#'
-        const kind = item.kind?.toLowerCase() ?? 'attachment'
-        const previewUrl = item.thumbUrl ?? item.url
+        const kind = item.kind?.trim().toLowerCase() || 'attachment'
+        const mediaUrl = item.url ?? null
+        const previewUrl = item.thumbUrl ?? mediaUrl
+        const openHref = mediaUrl ?? item.thumbUrl ?? null
         const isVisual = previewUrl !== null && /^(gif|image)$/i.test(kind)
+        const isVideo = mediaUrl !== null && kind === 'video'
+        const isAudio = mediaUrl !== null && kind === 'audio'
 
         return (
-          <a
+          <article
             key={key}
-            href={href}
-            className="group overflow-hidden rounded-[1.35rem] border border-white/10 bg-slate-950/60 transition hover:border-white/20 hover:bg-slate-950/80"
+            data-post-media-kind={kind}
+            className="overflow-hidden rounded-[1.35rem] border border-white/10 bg-slate-950/60 transition hover:border-white/20 hover:bg-slate-950/80"
           >
             {isVisual ? (
               <img
                 src={previewUrl ?? undefined}
                 alt={`${kind} attachment from ${authorName}`}
-                className="h-40 w-full object-cover transition duration-200 group-hover:scale-[1.01]"
+                className="h-40 w-full object-cover"
               />
+            ) : isVideo ? (
+              <video
+                aria-label={`${kind} attachment from ${authorName}`}
+                className="h-40 w-full bg-slate-950 object-cover"
+                controls
+                playsInline
+                poster={item.thumbUrl ?? undefined}
+                preload="metadata"
+                src={mediaUrl}
+              />
+            ) : isAudio ? (
+              <div className="flex min-h-40 flex-col justify-center bg-[radial-gradient(circle_at_top,_rgba(34,211,238,0.14),transparent_35%),linear-gradient(135deg,rgba(15,23,42,0.96),rgba(30,41,59,0.9))] px-4 py-5">
+                <p className="text-xs font-medium uppercase tracking-[0.24em] text-slate-400">
+                  Audio attachment
+                </p>
+                <audio
+                  aria-label={`${kind} attachment from ${authorName}`}
+                  className="mt-4 w-full"
+                  controls
+                  preload="metadata"
+                  src={mediaUrl}
+                />
+              </div>
             ) : (
               <div className="flex h-40 items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(34,211,238,0.14),transparent_35%),linear-gradient(135deg,rgba(15,23,42,0.96),rgba(30,41,59,0.9))] px-4 text-center">
                 <div>
@@ -378,9 +404,18 @@ function PostMediaGallery({
             )}
             <div className="flex items-center justify-between gap-3 px-4 py-3 text-xs text-slate-400">
               <span className="uppercase tracking-[0.18em]">{kind}</span>
-              <span>Open media</span>
+              {openHref ? (
+                <a
+                  href={openHref}
+                  className="text-cyan-100 transition hover:text-cyan-50"
+                >
+                  Open media
+                </a>
+              ) : (
+                <span>Preview unavailable</span>
+              )}
             </div>
-          </a>
+          </article>
         )
       })}
     </div>

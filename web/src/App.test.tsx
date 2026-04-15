@@ -681,6 +681,95 @@ describe('App', () => {
     ).toHaveAttribute('href', '/p/post-1')
   })
 
+  it('renders image, gif, video, and audio attachments on the /p/{id} route', async () => {
+    window.history.replaceState({}, '', '/p/post-mixed-media')
+
+    const media = [
+      {
+        id: 'media-image',
+        kind: 'image',
+        url: 'https://cdn.example.com/media/launch-board.png',
+        thumbUrl: 'https://cdn.example.com/media/launch-board-thumb.png',
+        width: 1280,
+        height: 720,
+      },
+      {
+        id: 'media-gif',
+        kind: 'gif',
+        url: 'https://cdn.example.com/media/prompt-loop.gif',
+        thumbUrl: 'https://cdn.example.com/media/prompt-loop.gif',
+        width: 720,
+        height: 720,
+      },
+      {
+        id: 'media-video',
+        kind: 'video',
+        url: 'https://cdn.example.com/media/demo.mp4',
+        thumbUrl: 'https://cdn.example.com/media/demo-poster.jpg',
+        width: 1920,
+        height: 1080,
+      },
+      {
+        id: 'media-audio',
+        kind: 'audio',
+        url: 'https://cdn.example.com/media/voice-note.mp3',
+        thumbUrl: null,
+        width: null,
+        height: null,
+      },
+    ]
+
+    mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/posts/post-mixed-media') {
+        return createJsonResponse(200, {
+          data: createPublicPost({
+            id: 'post-mixed-media',
+            threadId: 'post-mixed-media',
+            text: 'Mixed media launch update',
+            media,
+          }),
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/threads/post-mixed-media') {
+        return createJsonResponse(200, {
+          data: {
+            threadId: 'post-mixed-media',
+            posts: [
+              createThreadPost({
+                id: 'post-mixed-media',
+                threadId: 'post-mixed-media',
+                text: 'Mixed media launch update',
+                media,
+              }),
+            ],
+            continuationToken: null,
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    renderApp()
+
+    expect(
+      await screen.findByAltText('image attachment from Ada Lovelace'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByAltText('gif attachment from Ada Lovelace'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByLabelText('video attachment from Ada Lovelace'),
+    ).toHaveAttribute('src', 'https://cdn.example.com/media/demo.mp4')
+    expect(
+      screen.getByLabelText('audio attachment from Ada Lovelace'),
+    ).toHaveAttribute('src', 'https://cdn.example.com/media/voice-note.mp3')
+    expect(screen.getAllByRole('link', { name: 'Open media' })).toHaveLength(4)
+  })
+
   it('flattens replies beyond depth 3 while preserving replying-to context', async () => {
     window.history.replaceState({}, '', '/p/reply-4')
 
