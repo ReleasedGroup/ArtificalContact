@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { PostComposer } from './PostComposer'
+import { UploadPipelinePreview } from './UploadPipelinePreview'
+import { PostComposer, type PostComposerMediaFile } from './PostComposer'
 import { UploadPipelinePreview } from './UploadPipelinePreview'
 
 interface ComposerPreviewPanelProps {
@@ -19,6 +20,12 @@ export function ComposerPreviewPanel({
   const [replyDraft, setReplyDraft] = useState(
     'We should keep the #thread reply surface lightweight and readable.',
   )
+  const [postMediaFiles, setPostMediaFiles] = useState<PostComposerMediaFile[]>(
+    [],
+  )
+  const [replyMediaFiles, setReplyMediaFiles] = useState<PostComposerMediaFile[]>(
+    [],
+  )
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
 
   const replyTarget = authorHandle ? `@${authorHandle}` : '@thread-root'
@@ -31,10 +38,11 @@ export function ComposerPreviewPanel({
             Composer preview
           </p>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-400">
-            Issue #47 lands the reusable post composer shell ahead of the feed
-            and thread pages. These text submissions stay local for now so
-            later slices can reuse the same UI once the post and reply
-            mutations are wired into their real screens.
+            Issue #57 extends the reusable composer shell with local image
+            attachment previews, drag-and-drop selection, and removal controls
+            ahead of the real Sprint 3 upload pipeline. These submissions stay
+            local for now so later slices can reuse the same UI once the post,
+            reply, and upload mutations are wired into their real screens.
           </p>
         </div>
 
@@ -58,14 +66,22 @@ export function ComposerPreviewPanel({
               authorHandle={authorHandle}
               authorName={authorName}
               label="Post body"
+              mediaFiles={postMediaFiles}
               onChange={(nextValue) => {
                 setPostDraft(nextValue)
                 setFeedbackMessage(null)
               }}
-              onSubmit={(submittedValue) => {
+              onMediaFilesChange={(nextFiles) => {
+                setPostMediaFiles(nextFiles)
+                setFeedbackMessage(null)
+              }}
+              onSubmit={({ mediaFiles, value: submittedValue }) => {
                 setPostDraft('')
+                setPostMediaFiles([])
                 setFeedbackMessage(
-                  `Local post preview saved: ${submittedValue.trim()}`,
+                  `Local post preview saved with ${mediaFiles.length} ${
+                    mediaFiles.length === 1 ? 'image' : 'images'
+                  }: ${submittedValue.trim()}`,
                 )
               }}
               placeholder="Share an experiment, prompt, eval result, or hot take…"
@@ -78,8 +94,8 @@ export function ComposerPreviewPanel({
         <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/45 p-4">
           <p className="text-sm font-medium text-white">Reply box</p>
           <p className="mt-2 text-sm leading-7 text-slate-400">
-            Reuses the same highlighting and character budget with a tighter
-            footprint for thread replies.
+            Reuses the same highlighting, attachment previews, and character
+            budget with a tighter footprint for thread replies.
           </p>
           <div className="mt-4">
             <PostComposer
@@ -87,14 +103,22 @@ export function ComposerPreviewPanel({
               authorHandle={authorHandle}
               authorName={authorName}
               label="Reply body"
+              mediaFiles={replyMediaFiles}
               onChange={(nextValue) => {
                 setReplyDraft(nextValue)
                 setFeedbackMessage(null)
               }}
-              onSubmit={(submittedValue) => {
+              onMediaFilesChange={(nextFiles) => {
+                setReplyMediaFiles(nextFiles)
+                setFeedbackMessage(null)
+              }}
+              onSubmit={({ mediaFiles, value: submittedValue }) => {
                 setReplyDraft('')
+                setReplyMediaFiles([])
                 setFeedbackMessage(
-                  `Local reply preview saved for ${replyTarget}: ${submittedValue.trim()}`,
+                  `Local reply preview saved for ${replyTarget} with ${
+                    mediaFiles.length
+                  } ${mediaFiles.length === 1 ? 'image' : 'images'}: ${submittedValue.trim()}`,
                 )
               }}
               placeholder={`Reply to ${replyTarget}…`}
