@@ -14,6 +14,12 @@ describe('createHealthReport', () => {
         cosmosConnectionString: undefined,
         cosmosDatabaseName: 'acn',
         cosmosEndpoint: undefined,
+        mediaBaseUrl: undefined,
+        mediaContainerName: undefined,
+        contentSafetyEndpoint: undefined,
+        contentSafetyKey: undefined,
+        contentSafetyThreshold: 4,
+        ffmpegPath: undefined,
       },
       cosmosPing: async () => ({
         status: 'ok',

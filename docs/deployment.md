@@ -77,6 +77,15 @@ For the Sprint 3 media upload pipeline, the Functions app also needs:
 - Optional container overrides via `MEDIA_IMAGES_CONTAINER_NAME`, `MEDIA_GIF_CONTAINER_NAME`, `MEDIA_AUDIO_CONTAINER_NAME`, and `MEDIA_VIDEO_CONTAINER_NAME`
 - Optional `MEDIA_UPLOAD_SAS_TTL_MINUTES` between `1` and `15`; the default is `15`
 
+## Media pipeline settings
+
+- `MEDIA_BASE_URL` should point at the Front Door or CDN host used for public media URLs. The Bicep deployment now sets this to the deployed Front Door endpoint automatically.
+- `MEDIA_CONTAINER_NAME` defaults to `media` and backs the Cosmos container that stores blob metadata and moderation outcomes.
+- `CONTENT_SAFETY_ENDPOINT` enables live Azure AI Content Safety checks for uploaded images, GIFs, and extracted video poster frames.
+- `CONTENT_SAFETY_KEY` is optional for local development. In deployed environments, prefer leaving the key unset and granting the Functions managed identity the `Cognitive Services User` role on the Content Safety resource instead.
+- `CONTENT_SAFETY_THRESHOLD` controls the moderation sensitivity used for Azure AI Content Safety results. Supported values are `0` through `7`; the default is `4`.
+- `FFMPEG_PATH` or `MEDIA_FFMPEG_PATH` can be set to the `ffmpeg` executable path when no bundled `ffmpeg` binary is available. This is required for extracting video poster frames in environments that do not include the packaged binary.
+
 ## Front Door media delivery
 
 The infrastructure deployment now attaches a Front Door ruleset to the storage route:
