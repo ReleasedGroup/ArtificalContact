@@ -1,3 +1,4 @@
+import { registerCreateModActionFunction } from './functions/create-mod-action.js'
 import { registerCreateReplyFunction } from './functions/create-reply.js'
 import { registerCreateReportFunction } from './functions/create-report.js'
 import { registerCreateReactionFunction } from './functions/create-reaction.js'
@@ -33,6 +34,7 @@ import { registerUpdateProfileFunction } from './functions/update-profile.js'
 import { registerUserPostAuthorSyncFunction } from './functions/user-post-author-sync.js'
 import { registerUsersByHandleMirrorFunction } from './functions/users-by-handle-mirror.js'
 
+registerCreateModActionFunction()
 registerCreateReplyFunction()
 registerCreateReportFunction()
 registerCreateReactionFunction()

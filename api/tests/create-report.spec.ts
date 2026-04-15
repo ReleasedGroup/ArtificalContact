@@ -65,6 +65,8 @@ function createRepository(
 ): ReportRepository {
   return {
     create: vi.fn(async (report) => report),
+    getById: vi.fn(async () => null),
+    upsert: vi.fn(async (report) => report),
     ...overrides,
   }
 }
@@ -280,6 +282,8 @@ describe('createReportHandler', () => {
         create: async () => {
           throw new Error('Cosmos unavailable')
         },
+        getById: async () => null,
+        upsert: async (report) => report,
       }),
     })
 
