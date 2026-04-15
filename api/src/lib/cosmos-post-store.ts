@@ -102,6 +102,73 @@ export class CosmosPostStore implements MutablePostStore, PostRepository {
     return resources
   }
 
+  async listRootPostsByAuthorIds(
+    authorIds: readonly string[],
+    options: {
+      limit: number
+      cursor?: string
+    },
+  ): Promise<{
+    posts: StoredPostDocument[]
+    cursor?: string
+  }> {
+    if (authorIds.length === 0) {
+      return {
+        posts: [],
+      }
+    }
+
+    const querySpec: SqlQuerySpec = {
+      query: `
+        SELECT * FROM c
+        WHERE ARRAY_CONTAINS(@authorIds, c.authorId)
+          AND c.type = @type
+          AND c.kind = @kind
+          AND c.threadId = c.id
+          AND (NOT IS_DEFINED(c.parentId) OR IS_NULL(c.parentId))
+          AND (NOT IS_DEFINED(c.deletedAt) OR IS_NULL(c.deletedAt))
+          AND (
+            NOT IS_DEFINED(c.visibility)
+            OR IS_NULL(c.visibility)
+            OR c.visibility = @visibility
+          )
+          AND (
+            NOT IS_DEFINED(c.moderationState)
+            OR IS_NULL(c.moderationState)
+            OR (
+              c.moderationState != @hiddenModerationState
+              AND c.moderationState != @removedModerationState
+            )
+          )
+        ORDER BY c.createdAt DESC, c.id DESC
+      `,
+      parameters: [
+        { name: '@authorIds', value: [...authorIds] },
+        { name: '@type', value: 'post' },
+        { name: '@kind', value: 'user' },
+        { name: '@visibility', value: 'public' },
+        { name: '@hiddenModerationState', value: 'hidden' },
+        { name: '@removedModerationState', value: 'removed' },
+      ],
+    }
+    const queryIterator = this.postsContainer.items.query<StoredPostDocument>(
+      querySpec,
+      {
+        maxItemCount: options.limit,
+        enableQueryControl: true,
+        ...(options.cursor === undefined
+          ? {}
+          : { continuationToken: options.cursor }),
+      },
+    )
+    const { resources, continuationToken } = await queryIterator.fetchNext()
+
+    return {
+      posts: resources ?? [],
+      ...(continuationToken === undefined ? {} : { cursor: continuationToken }),
+    }
+  }
+
   async upsertPost(post: StoredPostDocument): Promise<StoredPostDocument> {
     const { resource } =
       await this.postsContainer.items.upsert<StoredPostDocument>(post)

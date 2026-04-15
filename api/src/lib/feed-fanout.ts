@@ -50,7 +50,7 @@ export interface LoggerLike {
   warn(message: string, ...args: unknown[]): void
 }
 
-interface FeedFanOutWorkItem {
+export interface FeedEntrySource {
   authorAvatarUrl: string | null
   authorDisplayName: string | null
   authorHandle: string | null
@@ -109,9 +109,9 @@ function buildFeedMedia(
     }))
 }
 
-function buildFeedFanOutWorkItem(
+export function buildFeedEntrySource(
   document: FeedFanOutSourceDocument,
-): FeedFanOutWorkItem | null {
+): FeedEntrySource | null {
   const postId = toNonEmptyString(document.id)
   const type = toNullableString(document.type) ?? 'post'
   const kind = toNullableString(document.kind) ?? 'user'
@@ -157,8 +157,8 @@ function buildFeedFanOutWorkItem(
 
 function collapsePostChangesToLatest(
   documents: readonly FeedFanOutSourceDocument[],
-): FeedFanOutWorkItem[] {
-  const latestById = new Map<string, FeedFanOutWorkItem | null>()
+): FeedEntrySource[] {
+  const latestById = new Map<string, FeedEntrySource | null>()
 
   for (const document of documents) {
     const postId = toNonEmptyString(document.id)
@@ -166,11 +166,11 @@ function collapsePostChangesToLatest(
       continue
     }
 
-    latestById.set(postId, buildFeedFanOutWorkItem(document))
+    latestById.set(postId, buildFeedEntrySource(document))
   }
 
   return [...latestById.values()].filter(
-    (workItem): workItem is FeedFanOutWorkItem => workItem !== null,
+    (workItem): workItem is FeedEntrySource => workItem !== null,
   )
 }
 
@@ -190,7 +190,7 @@ export function buildFeedEntryId(feedOwnerId: string, postId: string): string {
 
 export function buildFeedEntryDocument(
   feedOwnerId: string,
-  workItem: FeedFanOutWorkItem,
+  workItem: FeedEntrySource,
 ): FeedEntryDocument {
   return {
     id: buildFeedEntryId(feedOwnerId, workItem.postId),
