@@ -135,12 +135,11 @@ export interface PostCounters {
   replies: number
 }
 
-export interface PostDocument {
-  id: string
-  type: 'post'
+export interface UserPostDocument extends StoredPostDocument {
+  type: 'post' | 'reply'
   kind: 'user'
   threadId: string
-  parentId: null
+  parentId: string | null
   authorId: string
   authorHandle: string
   authorDisplayName: string
@@ -156,6 +155,11 @@ export interface PostDocument {
   deletedAt: null
 }
 
+export interface PostDocument extends UserPostDocument {
+  type: 'post'
+  parentId: null
+}
+
 export interface PostStore {
   getPostById(
     postId: string,
@@ -163,12 +167,14 @@ export interface PostStore {
   ): Promise<StoredPostDocument | null>
 }
 
-export interface MutablePostStore extends PostStore {
-  upsertPost(post: StoredPostDocument): Promise<StoredPostDocument>
+export interface PostRepository {
+  create(post: UserPostDocument): Promise<UserPostDocument>
 }
 
-export interface PostRepository {
-  create(post: PostDocument): Promise<PostDocument>
+export interface ReadablePostRepository extends PostStore, PostRepository {}
+
+export interface MutablePostStore extends PostStore {
+  upsertPost(post: StoredPostDocument): Promise<StoredPostDocument>
 }
 
 export type MutablePostRepository = PostRepository
@@ -349,7 +355,7 @@ function buildDeletedPostSummary(
   }
 }
 
-function isPubliclyVisiblePost(post: StoredPostDocument): boolean {
+export function isPubliclyVisiblePost(post: StoredPostDocument): boolean {
   if (toNullableString(post.deletedAt) !== null) {
     return false
   }
@@ -367,9 +373,9 @@ function createPostRepositoryForContainer(
   container: Container,
 ): MutablePostRepository {
   return {
-    async create(post: PostDocument) {
-      await container.items.create<PostDocument>(post)
-      return post
+    async create(post: UserPostDocument) {
+      const response = await container.items.create<UserPostDocument>(post)
+      return response.resource ?? post
     },
   }
 }
@@ -436,6 +442,44 @@ export function mapCreatePostValidationIssues(
     message: issue.message,
     ...(issue.path.length > 0 ? { field: issue.path.join('.') } : {}),
   }))
+}
+
+export function createUserReplyDocument(
+  user: UserDocument,
+  parent: StoredPostDocument,
+  request: CreatePostRequest,
+  createdAt: Date,
+  idFactory: () => string,
+): UserPostDocument {
+  const id = idFactory()
+  const timestamp = createdAt.toISOString()
+  const threadId = toNullableString(parent.threadId) ?? parent.id
+
+  return {
+    id,
+    type: 'reply',
+    kind: 'user',
+    threadId,
+    parentId: parent.id,
+    authorId: user.id,
+    authorHandle: user.handle ?? user.handleLower ?? '',
+    authorDisplayName: user.displayName,
+    ...(user.avatarUrl ? { authorAvatarUrl: user.avatarUrl } : {}),
+    text: request.text,
+    hashtags: request.hashtags,
+    mentions: request.mentions,
+    counters: {
+      likes: 0,
+      dislikes: 0,
+      emoji: 0,
+      replies: 0,
+    },
+    visibility: 'public',
+    moderationState: 'ok',
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    deletedAt: null,
+  }
 }
 
 export function buildPublicPost(post: StoredPostDocument): PublicPost {
@@ -665,6 +709,8 @@ export function createPostRepositoryFromConfig(
 }
 
 export function createPostRepository(): MutablePostRepository {
-  cachedPostRepository ??= createPostRepositoryFromConfig(getEnvironmentConfig())
+  cachedPostRepository ??= createPostRepositoryFromConfig(
+    getEnvironmentConfig(),
+  )
   return cachedPostRepository
 }
