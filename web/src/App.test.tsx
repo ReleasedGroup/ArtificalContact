@@ -1,6 +1,8 @@
+import { QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { createQueryClient } from './lib/query-client'
 
 const mockFetch = vi.fn()
 
@@ -19,6 +21,16 @@ function createDeferredResponse<T>() {
   })
 
   return { promise, resolve }
+}
+
+function renderApp() {
+  const queryClient = createQueryClient()
+
+  render(
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>,
+  )
 }
 
 describe('App', () => {
@@ -56,7 +68,7 @@ describe('App', () => {
       throw new Error(`Unexpected fetch request: ${String(input)}`)
     })
 
-    render(<App />)
+    renderApp()
 
     expect(
       screen.getByRole('heading', {
@@ -66,16 +78,13 @@ describe('App', () => {
 
     expect(
       screen.getByRole('link', { name: /continue with microsoft/i }),
-    ).toHaveAttribute(
-      'href',
-      '/.auth/login/aad?post_login_redirect_uri=%2F',
-    )
+    ).toHaveAttribute('href', '/.auth/login/aad?post_login_redirect_uri=%2F')
     expect(
       screen.getByRole('link', { name: /continue with github/i }),
-    ).toHaveAttribute(
-      'href',
-      '/.auth/login/github?post_login_redirect_uri=%2F',
-    )
+    ).toHaveAttribute('href', '/.auth/login/github?post_login_redirect_uri=%2F')
+    expect(
+      screen.getByRole('button', { name: /sign out/i }),
+    ).toBeInTheDocument()
 
     expect(await screen.findByText('Healthy')).toBeInTheDocument()
     expect(screen.getByText(/sha-1234/)).toBeInTheDocument()
@@ -111,7 +120,7 @@ describe('App', () => {
       throw new Error(`Unexpected fetch request: ${String(input)}`)
     })
 
-    render(<App />)
+    renderApp()
 
     expect(
       await screen.findByRole('heading', { name: 'Ada Lovelace' }),
@@ -149,7 +158,7 @@ describe('App', () => {
       throw new Error(`Unexpected fetch request: ${String(input)}`)
     })
 
-    render(<App />)
+    renderApp()
 
     expect(
       await screen.findByRole('heading', { name: 'Profile not found' }),
@@ -189,7 +198,7 @@ describe('App', () => {
       throw new Error(`Unexpected fetch request: ${String(input)}`)
     })
 
-    render(<App />)
+    renderApp()
 
     await act(async () => {
       firstResponse.resolve(

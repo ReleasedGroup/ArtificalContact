@@ -4,7 +4,7 @@ import { getEnvironmentConfig, type EnvironmentConfig } from './config.js'
 import { createCosmosClient } from './cosmos-client.js'
 
 const defaultUsersContainerName = 'users'
-let cachedUserRepository: UserRepository | undefined
+let cachedUserRepository: MutableUserRepository | undefined
 
 export type UserStatus =
   | 'active'
@@ -44,6 +44,11 @@ export interface UserDocument {
 export interface UserRepository {
   create(user: UserDocument): Promise<UserDocument>
   getById(userId: string): Promise<UserDocument | null>
+  upsert(user: UserDocument): Promise<UserDocument>
+}
+
+export interface MutableUserRepository extends UserRepository {
+  upsert(user: UserDocument): Promise<UserDocument>
 }
 
 export interface ResolvedMeProfile {
@@ -108,7 +113,9 @@ function readOptionalValue(value?: string): string | undefined {
   return trimmed ? trimmed : undefined
 }
 
-function createCosmosUserRepository(container: Container): UserRepository {
+function createCosmosUserRepository(
+  container: Container,
+): MutableUserRepository {
   return {
     async getById(userId: string) {
       try {
@@ -128,13 +135,17 @@ function createCosmosUserRepository(container: Container): UserRepository {
       const response = await container.items.create<UserDocument>(user)
       return response.resource ?? user
     },
+    async upsert(user: UserDocument) {
+      const response = await container.items.upsert<UserDocument>(user)
+      return response.resource ?? user
+    },
   }
 }
 
 export function createUserRepositoryFromConfig(
   config: EnvironmentConfig,
   env: NodeJS.ProcessEnv = process.env,
-): UserRepository {
+): MutableUserRepository {
   if (!config.cosmosDatabaseName) {
     throw new Error('COSMOS_DATABASE_NAME is required to resolve users.')
   }
@@ -149,7 +160,7 @@ export function createUserRepositoryFromConfig(
   return createCosmosUserRepository(container)
 }
 
-export function createUserRepository(): UserRepository {
+export function createUserRepository(): MutableUserRepository {
   cachedUserRepository ??= createUserRepositoryFromConfig(
     getEnvironmentConfig(),
   )

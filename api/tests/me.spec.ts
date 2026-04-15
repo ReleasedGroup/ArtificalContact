@@ -61,12 +61,15 @@ function createContext(): InvocationContext {
 describe('authMeHandler', () => {
   it('returns the existing user profile without provisioning a new document', async () => {
     const existingUser = createStoredUser()
+    const emitSigninTelemetry = vi.fn()
     const repository: UserRepository = {
       getById: vi.fn(async () => existingUser),
       create: vi.fn(async (user) => user),
+      upsert: vi.fn(async (user) => user),
     }
 
     const handler = buildAuthMeHandler({
+      emitSigninTelemetry,
       repositoryFactory: () => repository,
       now: () => new Date('2026-04-15T02:00:00.000Z'),
     })
@@ -95,15 +98,22 @@ describe('authMeHandler', () => {
       errors: [],
     })
     expect(repository.create).not.toHaveBeenCalled()
+    expect(emitSigninTelemetry).toHaveBeenCalledWith({
+      identityProvider: 'github',
+      isNewUser: false,
+    })
   })
 
   it('jit provisions a pending user on first sign-in', async () => {
+    const emitSigninTelemetry = vi.fn()
     const repository: UserRepository = {
       getById: vi.fn(async () => null),
       create: vi.fn(async (user) => user),
+      upsert: vi.fn(async (user) => user),
     }
 
     const handler = buildAuthMeHandler({
+      emitSigninTelemetry,
       repositoryFactory: () => repository,
       now: () => new Date('2026-04-15T02:30:00.000Z'),
     })
@@ -144,6 +154,10 @@ describe('authMeHandler', () => {
         updatedAt: '2026-04-15T02:30:00.000Z',
       }),
     )
+    expect(emitSigninTelemetry).toHaveBeenCalledWith({
+      identityProvider: 'github',
+      isNewUser: true,
+    })
   })
 
   it('re-reads the user when jit provisioning races with another request', async () => {
@@ -163,6 +177,7 @@ describe('authMeHandler', () => {
         ;(error as Error & { statusCode: number }).statusCode = 409
         throw error
       }),
+      upsert: vi.fn(async (user) => user),
     }
 
     const handler = buildAuthMeHandler({
@@ -199,6 +214,7 @@ describe('authMeHandler', () => {
       repositoryFactory: () => ({
         getById: async () => null,
         create: async (user) => user,
+        upsert: async (user) => user,
       }),
     })
 
@@ -217,5 +233,41 @@ describe('authMeHandler', () => {
         },
       ],
     })
+  })
+
+  it('does not fail the request when auth.signin telemetry emission throws', async () => {
+    const context = createContext()
+    const repository: UserRepository = {
+      getById: vi.fn(async () => createStoredUser()),
+      create: vi.fn(async (user) => user),
+      upsert: vi.fn(async (user) => user),
+    }
+
+    const handler = buildAuthMeHandler({
+      emitSigninTelemetry: () => {
+        throw new Error('Telemetry unavailable')
+      },
+      repositoryFactory: () => repository,
+      now: () => new Date('2026-04-15T02:00:00.000Z'),
+    })
+
+    const response = await handler(
+      createPrincipalRequest({
+        identityProvider: 'github',
+        userId: 'abc123',
+        userDetails: 'nickbeau',
+        userRoles: ['anonymous', 'authenticated'],
+        claims: [{ typ: 'emails', val: 'nick@example.com' }],
+      }),
+      context,
+    )
+
+    expect(response.status).toBe(200)
+    expect(context.log).toHaveBeenCalledWith(
+      'Failed to emit auth.signin telemetry.',
+      {
+        error: 'Telemetry unavailable',
+      },
+    )
   })
 })
