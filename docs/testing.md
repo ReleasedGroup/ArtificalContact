@@ -38,6 +38,7 @@ npm run test
 - Vitest covers the user-profile change-feed worker that refreshes denormalised post author fields after profile updates, including avatar removal and duplicate change-feed image collapse
 - Vitest covers the public profile lookup at `GET /api/users/{handle}`, including case-insensitive mirror resolution and safe not-found behavior
 - Vitest covers the paginated following lookup at `GET /api/users/{handle}/following`, including invalid limits, continuation tokens, and filtering of missing or non-public followees
+- Vitest covers the public followers list at `GET /api/users/{handle}/followers`, including pagination, case-insensitive target resolution, and filtering stale or non-public follower records
 - Vitest covers Static Web Apps principal decoding and HTTP auth role attachment for anonymous, user, moderator, admin, and malformed-principal request paths
 - Vitest covers `PUT /api/me`, including duplicate-handle rejection via `usersByHandle`
 - Vitest covers the `usersByHandle` change-feed mirror logic, including stale-handle cleanup and non-fatal collision handling

@@ -4,7 +4,9 @@ import { createCosmosClient } from './cosmos-client.js'
 import { readOptionalValue } from './strings.js'
 
 export const DEFAULT_FOLLOWS_CONTAINER_NAME = 'follows'
+export const DEFAULT_FOLLOWERS_CONTAINER_NAME = 'followers'
 let cachedFollowRepository: MutableFollowRepository | undefined
+let cachedFollowersMirrorRepository: FollowersMirrorRepository | undefined
 
 export interface FollowDocument {
   id: string
@@ -29,6 +31,19 @@ export interface FollowRepository {
 export interface FollowingListRepository {
   listByFollowerId(
     followerId: string,
+    options: {
+      limit: number
+      continuationToken?: string
+    },
+  ): Promise<{
+    follows: FollowDocument[]
+    continuationToken?: string
+  }>
+}
+
+export interface FollowersMirrorRepository {
+  listFollowers(
+    followedId: string,
     options: {
       limit: number
       continuationToken?: string
@@ -91,9 +106,7 @@ function createCosmosFollowRepository(
       const id = buildFollowDocumentId(followerId, followedId)
 
       try {
-        const response = await container
-          .item(id, followerId)
-          .read<FollowDocument>()
+        const response = await container.item(id, followerId).read<FollowDocument>()
         return response.resource ?? null
       } catch (error) {
         if (isExpectedCosmosStatusCode(error, 404)) {
@@ -162,6 +175,49 @@ function createCosmosFollowRepository(
   }
 }
 
+function createCosmosFollowersMirrorRepository(
+  container: Container,
+): FollowersMirrorRepository {
+  return {
+    async listFollowers(
+      followedId: string,
+      options: {
+        limit: number
+        continuationToken?: string
+      },
+    ): Promise<{
+      follows: FollowDocument[]
+      continuationToken?: string
+    }> {
+      const queryIterator = container.items.query<FollowDocument>(
+        {
+          query: `
+            SELECT * FROM c
+            WHERE c.followedId = @followedId
+            ORDER BY c.createdAt DESC
+          `,
+          parameters: [{ name: '@followedId', value: followedId }],
+        },
+        {
+          partitionKey: followedId,
+          maxItemCount: options.limit,
+          enableQueryControl: true,
+          ...(options.continuationToken === undefined
+            ? {}
+            : { continuationToken: options.continuationToken }),
+        },
+      )
+
+      const { resources, continuationToken } = await queryIterator.fetchNext()
+
+      return {
+        follows: resources ?? [],
+        ...(continuationToken === undefined ? {} : { continuationToken }),
+      }
+    },
+  }
+}
+
 export function createFollowRepositoryFromConfig(
   config: EnvironmentConfig,
   env: NodeJS.ProcessEnv = process.env,
@@ -173,25 +229,47 @@ export function createFollowRepositoryFromConfig(
   const followsContainerName =
     readOptionalValue(env.FOLLOWS_CONTAINER_NAME) ?? DEFAULT_FOLLOWS_CONTAINER_NAME
   const client = createCosmosClient(config)
-  const container = client
-    .database(config.cosmosDatabaseName)
-    .container(followsContainerName)
+  const container = client.database(config.cosmosDatabaseName).container(followsContainerName)
 
   return createCosmosFollowRepository(container)
 }
 
 export function createFollowRepository(): MutableFollowRepository {
-  cachedFollowRepository ??= createFollowRepositoryFromConfig(
-    getEnvironmentConfig(),
-  )
+  cachedFollowRepository ??= createFollowRepositoryFromConfig(getEnvironmentConfig())
   return cachedFollowRepository
 }
 
 export function createFollowingListRepository(): FollowingListRepository {
-  cachedFollowRepository ??= createFollowRepositoryFromConfig(
+  cachedFollowRepository ??= createFollowRepositoryFromConfig(getEnvironmentConfig())
+  return cachedFollowRepository
+}
+
+export function createFollowersMirrorRepositoryFromConfig(
+  config: EnvironmentConfig,
+  env: NodeJS.ProcessEnv = process.env,
+): FollowersMirrorRepository {
+  if (!config.cosmosDatabaseName) {
+    throw new Error(
+      'COSMOS_DATABASE_NAME is required to resolve followers mirror records.',
+    )
+  }
+
+  const followersContainerName =
+    readOptionalValue(env.FOLLOWERS_CONTAINER_NAME) ??
+    DEFAULT_FOLLOWERS_CONTAINER_NAME
+  const client = createCosmosClient(config)
+  const container = client
+    .database(config.cosmosDatabaseName)
+    .container(followersContainerName)
+
+  return createCosmosFollowersMirrorRepository(container)
+}
+
+export function createFollowersMirrorRepository(): FollowersMirrorRepository {
+  cachedFollowersMirrorRepository ??= createFollowersMirrorRepositoryFromConfig(
     getEnvironmentConfig(),
   )
-  return cachedFollowRepository
+  return cachedFollowersMirrorRepository
 }
 
 export function createFollowDocument(
