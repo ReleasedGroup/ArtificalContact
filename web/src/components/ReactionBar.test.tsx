@@ -21,6 +21,15 @@ describe('ReactionBar', () => {
       />,
     )
 
+  const getEmojiButton = (emoji: string) => {
+    const button = screen
+      .getAllByRole('button')
+      .find((candidate) => candidate.textContent?.trim() === emoji)
+
+    expect(button).toBeDefined()
+    return button as HTMLButtonElement
+  }
+
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -101,7 +110,7 @@ describe('ReactionBar', () => {
     renderBar()
 
     fireEvent.click(screen.getByRole('button', { name: 'Emoji reaction picker' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Emoji 😍' }))
+    fireEvent.click(getEmojiButton('😍'))
 
     await waitFor(() => {
       expect(createReaction).toHaveBeenCalledWith('post-1', {
@@ -114,7 +123,7 @@ describe('ReactionBar', () => {
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Emoji reaction picker' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Emoji 😍' }))
+    fireEvent.click(getEmojiButton('😍'))
 
     await waitFor(() => {
       expect(deleteReaction).toHaveBeenCalledWith('post-1', '😍')
