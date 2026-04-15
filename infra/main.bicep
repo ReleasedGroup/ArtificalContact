@@ -138,6 +138,7 @@ output cosmosFollowersContainerName string = cosmos.outputs.followersContainerNa
 output cosmosFollowsContainerName string = cosmos.outputs.followsContainerName
 output cosmosMediaContainerName string = cosmos.outputs.mediaContainerName
 output cosmosNotificationPrefsContainerName string = cosmos.outputs.notificationPrefsContainerName
+output cosmosNotificationsContainerName string = cosmos.outputs.notificationsContainerName
 output cosmosPostsContainerName string = cosmos.outputs.postsContainerName
 output cosmosReactionsContainerName string = cosmos.outputs.reactionsContainerName
 output cosmosUsersContainerName string = cosmos.outputs.usersContainerName
