@@ -231,4 +231,134 @@ describe('SearchScreen', () => {
     expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument()
     expect(screen.getByText('@ada')).toBeInTheDocument()
   })
+
+  it('scopes facet filters to tabs when switching result types', async () => {
+    mockFetch.mockImplementation(async (input) => {
+      const requestUrl = new URL(String(input), 'https://example.com')
+      const type = requestUrl.searchParams.get('type')
+      const filter = requestUrl.searchParams.get('filter')
+
+      if (type === 'hashtags') {
+        expect(filter).toBe('mediaKind:image')
+
+        return createJsonResponse(200, {
+          data: {
+            type: 'hashtags',
+            query: 'evals',
+            filters: {
+              hashtag: null,
+              mediaKind: 'image',
+            },
+            totalCount: 1,
+            results: [{ type: 'hashtag', hashtag: 'evals', count: 1 }],
+          },
+          errors: [],
+        })
+      }
+
+      if (type === 'users') {
+        expect(filter).toBeNull()
+
+        return createJsonResponse(200, {
+          data: {
+            type: 'users',
+            query: 'evals',
+            filters: {
+              hashtag: null,
+              mediaKind: null,
+            },
+            totalCount: 1,
+            results: [
+              {
+                type: 'user',
+                id: 'user-1',
+                handle: 'ada',
+                displayName: 'Ada Lovelace',
+                bio: 'Searches distributed systems and eval tooling.',
+                expertise: ['evals'],
+                followerCount: 42,
+              },
+            ],
+          },
+          errors: [],
+        })
+      }
+
+      expect(filter).toBe('hashtag:evals,mediaKind:image')
+
+      return createJsonResponse(200, {
+        data: {
+          type: 'posts',
+          query: 'evals',
+          filters: {
+            hashtag: 'evals',
+            mediaKind: 'image',
+          },
+          totalCount: 1,
+          facets: {
+            hashtags: [{ value: 'evals', count: 1 }],
+            mediaKinds: [{ value: 'image', count: 1 }],
+          },
+          results: [
+            {
+              type: 'post',
+              id: 'post-1',
+              kind: 'user',
+              authorHandle: 'ada',
+              text: 'Facet scoped result',
+              hashtags: ['evals'],
+              mediaKinds: ['image'],
+              createdAt: '2026-04-15T00:00:00.000Z',
+              likeCount: 3,
+              replyCount: 2,
+              githubEventType: null,
+              githubRepo: null,
+            },
+          ],
+        },
+        errors: [],
+      })
+    })
+
+    window.history.replaceState(
+      {},
+      '',
+      '/search?q=evals&type=posts&hashtag=evals&mediaKind=image',
+    )
+    renderSearchScreen()
+
+    expect(await screen.findByText('Facet scoped result')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hashtags' }))
+
+    expect(await screen.findByText('#evals')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(window.location.search).toBe('?q=evals&type=hashtags&mediaKind=image')
+    })
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '/api/search?q=evals&type=hashtags&filter=mediaKind%3Aimage',
+        ),
+        expect.any(Object),
+      )
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'People' }))
+
+    expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(window.location.search).toBe('?q=evals&type=users')
+    })
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/search?q=evals&type=users',
+        expect.any(Object),
+      )
+    })
+  })
 })

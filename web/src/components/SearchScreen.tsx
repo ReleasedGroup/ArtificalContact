@@ -38,39 +38,82 @@ function normalizeSearchType(value: string | null): SearchResultType {
   return 'posts'
 }
 
+function normalizeFacetValue(value: string | null): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const normalizedValue = value.trim().replace(/^#/, '').toLowerCase()
+  return normalizedValue.length > 0 ? normalizedValue : null
+}
+
+function normalizeFiltersForType(
+  type: SearchResultType,
+  filters: SearchFilters,
+): SearchFilters {
+  const mediaKind = normalizeFacetValue(filters.mediaKind)
+
+  if (type === 'users') {
+    return {
+      hashtag: null,
+      mediaKind: null,
+    }
+  }
+
+  if (type === 'hashtags') {
+    return {
+      hashtag: null,
+      mediaKind,
+    }
+  }
+
+  return {
+    hashtag: normalizeFacetValue(filters.hashtag),
+    mediaKind,
+  }
+}
+
+function normalizeRouteState(state: SearchRouteState): SearchRouteState {
+  return {
+    ...state,
+    filters: normalizeFiltersForType(state.type, state.filters),
+  }
+}
+
 function parseRouteState(
   search: string = window.location.search,
 ): SearchRouteState {
   const params = new URLSearchParams(search)
+  const type = normalizeSearchType(params.get('type'))
 
-  return {
+  return normalizeRouteState({
     query: params.get('q')?.trim() ?? '',
-    type: normalizeSearchType(params.get('type')),
-    filters: {
-      hashtag:
-        params.get('hashtag')?.trim().replace(/^#/, '').toLowerCase() ?? null,
-      mediaKind: params.get('mediaKind')?.trim().toLowerCase() ?? null,
-    },
-  }
+    type,
+    filters: normalizeFiltersForType(type, {
+      hashtag: params.get('hashtag'),
+      mediaKind: params.get('mediaKind'),
+    }),
+  })
 }
 
 function buildSearchHref(state: SearchRouteState): string {
+  const normalizedState = normalizeRouteState(state)
   const params = new URLSearchParams()
 
-  if (state.query.trim().length > 0) {
-    params.set('q', state.query.trim())
+  if (normalizedState.query.trim().length > 0) {
+    params.set('q', normalizedState.query.trim())
   }
 
-  if (state.type !== 'posts') {
-    params.set('type', state.type)
+  if (normalizedState.type !== 'posts') {
+    params.set('type', normalizedState.type)
   }
 
-  if (state.filters.hashtag) {
-    params.set('hashtag', state.filters.hashtag)
+  if (normalizedState.filters.hashtag) {
+    params.set('hashtag', normalizedState.filters.hashtag)
   }
 
-  if (state.filters.mediaKind) {
-    params.set('mediaKind', state.filters.mediaKind)
+  if (normalizedState.filters.mediaKind) {
+    params.set('mediaKind', normalizedState.filters.mediaKind)
   }
 
   const serialized = params.toString()
@@ -198,86 +241,90 @@ function SearchPostsResults(props: { data: SearchPostsData }) {
 
   return (
     <div className="space-y-4">
-      {props.data.results.map((result) => (
-        <article
-          key={result.id}
-          className="rounded-[1.75rem] border border-white/10 bg-slate-950/68 p-5 shadow-xl shadow-slate-950/20"
-        >
-          <div className="flex flex-wrap items-center gap-3 text-sm">
-            {result.authorHandle ? (
-              <a
-                href={`/u/${encodeURIComponent(result.authorHandle)}`}
-                className="font-semibold text-white transition hover:text-cyan-100"
-              >
-                @{result.authorHandle}
-              </a>
-            ) : (
-              <span className="font-semibold text-white">Unknown author</span>
-            )}
-            {result.kind === 'github' && (
-              <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-amber-100">
-                GitHub
-              </span>
-            )}
-            {formatTimestamp(result.createdAt) && (
-              <time className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                {formatTimestamp(result.createdAt)}
-              </time>
-            )}
-          </div>
+      {props.data.results.map((result) => {
+        const formattedCreatedAt = formatTimestamp(result.createdAt)
 
-          <a
-            href={`/p/${encodeURIComponent(result.id)}`}
-            className="mt-4 block rounded-[1.4rem] border border-transparent bg-white/0 px-1 py-1 transition hover:border-white/8 hover:bg-white/4"
+        return (
+          <article
+            key={result.id}
+            className="rounded-[1.75rem] border border-white/10 bg-slate-950/68 p-5 shadow-xl shadow-slate-950/20"
           >
-            <p className="text-sm leading-7 text-slate-200 sm:text-[15px]">
-              {result.text?.trim() ||
-                'This post did not include searchable text.'}
-            </p>
-          </a>
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              {result.authorHandle ? (
+                <a
+                  href={`/u/${encodeURIComponent(result.authorHandle)}`}
+                  className="font-semibold text-white transition hover:text-cyan-100"
+                >
+                  @{result.authorHandle}
+                </a>
+              ) : (
+                <span className="font-semibold text-white">Unknown author</span>
+              )}
+              {result.kind === 'github' && (
+                <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-amber-100">
+                  GitHub
+                </span>
+              )}
+              {formattedCreatedAt && (
+                <time className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                  {formattedCreatedAt}
+                </time>
+              )}
+            </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            {result.hashtags.map((hashtag) => (
-              <a
-                key={`${result.id}-${hashtag}`}
-                href={buildSearchHref({
-                  query: hashtag,
-                  type: 'hashtags',
-                  filters: {
-                    hashtag: null,
-                    mediaKind: null,
-                  },
-                })}
-                className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-[0.16em] text-slate-200 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-cyan-50"
-              >
-                #{hashtag}
-              </a>
-            ))}
-            {result.mediaKinds.map((mediaKind) => (
-              <span
-                key={`${result.id}-${mediaKind}`}
-                className="rounded-full border border-fuchsia-300/20 bg-fuchsia-300/10 px-3 py-1.5 text-xs font-medium uppercase tracking-[0.16em] text-fuchsia-50"
-              >
-                {mediaKind}
+            <a
+              href={`/p/${encodeURIComponent(result.id)}`}
+              className="mt-4 block rounded-[1.4rem] border border-transparent bg-white/0 px-1 py-1 transition hover:border-white/8 hover:bg-white/4"
+            >
+              <p className="text-sm leading-7 text-slate-200 sm:text-[15px]">
+                {result.text?.trim() ||
+                  'This post did not include searchable text.'}
+              </p>
+            </a>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {result.hashtags.map((hashtag) => (
+                <a
+                  key={`${result.id}-${hashtag}`}
+                  href={buildSearchHref({
+                    query: hashtag,
+                    type: 'hashtags',
+                    filters: {
+                      hashtag: null,
+                      mediaKind: null,
+                    },
+                  })}
+                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-[0.16em] text-slate-200 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-cyan-50"
+                >
+                  #{hashtag}
+                </a>
+              ))}
+              {result.mediaKinds.map((mediaKind) => (
+                <span
+                  key={`${result.id}-${mediaKind}`}
+                  className="rounded-full border border-fuchsia-300/20 bg-fuchsia-300/10 px-3 py-1.5 text-xs font-medium uppercase tracking-[0.16em] text-fuchsia-50"
+                >
+                  {mediaKind}
+                </span>
+              ))}
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium uppercase tracking-[0.16em] text-slate-300">
+              <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1.5 text-cyan-100">
+                {formatCount(result.likeCount)} likes
               </span>
-            ))}
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium uppercase tracking-[0.16em] text-slate-300">
-            <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1.5 text-cyan-100">
-              {formatCount(result.likeCount)} likes
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
-              {formatCount(result.replyCount)} replies
-            </span>
-            {result.githubRepo && (
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
-                {result.githubRepo}
+                {formatCount(result.replyCount)} replies
               </span>
-            )}
-          </div>
-        </article>
-      ))}
+              {result.githubRepo && (
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
+                  {result.githubRepo}
+                </span>
+              )}
+            </div>
+          </article>
+        )
+      })}
     </div>
   )
 }
@@ -407,6 +454,10 @@ export function SearchScreen() {
   )
   const [draftQuery, setDraftQuery] = useState(routeState.query)
   const deferredQuery = useDeferredValue(draftQuery.trim())
+  const scopedFilters = useMemo(
+    () => normalizeFiltersForType(routeState.type, routeState.filters),
+    [routeState.filters, routeState.type],
+  )
 
   useEffect(() => {
     const handlePopState = () => {
@@ -428,10 +479,10 @@ export function SearchScreen() {
       return
     }
 
-    const nextState = {
+    const nextState = normalizeRouteState({
       ...routeState,
       query: deferredQuery,
-    }
+    })
 
     replaceBrowserRoute(nextState)
     startTransition(() => {
@@ -444,14 +495,14 @@ export function SearchScreen() {
       'search',
       routeState.query,
       routeState.type,
-      routeState.filters.hashtag,
-      routeState.filters.mediaKind,
+      scopedFilters.hashtag,
+      scopedFilters.mediaKind,
     ],
     queryFn: ({ signal }) =>
       searchSite({
         query: routeState.query,
         type: routeState.type,
-        filters: routeState.filters,
+        filters: scopedFilters,
         signal,
       }),
     retry: false,
@@ -462,29 +513,30 @@ export function SearchScreen() {
   const activeFilters = useMemo(
     () =>
       [
-        routeState.filters.hashtag
+        scopedFilters.hashtag
           ? {
               key: 'hashtag',
-              label: `#${routeState.filters.hashtag}`,
+              label: `#${scopedFilters.hashtag}`,
             }
           : null,
-        routeState.filters.mediaKind
+        scopedFilters.mediaKind
           ? {
               key: 'mediaKind',
-              label: routeState.filters.mediaKind,
+              label: scopedFilters.mediaKind,
             }
           : null,
       ].filter(
         (value): value is { key: 'hashtag' | 'mediaKind'; label: string } =>
           value !== null,
       ),
-    [routeState.filters.hashtag, routeState.filters.mediaKind],
+    [scopedFilters.hashtag, scopedFilters.mediaKind],
   )
 
   const commitRouteState = (nextState: SearchRouteState) => {
-    updateBrowserRoute(nextState)
+    const normalizedState = normalizeRouteState(nextState)
+    updateBrowserRoute(normalizedState)
     startTransition(() => {
-      setRouteState(nextState)
+      setRouteState(normalizedState)
     })
   }
 
