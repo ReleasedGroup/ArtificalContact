@@ -12,7 +12,7 @@ var usersContainerAutoscaleMaxThroughput = 4000
 var mediaContainerThroughput = 400
 var modActionsContainerThroughput = 400
 var notificationPrefsContainerThroughput = 400
-var rateLimitsContainerThroughput = 400
+var sqlDatabaseSharedThroughput = 400
 var reportsContainerThroughput = 400
 
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
@@ -43,6 +43,9 @@ resource sqlDatabase 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2024-05
   parent: cosmosAccount
   name: names.cosmosDatabase
   properties: {
+    options: {
+      throughput: sqlDatabaseSharedThroughput
+    }
     resource: {
       id: names.cosmosDatabase
     }
@@ -318,9 +321,6 @@ resource rateLimitsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases
   parent: sqlDatabase
   name: names.rateLimitsContainer
   properties: {
-    options: {
-      throughput: rateLimitsContainerThroughput
-    }
     resource: {
       id: names.rateLimitsContainer
       partitionKey: {
@@ -330,7 +330,7 @@ resource rateLimitsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases
         ]
         version: 2
       }
-      // Enable per-item TTL values so token buckets can expire independently.
+      // Enable per-document TTL so token bucket windows can expire automatically.
       defaultTtl: -1
     }
   }

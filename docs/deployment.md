@@ -23,10 +23,11 @@ Notification documents use deterministic ids of the form
 workers can safely upsert follow, reply, reaction, and mention notifications
 without duplication.
 
-The Cosmos `rateLimits` container is partitioned on `/userId` and enables
-per-item TTL values (`defaultTtl: -1`) so each token-bucket document can expire
-independently once its bucket has fully refilled. Rate-limit documents use ids of
-the form `${userId}:${endpointClass}`.
+The Cosmos `acn` SQL database provisions 400 RU/s of shared throughput. The
+`rateLimits` container participates in that shared pool, is partitioned on
+`/userId`, and enables per-item TTL values (`defaultTtl: -1`) so each
+token-bucket document can expire independently once its refill window closes.
+Rate-limit documents use ids of the form `${userId}:${endpointClass}`.
 
 ## Local prerequisites
 

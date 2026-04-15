@@ -253,4 +253,110 @@ describe('HomeFeedScreen', () => {
       expect(mockFetch).toHaveBeenCalledTimes(3)
     })
   })
+
+  it('lets the viewer report a feed post from the in-product dialog', async () => {
+    mockFetch.mockImplementation(async (input, init) => {
+      const requestUrl = String(input)
+
+      if (requestUrl === '/api/feed') {
+        return createJsonResponse(200, {
+          data: [
+            createFeedEntry('one', {
+              postId: 'post-one',
+              authorId: 'github:target-1',
+              authorHandle: 'grace',
+              authorDisplayName: 'Grace Hopper',
+              excerpt: 'First page entry',
+            }),
+          ],
+          cursor: null,
+          errors: [],
+        })
+      }
+
+      if (requestUrl === '/api/reports') {
+        expect(init).toMatchObject({
+          method: 'POST',
+        })
+        expect(JSON.parse(String(init?.body ?? '{}'))).toEqual({
+          targetType: 'post',
+          targetId: 'post-one',
+          targetProfileHandle: 'grace',
+          reasonCode: 'spam',
+          details: null,
+        })
+
+        return createJsonResponse(201, {
+          data: {
+            report: {
+              id: 'report-feed-post',
+              status: 'open',
+              targetType: 'post',
+              targetId: 'post-one',
+              reasonCode: 'spam',
+              createdAt: '2026-04-16T08:00:00.000Z',
+            },
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${requestUrl}`)
+    })
+
+    renderHomeFeedScreen()
+
+    expect(await screen.findByText('First page entry')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report post' }))
+    expect(
+      await screen.findByRole('dialog', { name: 'Report this post' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit report' }))
+
+    expect(await screen.findByText('Post report submitted.')).toBeInTheDocument()
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/reports',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    )
+  })
+
+  it('hides the report action when the viewer cannot create reports', async () => {
+    mockFetch.mockImplementation(async (input) => {
+      const requestUrl = String(input)
+
+      if (requestUrl === '/api/feed') {
+        return createJsonResponse(200, {
+          data: [
+            createFeedEntry('one', {
+              postId: 'post-one',
+              authorId: 'github:target-1',
+              authorHandle: 'grace',
+              authorDisplayName: 'Grace Hopper',
+              excerpt: 'First page entry',
+            }),
+          ],
+          cursor: null,
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${requestUrl}`)
+    })
+
+    renderHomeFeedScreen(
+      createViewer({
+        status: 'pending',
+        handle: null,
+      }),
+    )
+
+    expect(await screen.findByText('First page entry')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Report post' }),
+    ).not.toBeInTheDocument()
+  })
 })
