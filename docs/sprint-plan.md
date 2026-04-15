@@ -109,7 +109,7 @@
 
 **Scope**
 - `reactions` container (pk `/postId`, doc id `${postId}:${userId}`)
-- API: `POST /api/posts/{id}/reactions`, `DELETE /api/posts/{id}/reactions`
+- API: `GET /api/posts/{id}/reactions`, `POST /api/posts/{id}/reactions`, `DELETE /api/posts/{id}/reactions`
 - Business rules: like/dislike mutually exclusive; multiple emoji types allowed; GIF responses persist a single opaque `value` on the caller's reaction document and do not contribute to aggregate counters
 - `counterFn` updates aggregate `likes`, `dislikes`, `emoji` counts on the parent post (idempotent upserts)
 - SPA: reaction bar, reaction summary popover, GIF picker (Tenor — see open question)
