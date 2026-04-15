@@ -1,16 +1,18 @@
 import type { Container, SqlQuerySpec } from '@azure/cosmos'
-import { DEFAULT_FOLLOWS_CONTAINER_NAME } from './follows.js'
+import {
+  type AdminMetricsActiveUserBucketRecord,
+  type AdminMetricsBucket,
+  type AdminMetricsCountBucketRecord,
+  type AdminMetricsReadStore,
+  type AdminMetricsReportRecord,
+} from './admin-metrics.js'
 import { getEnvironmentConfig } from './config.js'
 import { createCosmosClient } from './cosmos-client.js'
-import { DEFAULT_NOTIFICATIONS_CONTAINER_NAME } from './notifications.js'
+import { DEFAULT_FOLLOWS_CONTAINER_NAME } from './follows.js'
 import { DEFAULT_POSTS_CONTAINER_NAME } from './posts.js'
 import { DEFAULT_REACTIONS_CONTAINER_NAME } from './reactions.js'
-import {
-  DEFAULT_REPORTS_CONTAINER_NAME,
-  type ReportStatus,
-} from './reports.js'
+import { DEFAULT_REPORTS_CONTAINER_NAME } from './reports.js'
 import { readOptionalValue } from './strings.js'
-import type { AdminMetricsStore } from './admin-metrics.js'
 
 const DEFAULT_USERS_CONTAINER_NAME = 'users'
 
@@ -31,14 +33,159 @@ function toTrimmedString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
-export class CosmosAdminMetricsStore implements AdminMetricsStore {
+function getBucketPrefixLength(bucket: AdminMetricsBucket): number {
+  return bucket === 'hour' ? 13 : 10
+}
+
+async function fetchScalarValue<T>(
+  container: Container,
+  querySpec: SqlQuerySpec,
+): Promise<T | undefined> {
+  const response = await container.items
+    .query<T>(querySpec, {
+      enableQueryControl: true,
+      maxItemCount: 1,
+    })
+    .fetchNext()
+
+  return response.resources?.[0]
+}
+
+async function fetchCountValue(
+  container: Container,
+  querySpec: SqlQuerySpec,
+): Promise<number> {
+  return toCount(await fetchScalarValue<number>(container, querySpec))
+}
+
+async function fetchRows<T>(
+  container: Container,
+  querySpec: SqlQuerySpec,
+): Promise<T[]> {
+  const queryIterator = container.items.query<T>(querySpec, {
+    enableQueryControl: true,
+  })
+  const rows: T[] = []
+
+  while (queryIterator.hasMoreResults()) {
+    const response = await queryIterator.fetchNext()
+    rows.push(...(response.resources ?? []))
+  }
+
+  return rows
+}
+
+function createCountWindowQuery(
+  occurredAtFieldName: string,
+  start: Date,
+  end: Date,
+  extraFilter = '',
+  extraParameters: Array<{ name: string; value: string }> = [],
+): SqlQuerySpec {
+  return {
+    query: `
+      SELECT VALUE COUNT(1)
+      FROM c
+      WHERE ${occurredAtFieldName} >= @start
+        AND ${occurredAtFieldName} < @end${extraFilter}
+    `,
+    parameters: [
+      { name: '@start', value: start.toISOString() },
+      { name: '@end', value: end.toISOString() },
+      ...extraParameters,
+    ],
+  }
+}
+
+function createDistinctActorWindowQuery(
+  userFieldName: string,
+  occurredAtFieldName: string,
+  start: Date,
+  end: Date,
+  extraFilter = '',
+  extraParameters: Array<{ name: string; value: string }> = [],
+): SqlQuerySpec {
+  return {
+    query: `
+      SELECT DISTINCT VALUE ${userFieldName}
+      FROM c
+      WHERE ${occurredAtFieldName} >= @start
+        AND ${occurredAtFieldName} < @end
+        AND IS_DEFINED(${userFieldName})
+        AND NOT IS_NULL(${userFieldName})${extraFilter}
+    `,
+    parameters: [
+      { name: '@start', value: start.toISOString() },
+      { name: '@end', value: end.toISOString() },
+      ...extraParameters,
+    ],
+  }
+}
+
+function createBucketedCountQuery(
+  occurredAtFieldName: string,
+  bucket: AdminMetricsBucket,
+  start: Date,
+  end: Date,
+  extraFilter = '',
+  extraParameters: Array<{ name: string; value: string }> = [],
+): SqlQuerySpec {
+  const prefixLength = getBucketPrefixLength(bucket)
+  const bucketExpression = `SUBSTRING(${occurredAtFieldName}, 0, ${prefixLength})`
+
+  return {
+    query: `
+      SELECT ${bucketExpression} AS bucketKey, COUNT(1) AS count
+      FROM c
+      WHERE ${occurredAtFieldName} >= @start
+        AND ${occurredAtFieldName} < @end${extraFilter}
+      GROUP BY ${bucketExpression}
+    `,
+    parameters: [
+      { name: '@start', value: start.toISOString() },
+      { name: '@end', value: end.toISOString() },
+      ...extraParameters,
+    ],
+  }
+}
+
+function createBucketedDistinctActorQuery(
+  userFieldName: string,
+  occurredAtFieldName: string,
+  bucket: AdminMetricsBucket,
+  start: Date,
+  end: Date,
+  extraFilter = '',
+  extraParameters: Array<{ name: string; value: string }> = [],
+): SqlQuerySpec {
+  const prefixLength = getBucketPrefixLength(bucket)
+  const bucketExpression = `SUBSTRING(${occurredAtFieldName}, 0, ${prefixLength})`
+
+  return {
+    query: `
+      SELECT ${bucketExpression} AS bucketKey, ${userFieldName} AS userId
+      FROM c
+      WHERE ${occurredAtFieldName} >= @start
+        AND ${occurredAtFieldName} < @end
+        AND IS_DEFINED(${userFieldName})
+        AND NOT IS_NULL(${userFieldName})${extraFilter}
+      GROUP BY ${bucketExpression}, ${userFieldName}
+    `,
+    parameters: [
+      { name: '@start', value: start.toISOString() },
+      { name: '@end', value: end.toISOString() },
+      ...extraParameters,
+    ],
+  }
+}
+
+export class CosmosAdminMetricsStore implements AdminMetricsReadStore {
   constructor(
     private readonly usersContainer: Container,
     private readonly postsContainer: Container,
-    private readonly followsContainer: Container,
     private readonly reactionsContainer: Container,
+    private readonly followsContainer: Container,
     private readonly reportsContainer: Container,
-    private readonly notificationsContainer: Container,
   ) {}
 
   static fromEnvironment(): CosmosAdminMetricsStore {
@@ -62,243 +209,367 @@ export class CosmosAdminMetricsStore implements AdminMetricsStore {
           DEFAULT_POSTS_CONTAINER_NAME,
       ),
       database.container(
-        readOptionalValue(process.env.FOLLOWS_CONTAINER_NAME) ??
-          DEFAULT_FOLLOWS_CONTAINER_NAME,
-      ),
-      database.container(
         readOptionalValue(process.env.REACTIONS_CONTAINER_NAME) ??
           DEFAULT_REACTIONS_CONTAINER_NAME,
+      ),
+      database.container(
+        readOptionalValue(process.env.FOLLOWS_CONTAINER_NAME) ??
+          DEFAULT_FOLLOWS_CONTAINER_NAME,
       ),
       database.container(
         readOptionalValue(process.env.REPORTS_CONTAINER_NAME) ??
           DEFAULT_REPORTS_CONTAINER_NAME,
       ),
-      database.container(
-        readOptionalValue(process.env.NOTIFICATIONS_CONTAINER_NAME) ??
-          DEFAULT_NOTIFICATIONS_CONTAINER_NAME,
-      ),
     )
   }
 
-  async countRegistrations(): Promise<number> {
-    return this.countValues(this.usersContainer, {
-      query: `
-        SELECT VALUE COUNT(1) FROM c
-        WHERE c.type = @type
-      `,
-      parameters: [{ name: '@type', value: 'user' }],
-    })
-  }
-
-  async countRegistrationsSince(since: string): Promise<number> {
-    return this.countValues(this.usersContainer, {
-      query: `
-        SELECT VALUE COUNT(1) FROM c
-        WHERE c.type = @type
-          AND IS_DEFINED(c.createdAt)
-          AND c.createdAt >= @since
-      `,
-      parameters: [
-        { name: '@type', value: 'user' },
-        { name: '@since', value: since },
-      ],
-    })
-  }
-
-  async listUserIdsWithPostsSince(since: string): Promise<string[]> {
-    return this.listStringValues(this.postsContainer, {
-      query: `
-        SELECT VALUE c.authorId FROM c
-        WHERE c.kind = @kind
-          AND IS_DEFINED(c.authorId)
-          AND NOT IS_NULL(c.authorId)
-          AND IS_DEFINED(c.createdAt)
-          AND c.createdAt >= @since
-      `,
-      parameters: [
-        { name: '@kind', value: 'user' },
-        { name: '@since', value: since },
-      ],
-    })
-  }
-
-  async listUserIdsWithReactionsSince(since: string): Promise<string[]> {
-    return this.listStringValues(this.reactionsContainer, {
-      query: `
-        SELECT VALUE c.userId FROM c
-        WHERE c.type = @type
-          AND IS_DEFINED(c.userId)
-          AND NOT IS_NULL(c.userId)
-          AND IS_DEFINED(c.updatedAt)
-          AND c.updatedAt >= @since
-      `,
-      parameters: [
-        { name: '@type', value: 'reaction' },
-        { name: '@since', value: since },
-      ],
-    })
-  }
-
-  async listUserIdsWithFollowsSince(since: string): Promise<string[]> {
-    return this.listStringValues(this.followsContainer, {
-      query: `
-        SELECT VALUE c.followerId FROM c
-        WHERE c.type = @type
-          AND IS_DEFINED(c.followerId)
-          AND NOT IS_NULL(c.followerId)
-          AND IS_DEFINED(c.createdAt)
-          AND c.createdAt >= @since
-          AND (NOT IS_DEFINED(c.deletedAt) OR IS_NULL(c.deletedAt))
-      `,
-      parameters: [
-        { name: '@type', value: 'follow' },
-        { name: '@since', value: since },
-      ],
-    })
-  }
-
-  async listUserIdsWithReportsSince(since: string): Promise<string[]> {
-    return this.listStringValues(this.reportsContainer, {
-      query: `
-        SELECT VALUE c.reporterId FROM c
-        WHERE c.type = @type
-          AND IS_DEFINED(c.reporterId)
-          AND NOT IS_NULL(c.reporterId)
-          AND IS_DEFINED(c.createdAt)
-          AND c.createdAt >= @since
-      `,
-      parameters: [
-        { name: '@type', value: 'report' },
-        { name: '@since', value: since },
-      ],
-    })
-  }
-
-  async countRootPostsSince(since: string): Promise<number> {
-    return this.countValues(this.postsContainer, {
-      query: `
-        SELECT VALUE COUNT(1) FROM c
-        WHERE c.kind = @kind
-          AND c.type = @type
-          AND IS_DEFINED(c.createdAt)
-          AND c.createdAt >= @since
-      `,
-      parameters: [
-        { name: '@kind', value: 'user' },
-        { name: '@type', value: 'post' },
-        { name: '@since', value: since },
-      ],
-    })
-  }
-
-  async countRepliesSince(since: string): Promise<number> {
-    return this.countValues(this.postsContainer, {
-      query: `
-        SELECT VALUE COUNT(1) FROM c
-        WHERE c.kind = @kind
-          AND c.type = @type
-          AND IS_DEFINED(c.createdAt)
-          AND c.createdAt >= @since
-      `,
-      parameters: [
-        { name: '@kind', value: 'user' },
-        { name: '@type', value: 'reply' },
-        { name: '@since', value: since },
-      ],
-    })
-  }
-
-  async countReports(): Promise<number> {
-    return this.countValues(this.reportsContainer, {
-      query: `
-        SELECT VALUE COUNT(1) FROM c
-        WHERE c.type = @type
-      `,
-      parameters: [{ name: '@type', value: 'report' }],
-    })
-  }
-
-  async countReportsSince(since: string): Promise<number> {
-    return this.countValues(this.reportsContainer, {
-      query: `
-        SELECT VALUE COUNT(1) FROM c
-        WHERE c.type = @type
-          AND IS_DEFINED(c.createdAt)
-          AND c.createdAt >= @since
-      `,
-      parameters: [
-        { name: '@type', value: 'report' },
-        { name: '@since', value: since },
-      ],
-    })
-  }
-
-  async countReportsByStatus(status: ReportStatus): Promise<number> {
-    return this.countValues(this.reportsContainer, {
-      query: `
-        SELECT VALUE COUNT(1) FROM c
-        WHERE c.type = @type
-          AND c.status = @status
-      `,
-      parameters: [
-        { name: '@type', value: 'report' },
-        { name: '@status', value: status },
-      ],
-    })
-  }
-
-  async countReportsUpdatedSince(
-    since: string,
-    status: Extract<ReportStatus, 'triaged' | 'resolved'>,
-  ): Promise<number> {
-    return this.countValues(this.reportsContainer, {
-      query: `
-        SELECT VALUE COUNT(1) FROM c
-        WHERE c.type = @type
-          AND c.status = @status
-          AND IS_DEFINED(c.updatedAt)
-          AND c.updatedAt >= @since
-      `,
-      parameters: [
-        { name: '@type', value: 'report' },
-        { name: '@status', value: status },
-        { name: '@since', value: since },
-      ],
-    })
-  }
-
-  async countNotificationsSince(since: string): Promise<number> {
-    return this.countValues(this.notificationsContainer, {
-      query: `
-        SELECT VALUE COUNT(1) FROM c
-        WHERE (
+  countRegistrations(start: Date, end: Date): Promise<number> {
+    return fetchCountValue(
+      this.usersContainer,
+      createCountWindowQuery(
+        'c.createdAt',
+        start,
+        end,
+        `
+        AND (
           NOT IS_DEFINED(c.type)
           OR IS_NULL(c.type)
           OR c.type = @type
         )
-          AND IS_DEFINED(c.createdAt)
-          AND c.createdAt >= @since
+      `,
+        [{ name: '@type', value: 'user' }],
+      ),
+    )
+  }
+
+  countPosts(start: Date, end: Date): Promise<number> {
+    return fetchCountValue(
+      this.postsContainer,
+      createCountWindowQuery(
+        'c.createdAt',
+        start,
+        end,
+        `
+        AND (
+          c.type = @postType
+          OR c.type = @replyType
+        )
+        AND (
+          NOT IS_DEFINED(c.kind)
+          OR IS_NULL(c.kind)
+          OR c.kind = @kind
+        )
+      `,
+        [
+          { name: '@postType', value: 'post' },
+          { name: '@replyType', value: 'reply' },
+          { name: '@kind', value: 'user' },
+        ],
+      ),
+    )
+  }
+
+  async listActiveUsers(start: Date, end: Date): Promise<string[]> {
+    const [registrations, posts, reactions, follows, reports] =
+      await Promise.all([
+        fetchRows<string>(
+          this.usersContainer,
+          createDistinctActorWindowQuery(
+            'c.id',
+            'c.createdAt',
+            start,
+            end,
+            `
+            AND (
+              NOT IS_DEFINED(c.type)
+              OR IS_NULL(c.type)
+              OR c.type = @type
+            )
+          `,
+            [{ name: '@type', value: 'user' }],
+          ),
+        ),
+        fetchRows<string>(
+          this.postsContainer,
+          createDistinctActorWindowQuery(
+            'c.authorId',
+            'c.createdAt',
+            start,
+            end,
+            `
+            AND (
+              c.type = @postType
+              OR c.type = @replyType
+            )
+            AND (
+              NOT IS_DEFINED(c.kind)
+              OR IS_NULL(c.kind)
+              OR c.kind = @kind
+            )
+          `,
+            [
+              { name: '@postType', value: 'post' },
+              { name: '@replyType', value: 'reply' },
+              { name: '@kind', value: 'user' },
+            ],
+          ),
+        ),
+        fetchRows<string>(
+          this.reactionsContainer,
+          createDistinctActorWindowQuery(
+            'c.userId',
+            'c.updatedAt',
+            start,
+            end,
+            `
+            AND c.type = @type
+          `,
+            [{ name: '@type', value: 'reaction' }],
+          ),
+        ),
+        fetchRows<string>(
+          this.followsContainer,
+          createDistinctActorWindowQuery(
+            'c.followerId',
+            'c.createdAt',
+            start,
+            end,
+            `
+            AND c.type = @type
+          `,
+            [{ name: '@type', value: 'follow' }],
+          ),
+        ),
+        fetchRows<string>(
+          this.reportsContainer,
+          createDistinctActorWindowQuery(
+            'c.reporterId',
+            'c.createdAt',
+            start,
+            end,
+            `
+            AND (
+              NOT IS_DEFINED(c.type)
+              OR IS_NULL(c.type)
+              OR c.type = @type
+            )
+          `,
+            [{ name: '@type', value: 'report' }],
+          ),
+        ),
+      ])
+
+    return [
+      ...new Set(
+        [...registrations, ...posts, ...reactions, ...follows, ...reports]
+          .map((value) => toTrimmedString(value))
+          .filter((value): value is string => value !== null),
+      ),
+    ]
+  }
+
+  listRegistrationBuckets(
+    start: Date,
+    end: Date,
+    bucket: AdminMetricsBucket,
+  ): Promise<AdminMetricsCountBucketRecord[]> {
+    return fetchRows<AdminMetricsCountBucketRecord>(
+      this.usersContainer,
+      createBucketedCountQuery(
+        'c.createdAt',
+        bucket,
+        start,
+        end,
+        `
+        AND (
+          NOT IS_DEFINED(c.type)
+          OR IS_NULL(c.type)
+          OR c.type = @type
+        )
+      `,
+        [{ name: '@type', value: 'user' }],
+      ),
+    )
+  }
+
+  listPostBuckets(
+    start: Date,
+    end: Date,
+    bucket: AdminMetricsBucket,
+  ): Promise<AdminMetricsCountBucketRecord[]> {
+    return fetchRows<AdminMetricsCountBucketRecord>(
+      this.postsContainer,
+      createBucketedCountQuery(
+        'c.createdAt',
+        bucket,
+        start,
+        end,
+        `
+        AND (
+          c.type = @postType
+          OR c.type = @replyType
+        )
+        AND (
+          NOT IS_DEFINED(c.kind)
+          OR IS_NULL(c.kind)
+          OR c.kind = @kind
+        )
+      `,
+        [
+          { name: '@postType', value: 'post' },
+          { name: '@replyType', value: 'reply' },
+          { name: '@kind', value: 'user' },
+        ],
+      ),
+    )
+  }
+
+  async listActiveUserBuckets(
+    start: Date,
+    end: Date,
+    bucket: AdminMetricsBucket,
+  ): Promise<AdminMetricsActiveUserBucketRecord[]> {
+    const [registrations, posts, reactions, follows, reports] =
+      await Promise.all([
+        fetchRows<AdminMetricsActiveUserBucketRecord>(
+          this.usersContainer,
+          createBucketedDistinctActorQuery(
+            'c.id',
+            'c.createdAt',
+            bucket,
+            start,
+            end,
+            `
+            AND (
+              NOT IS_DEFINED(c.type)
+              OR IS_NULL(c.type)
+              OR c.type = @type
+            )
+          `,
+            [{ name: '@type', value: 'user' }],
+          ),
+        ),
+        fetchRows<AdminMetricsActiveUserBucketRecord>(
+          this.postsContainer,
+          createBucketedDistinctActorQuery(
+            'c.authorId',
+            'c.createdAt',
+            bucket,
+            start,
+            end,
+            `
+            AND (
+              c.type = @postType
+              OR c.type = @replyType
+            )
+            AND (
+              NOT IS_DEFINED(c.kind)
+              OR IS_NULL(c.kind)
+              OR c.kind = @kind
+            )
+          `,
+            [
+              { name: '@postType', value: 'post' },
+              { name: '@replyType', value: 'reply' },
+              { name: '@kind', value: 'user' },
+            ],
+          ),
+        ),
+        fetchRows<AdminMetricsActiveUserBucketRecord>(
+          this.reactionsContainer,
+          createBucketedDistinctActorQuery(
+            'c.userId',
+            'c.updatedAt',
+            bucket,
+            start,
+            end,
+            `
+            AND c.type = @type
+          `,
+            [{ name: '@type', value: 'reaction' }],
+          ),
+        ),
+        fetchRows<AdminMetricsActiveUserBucketRecord>(
+          this.followsContainer,
+          createBucketedDistinctActorQuery(
+            'c.followerId',
+            'c.createdAt',
+            bucket,
+            start,
+            end,
+            `
+            AND c.type = @type
+          `,
+            [{ name: '@type', value: 'follow' }],
+          ),
+        ),
+        fetchRows<AdminMetricsActiveUserBucketRecord>(
+          this.reportsContainer,
+          createBucketedDistinctActorQuery(
+            'c.reporterId',
+            'c.createdAt',
+            bucket,
+            start,
+            end,
+            `
+            AND (
+              NOT IS_DEFINED(c.type)
+              OR IS_NULL(c.type)
+              OR c.type = @type
+            )
+          `,
+            [{ name: '@type', value: 'report' }],
+          ),
+        ),
+      ])
+
+    return [
+      ...registrations,
+      ...posts,
+      ...reactions,
+      ...follows,
+      ...reports,
+    ]
+  }
+
+  listReportTimeline(
+    previousStart: Date,
+    end: Date,
+  ): Promise<AdminMetricsReportRecord[]> {
+    return fetchRows<AdminMetricsReportRecord>(this.reportsContainer, {
+      query: `
+        SELECT
+          c.createdAt,
+          c.triagedAt,
+          c.status,
+          c.reporterId
+        FROM c
+        WHERE c.createdAt < @end
+          AND (
+            NOT IS_DEFINED(c.type)
+            OR IS_NULL(c.type)
+            OR c.type = @type
+          )
+          AND (
+            c.createdAt >= @previousStart
+            OR (
+              NOT IS_DEFINED(c.status)
+              OR IS_NULL(c.status)
+              OR LOWER(c.status) = 'open'
+            )
+            OR (
+              IS_DEFINED(c.triagedAt)
+              AND NOT IS_NULL(c.triagedAt)
+              AND c.triagedAt >= @previousStart
+            )
+          )
       `,
       parameters: [
-        { name: '@type', value: 'notification' },
-        { name: '@since', value: since },
+        { name: '@end', value: end.toISOString() },
+        { name: '@previousStart', value: previousStart.toISOString() },
+        { name: '@type', value: 'report' },
       ],
     })
-  }
-
-  private async countValues(container: Container, querySpec: SqlQuerySpec): Promise<number> {
-    const { resources } = await container.items.query<number>(querySpec).fetchAll()
-    return toCount(resources[0])
-  }
-
-  private async listStringValues(
-    container: Container,
-    querySpec: SqlQuerySpec,
-  ): Promise<string[]> {
-    const { resources } = await container.items.query<string>(querySpec).fetchAll()
-    return resources
-      .map((value) => toTrimmedString(value))
-      .filter((value): value is string => value !== null)
   }
 }
 

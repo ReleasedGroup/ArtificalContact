@@ -1,124 +1,19 @@
 import type { HttpRequest, InvocationContext } from '@azure/functions'
 import { describe, expect, it, vi } from 'vitest'
+import { buildGetAdminMetricsHandler } from '../src/functions/get-admin-metrics.js'
 import { CLIENT_PRINCIPAL_HEADER } from '../src/lib/auth.js'
 import {
-  loadAdminMetricsSnapshot,
-  type AdminMetricsStore,
+  lookupAdminMetrics,
+  type AdminMetricsActiveUserBucketRecord,
+  type AdminMetricsCountBucketRecord,
+  type AdminMetricsReadStore,
+  type AdminMetricsReportRecord,
 } from '../src/lib/admin-metrics.js'
-import {
-  buildGetAdminMetricsHandler,
-} from '../src/functions/get-admin-metrics.js'
-import { withHttpAuth } from '../src/lib/http-auth.js'
 import type { UserDocument, UserRepository } from '../src/lib/users.js'
-
-function createStoredUser(overrides: Partial<UserDocument> = {}): UserDocument {
-  return {
-    id: 'github:abc123',
-    type: 'user',
-    identityProvider: 'github',
-    identityProviderUserId: 'abc123',
-    email: 'nick@example.com',
-    emailLower: 'nick@example.com',
-    handle: 'nick',
-    handleLower: 'nick',
-    displayName: 'Nick Beaugeard',
-    expertise: ['llm'],
-    links: {
-      website: 'https://example.com',
-    },
-    status: 'active',
-    roles: ['admin', 'user'],
-    counters: {
-      posts: 3,
-      followers: 8,
-      following: 5,
-    },
-    createdAt: '2026-04-15T00:00:00.000Z',
-    updatedAt: '2026-04-15T01:00:00.000Z',
-    ...overrides,
-  }
-}
-
-function createContext(user: UserDocument | null = createStoredUser()) {
-  return {
-    auth: user
-      ? {
-          isAuthenticated: true,
-          principal: null,
-          user,
-          roles: user.roles,
-        }
-      : undefined,
-    log: vi.fn(),
-  } as unknown as InvocationContext
-}
-
-function createStore(): AdminMetricsStore {
-  return {
-    countRegistrations: vi.fn(async () => 42),
-    countRegistrationsSince: vi.fn(async (since: string) =>
-      since.includes('2026-04-15T12:')
-        ? 2
-        : since.includes('2026-04-09T12:')
-          ? 9
-          : 17,
-    ),
-    listUserIdsWithPostsSince: vi.fn(async () => ['user-1', ' user-2 ']),
-    listUserIdsWithReactionsSince: vi.fn(async () => ['user-2', 'user-3']),
-    listUserIdsWithFollowsSince: vi.fn(async () => ['user-4']),
-    listUserIdsWithReportsSince: vi.fn(async () => ['user-1', '']),
-    countRootPostsSince: vi.fn(async (since: string) =>
-      since.includes('2026-04-15T12:')
-        ? 3
-        : since.includes('2026-04-09T12:')
-          ? 11
-          : 24,
-    ),
-    countRepliesSince: vi.fn(async (since: string) =>
-      since.includes('2026-04-15T12:')
-        ? 4
-        : since.includes('2026-04-09T12:')
-          ? 12
-          : 28,
-    ),
-    countReports: vi.fn(async () => 16),
-    countReportsSince: vi.fn(async (since: string) =>
-      since.includes('2026-04-15T12:')
-        ? 1
-        : since.includes('2026-04-09T12:')
-          ? 5
-          : 8,
-    ),
-    countReportsByStatus: vi.fn(async (status) =>
-      status === 'open' ? 6 : status === 'triaged' ? 4 : 6,
-    ),
-    countReportsUpdatedSince: vi.fn(async (since: string, status) => {
-      if (status === 'triaged') {
-        return since.includes('2026-04-15T12:')
-          ? 1
-          : since.includes('2026-04-09T12:')
-            ? 3
-            : 4
-      }
-
-      return since.includes('2026-04-15T12:')
-        ? 2
-        : since.includes('2026-04-09T12:')
-          ? 5
-          : 7
-    }),
-    countNotificationsSince: vi.fn(async (since: string) =>
-      since.includes('2026-04-15T12:')
-        ? 14
-        : since.includes('2026-04-09T12:')
-          ? 70
-          : 123,
-    ),
-  }
-}
 
 function createPrincipalRequest(
   principal?: Record<string, unknown>,
+  searchParams = new URLSearchParams(),
 ): HttpRequest {
   const encodedPrincipal = principal
     ? Buffer.from(JSON.stringify(principal)).toString('base64')
@@ -134,7 +29,7 @@ function createPrincipalRequest(
         return encodedPrincipal
       },
     },
-    query: new URLSearchParams(),
+    query: searchParams,
   } as unknown as HttpRequest
 }
 
@@ -143,137 +38,259 @@ function createAuthenticatedPrincipal(
 ): Record<string, unknown> {
   return {
     identityProvider: 'github',
-    userId: 'abc123',
-    userDetails: 'nickbeau',
+    userId: 'admin-1',
+    userDetails: 'platform-admin',
     userRoles: ['authenticated', 'user', 'admin'],
     claims: [],
     ...overrides,
   }
 }
 
-describe('loadAdminMetricsSnapshot', () => {
-  it('builds the admin metrics payload from the store counts and activity sets', async () => {
-    const result = await loadAdminMetricsSnapshot(
-      createStore(),
-      new Date('2026-04-16T12:00:00.000Z'),
+function createStoredUser(overrides: Partial<UserDocument> = {}): UserDocument {
+  return {
+    id: 'github:admin-1',
+    type: 'user',
+    identityProvider: 'github',
+    identityProviderUserId: 'admin-1',
+    email: 'admin@example.com',
+    emailLower: 'admin@example.com',
+    handle: 'platform-admin',
+    handleLower: 'platform-admin',
+    displayName: 'Platform Admin',
+    expertise: ['ops'],
+    links: {},
+    status: 'active',
+    roles: ['admin', 'user'],
+    counters: {
+      posts: 0,
+      followers: 0,
+      following: 0,
+    },
+    createdAt: '2026-04-10T00:00:00.000Z',
+    updatedAt: '2026-04-16T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function createRepository(user: UserDocument | null): UserRepository {
+  return {
+    create: async (createdUser) => createdUser,
+    getById: vi.fn(async () => user),
+    upsert: async (updatedUser) => updatedUser,
+  }
+}
+
+function createContext(): InvocationContext {
+  return {
+    log: vi.fn(),
+  } as unknown as InvocationContext
+}
+
+function createCountBucket(
+  bucketKey: string,
+  count: number,
+): AdminMetricsCountBucketRecord {
+  return {
+    bucketKey,
+    count,
+  }
+}
+
+function createActiveUserBucket(
+  bucketKey: string,
+  userId: string,
+): AdminMetricsActiveUserBucketRecord {
+  return {
+    bucketKey,
+    userId,
+  }
+}
+
+function createReportRecord(
+  overrides: Partial<AdminMetricsReportRecord> = {},
+): AdminMetricsReportRecord {
+  return {
+    createdAt: '2026-04-15T06:20:00.000Z',
+    triagedAt: null,
+    status: 'open',
+    reporterId: 'github:reporter-1',
+    ...overrides,
+  }
+}
+
+describe('lookupAdminMetrics', () => {
+  it('aggregates summaries and series for the selected range', async () => {
+    const store = {
+      countRegistrations: vi.fn(async (start: Date) =>
+        start.toISOString() === '2026-04-09T00:00:00.000Z' ? 1 : 1,
+      ),
+      countPosts: vi.fn(async (start: Date) =>
+        start.toISOString() === '2026-04-09T00:00:00.000Z' ? 1 : 1,
+      ),
+      listActiveUsers: vi.fn(async (start: Date) =>
+        start.toISOString() === '2026-04-09T00:00:00.000Z'
+          ? ['github:user-1', 'github:user-4', 'github:user-6']
+          : ['github:user-2', 'github:user-3', 'github:user-5'],
+      ),
+      listRegistrationBuckets: vi.fn(async () => [
+        createCountBucket('2026-04-15', 1),
+      ]),
+      listPostBuckets: vi.fn(async () => [createCountBucket('2026-04-15', 1)]),
+      listActiveUserBuckets: vi.fn(async () => [
+        createActiveUserBucket('2026-04-15', 'github:user-1'),
+        createActiveUserBucket('2026-04-15', 'github:user-4'),
+        createActiveUserBucket('2026-04-15', 'github:user-6'),
+      ]),
+      listReportTimeline: vi.fn(async () => [
+        createReportRecord(),
+        createReportRecord({
+          createdAt: '2026-04-14T03:00:00.000Z',
+          triagedAt: '2026-04-15T02:30:00.000Z',
+          status: 'triaged',
+          reporterId: 'github:reporter-2',
+        }),
+        createReportRecord({
+          createdAt: '2026-04-07T02:00:00.000Z',
+          triagedAt: '2026-04-08T22:00:00.000Z',
+          status: 'resolved',
+          reporterId: 'github:reporter-3',
+        }),
+      ]),
+    } satisfies AdminMetricsReadStore
+
+    const result = await lookupAdminMetrics(
+      '7d',
+      store,
+      () => new Date('2026-04-15T12:00:00.000Z'),
     )
 
-    expect(result).toEqual({
-      generatedAt: '2026-04-16T12:00:00.000Z',
-      windowStarts: {
-        last24Hours: '2026-04-15T12:00:00.000Z',
-        last7Days: '2026-04-09T12:00:00.000Z',
-        last30Days: '2026-03-17T12:00:00.000Z',
-      },
+    expect(result.status).toBe(200)
+    expect(result.body.data?.filters).toEqual({
+      range: '7d',
+      bucket: 'day',
+      startAt: '2026-04-09T00:00:00.000Z',
+      endAt: '2026-04-16T00:00:00.000Z',
+      generatedAt: '2026-04-15T12:00:00.000Z',
+    })
+    expect(result.body.data?.summary).toMatchObject({
       registrations: {
-        total: 42,
-        last24Hours: 2,
-        last7Days: 9,
-        last30Days: 17,
+        value: 1,
+        previousValue: 1,
+        changePercent: 0,
       },
-      dailyActiveUsers: 4,
+      activeUsers: {
+        value: 3,
+        previousValue: 3,
+        changePercent: 0,
+      },
       posts: {
-        last24Hours: {
-          total: 7,
-          rootPosts: 3,
-          replies: 4,
-        },
-        last7Days: {
-          total: 23,
-          rootPosts: 11,
-          replies: 12,
-        },
-        last30Days: {
-          total: 52,
-          rootPosts: 24,
-          replies: 28,
-        },
+        value: 1,
+        previousValue: 1,
+        changePercent: 0,
       },
       reports: {
-        total: 16,
-        created: {
-          last24Hours: 1,
-          last7Days: 5,
-          last30Days: 8,
-        },
-        byStatus: {
-          open: 6,
-          triaged: 4,
-          resolved: 6,
-        },
+        value: 2,
+        previousValue: 1,
+        changePercent: 100,
       },
       queueDepth: {
-        openReports: 6,
+        value: 1,
+        previousValue: 0,
+        changePercent: null,
       },
-      moderation: {
-        last24Hours: {
-          triaged: 1,
-          resolved: 2,
-          reviewed: 3,
-        },
-        last7Days: {
-          triaged: 3,
-          resolved: 5,
-          reviewed: 8,
-        },
-        last30Days: {
-          triaged: 4,
-          resolved: 7,
-          reviewed: 11,
-        },
-      },
-      notifications: {
-        last24Hours: 14,
-        last7Days: 70,
-        last30Days: 123,
-      },
+    })
+    expect(result.body.data?.series.at(-1)).toEqual({
+      bucketStart: '2026-04-15T00:00:00.000Z',
+      bucketEnd: '2026-04-16T00:00:00.000Z',
+      registrations: 1,
+      activeUsers: 3,
+      posts: 1,
+      reports: 1,
+      queueDepth: 1,
     })
   })
 })
 
-describe('buildGetAdminMetricsHandler', () => {
-  it('returns the admin metrics in the standard JSON envelope', async () => {
+describe('getAdminMetricsHandler', () => {
+  it('returns metrics for an authenticated admin', async () => {
     const handler = buildGetAdminMetricsHandler({
-      now: () => new Date('2026-04-16T12:00:00.000Z'),
-      storeFactory: createStore,
+      now: () => new Date('2026-04-15T12:00:00.000Z'),
+      repositoryFactory: () => createRepository(createStoredUser()),
+      storeFactory: () =>
+        ({
+          countRegistrations: async () => 1,
+          countPosts: async () => 1,
+          listActiveUsers: async () => ['github:user-1'],
+          listRegistrationBuckets: async () => [
+            createCountBucket('2026-04-15', 1),
+          ],
+          listPostBuckets: async () => [createCountBucket('2026-04-15', 1)],
+          listActiveUserBuckets: async () => [
+            createActiveUserBucket('2026-04-15', 'github:user-1'),
+          ],
+          listReportTimeline: async () => [createReportRecord()],
+        }) satisfies AdminMetricsReadStore,
     })
 
-    const response = await handler({} as HttpRequest, createContext())
+    const response = await handler(
+      createPrincipalRequest(createAuthenticatedPrincipal()),
+      createContext(),
+    )
 
     expect(response.status).toBe(200)
-    expect(response.headers).toEqual({
-      'cache-control': 'no-store',
-      'content-type': 'application/json; charset=utf-8',
-    })
     expect(response.jsonBody).toMatchObject({
       data: {
-        registrations: {
-          total: 42,
+        filters: {
+          range: '7d',
         },
-        dailyActiveUsers: 4,
-        queueDepth: {
-          openReports: 6,
+        summary: {
+          registrations: {
+            value: 1,
+          },
+          posts: {
+            value: 1,
+          },
+          reports: {
+            value: 1,
+          },
         },
       },
       errors: [],
     })
   })
 
-  it('returns 403 when invoked without an authenticated admin user context', async () => {
+  it('rejects invalid ranges', async () => {
     const handler = buildGetAdminMetricsHandler({
-      storeFactory: createStore,
+      repositoryFactory: () => createRepository(createStoredUser()),
+      storeFactory: () =>
+        ({
+          countRegistrations: async () => 0,
+          countPosts: async () => 0,
+          listActiveUsers: async () => [],
+          listRegistrationBuckets: async () => [],
+          listPostBuckets: async () => [],
+          listActiveUserBuckets: async () => [],
+          listReportTimeline: async () => [],
+        }) satisfies AdminMetricsReadStore,
     })
 
-    const response = await handler({} as HttpRequest, createContext(null))
+    const response = await handler(
+      createPrincipalRequest(
+        createAuthenticatedPrincipal(),
+        new URLSearchParams('range=90d'),
+      ),
+      createContext(),
+    )
 
-    expect(response.status).toBe(403)
+    expect(response.status).toBe(400)
     expect(response.jsonBody).toEqual({
       data: null,
       errors: [
         {
-          code: 'auth.forbidden',
+          code: 'invalid_range',
           message:
-            'The authenticated user must have a provisioned admin profile before reading admin metrics.',
+            "The range query parameter must be one of '24h', '7d', or '30d'.",
+          field: 'range',
         },
       ],
     })
@@ -281,12 +298,16 @@ describe('buildGetAdminMetricsHandler', () => {
 
   it('returns 500 when the store cannot be configured', async () => {
     const handler = buildGetAdminMetricsHandler({
+      repositoryFactory: () => createRepository(createStoredUser()),
       storeFactory: () => {
         throw new Error('missing config')
       },
     })
 
-    const response = await handler({} as HttpRequest, createContext())
+    const response = await handler(
+      createPrincipalRequest(createAuthenticatedPrincipal()),
+      createContext(),
+    )
 
     expect(response.status).toBe(500)
     expect(response.jsonBody).toEqual({
@@ -299,36 +320,34 @@ describe('buildGetAdminMetricsHandler', () => {
       ],
     })
   })
-})
 
-describe('getAdminMetricsHandler', () => {
-  it('rejects non-admin users before the handler body runs', async () => {
-    const repository: UserRepository = {
-      create: async (user) => user,
-      getById: vi.fn(async () =>
-        createStoredUser({
-          roles: ['user'],
-        }),
-      ),
-      upsert: async (user) => user,
-    }
+  it('rejects authenticated users without the admin role', async () => {
     const handler = buildGetAdminMetricsHandler({
-      storeFactory: createStore,
+      repositoryFactory: () =>
+        createRepository(
+          createStoredUser({
+            roles: ['user'],
+          }),
+        ),
+      storeFactory: () =>
+        ({
+          countRegistrations: async () => 0,
+          countPosts: async () => 0,
+          listActiveUsers: async () => [],
+          listRegistrationBuckets: async () => [],
+          listPostBuckets: async () => [],
+          listActiveUserBuckets: async () => [],
+          listReportTimeline: async () => [],
+        }) satisfies AdminMetricsReadStore,
     })
 
-    const protectedHandler = withHttpAuth(handler, {
-      requiredRoles: ['admin'],
-      repositoryFactory: () => repository,
-    })
-    const response = await protectedHandler(
+    const response = await handler(
       createPrincipalRequest(
         createAuthenticatedPrincipal({
           userRoles: ['authenticated', 'user'],
         }),
       ),
-      {
-        log: vi.fn(),
-      } as unknown as InvocationContext,
+      createContext(),
     )
 
     expect(response.status).toBe(403)
@@ -341,29 +360,5 @@ describe('getAdminMetricsHandler', () => {
         },
       ],
     })
-  })
-
-  it('allows admin users through the exported auth wrapper', async () => {
-    const repository: UserRepository = {
-      create: async (user) => user,
-      getById: vi.fn(async () => createStoredUser()),
-      upsert: async (user) => user,
-    }
-    const handler = buildGetAdminMetricsHandler({
-      now: () => new Date('2026-04-16T12:00:00.000Z'),
-      storeFactory: createStore,
-    })
-
-    const response = await withHttpAuth(handler, {
-      requiredRoles: ['admin'],
-      repositoryFactory: () => repository,
-    })(
-      createPrincipalRequest(createAuthenticatedPrincipal()),
-      {
-        log: vi.fn(),
-      } as unknown as InvocationContext,
-    )
-
-    expect(response.status).toBe(200)
   })
 })

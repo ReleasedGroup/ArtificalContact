@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
   type ReactElement,
 } from 'react'
+import { AdminMetricsScreen } from './components/AdminMetricsScreen'
 import { ComposerPreviewPanel } from './components/ComposerPreviewPanel'
 import { DirectBlobUploadCard } from './components/DirectBlobUploadCard'
 import { HomeFeedScreen } from './components/HomeFeedScreen'
@@ -38,6 +39,7 @@ import { initializeTelemetry } from './lib/telemetry'
 
 type AppRoute =
   | { kind: 'home' }
+  | { kind: 'adminMetrics' }
   | { kind: 'me' }
   | { kind: 'moderation' }
   | { kind: 'notifications' }
@@ -143,6 +145,10 @@ function getCurrentRoute(
 
   if (/^\/me\/?$/.test(pathname)) {
     return { kind: 'me' }
+  }
+
+  if (/^\/admin\/metrics\/?$/.test(pathname)) {
+    return { kind: 'adminMetrics' }
   }
 
   if (/^\/notifications\/?$/.test(pathname)) {
@@ -342,6 +348,10 @@ function App() {
     return <ProfileEditorScreen />
   }
 
+  if (route.kind === 'adminMetrics') {
+    return <AdminMetricsRouteScreen />
+  }
+
   if (route.kind === 'notifications') {
     return <NotificationsRouteScreen />
   }
@@ -443,6 +453,19 @@ function NotificationsRouteScreen() {
       errorLabel="Notification feed unavailable"
       errorTitle="The session check failed"
       render={(viewer) => <NotificationsScreen viewer={viewer} />}
+    />
+  )
+}
+
+function AdminMetricsRouteScreen() {
+  return (
+    <OptionalMeGate
+      loadingLabel="Admin metrics"
+      loadingTitle="Loading the admin metrics dashboard"
+      loadingBody="Checking the current Static Web Apps session before loading the administrator-only metrics surface."
+      errorLabel="Admin metrics unavailable"
+      errorTitle="The session check failed"
+      render={(viewer) => <AdminMetricsScreen viewer={viewer} />}
     />
   )
 }

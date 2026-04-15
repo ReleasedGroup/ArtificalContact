@@ -157,7 +157,7 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 | `report` | POST `/api/reports` | `{ targetType: "post" \| "reply" \| "media" \| "user", targetId, reason, details? }` |
 | `modQueue` | GET `/api/mod/queue` | Moderator role only |
 | `modAction` | POST `/api/mod/actions` | Moderator role only — `{ action: "hidePost" \| "removePost" \| "suspendAccount" \| "dismissReport", targetId, reportId?, notes? }` |
-| `adminMetrics` | GET `/api/admin/metrics` | Administrator role only |
+| `adminMetrics` | GET `/api/admin/metrics?range=24h\|7d\|30d` | Administrator role only — returns registrations, active users, posts, reports, queue depth, and a bucketed series for the selected range |
 | `listSyncedRepos` | GET `/api/admin/github/repos` | Administrator only — lists curated GitHub repositories with sync health |
 | `addSyncedRepo` | POST `/api/admin/github/repos` | Administrator only — `{ owner, name, eventTypes[] }` |
 | `updateSyncedRepo` | PATCH `/api/admin/github/repos/{id}` | Administrator only — pause/resume, change event types |
