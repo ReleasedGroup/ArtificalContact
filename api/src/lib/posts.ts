@@ -152,9 +152,25 @@ export interface PostRepository extends PostStore {
   create(post: UserPostDocument): Promise<UserPostDocument>
 }
 
+export interface MutablePostStore extends PostStore {
+  upsertPost(post: StoredPostDocument): Promise<StoredPostDocument>
+}
+
 export interface PostLookupResult {
   status: 200 | 400 | 404
   body: ApiEnvelope<PublicPost | null>
+}
+
+export interface DeletedPost {
+  id: string
+  threadId: string
+  deletedAt: string
+  alreadyDeleted: boolean
+}
+
+export interface PostDeletionResult {
+  status: 200 | 400 | 403 | 404
+  body: ApiEnvelope<DeletedPost | null>
 }
 
 function toNullableString(value: unknown): string | null {
@@ -268,6 +284,37 @@ function toPostType(post: StoredPostDocument): 'post' | 'reply' {
 
 function toPostKind(post: StoredPostDocument): 'user' | 'github' {
   return toNullableString(post.kind) === 'github' ? 'github' : 'user'
+}
+
+function normalizeRoles(roles: readonly string[]): string[] {
+  return [
+    ...new Set(roles.map((role) => role.trim().toLowerCase()).filter(Boolean)),
+  ]
+}
+
+function canDeletePost(
+  post: StoredPostDocument,
+  actorUserId: string,
+  actorRoles: readonly string[],
+): boolean {
+  if (toNullableString(post.authorId) === actorUserId) {
+    return true
+  }
+
+  return actorRoles.includes('moderator')
+}
+
+function buildDeletedPostSummary(
+  post: StoredPostDocument,
+  deletedAt: string,
+  alreadyDeleted: boolean,
+): DeletedPost {
+  return {
+    id: post.id,
+    threadId: toNullableString(post.threadId) ?? post.id,
+    deletedAt,
+    alreadyDeleted,
+  }
 }
 
 export function isPubliclyVisiblePost(post: StoredPostDocument): boolean {
@@ -415,6 +462,103 @@ export function buildPublicPost(post: StoredPostDocument): PublicPost {
     createdAt: toNullableString(post.createdAt),
     updatedAt: toNullableString(post.updatedAt),
     github: toGitHubMetadata(post.github),
+  }
+}
+
+export async function softDeletePost(
+  postId: string | undefined,
+  actor: {
+    userId: string
+    roles: readonly string[]
+  },
+  store: MutablePostStore,
+  now: () => Date = () => new Date(),
+): Promise<PostDeletionResult> {
+  const normalizedPostId = toNullableString(postId)
+  if (normalizedPostId === null) {
+    return {
+      status: 400,
+      body: {
+        data: null,
+        errors: [
+          {
+            code: 'invalid_post_id',
+            message: 'The post id path parameter is required.',
+            field: 'id',
+          },
+        ],
+      },
+    }
+  }
+
+  const post = await store.getPostById(normalizedPostId)
+  if (post === null) {
+    return {
+      status: 404,
+      body: {
+        data: null,
+        errors: [
+          {
+            code: 'post_not_found',
+            message: 'No post exists for the requested id.',
+            field: 'id',
+          },
+        ],
+      },
+    }
+  }
+
+  const normalizedActorRoles = normalizeRoles(actor.roles)
+  if (!canDeletePost(post, actor.userId, normalizedActorRoles)) {
+    return {
+      status: 403,
+      body: {
+        data: null,
+        errors: [
+          {
+            code: 'post_delete_forbidden',
+            message: 'Only the author or a moderator can delete this post.',
+          },
+        ],
+      },
+    }
+  }
+
+  const existingDeletedAt = toNullableString(post.deletedAt)
+  if (existingDeletedAt !== null) {
+    return {
+      status: 200,
+      body: {
+        data: buildDeletedPostSummary(post, existingDeletedAt, true),
+        errors: [],
+      },
+    }
+  }
+
+  const deletedAt = now().toISOString()
+  const deletedPost: StoredPostDocument = {
+    ...post,
+    text: null,
+    updatedAt: deletedAt,
+    deletedAt,
+    ...(post.github === null || post.github === undefined
+      ? {}
+      : {
+          github: {
+            ...post.github,
+            bodyExcerpt: null,
+          },
+        }),
+  }
+
+  await store.upsertPost(deletedPost)
+
+  return {
+    status: 200,
+    body: {
+      data: buildDeletedPostSummary(post, deletedAt, false),
+      errors: [],
+    },
   }
 }
 
