@@ -3,6 +3,7 @@ param names object
 param tags object = {}
 
 var usersContainerAutoscaleMaxThroughput = 4000
+var postsContainerAutoscaleMaxThroughput = 10000
 
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
   name: names.cosmosAccount
@@ -83,7 +84,31 @@ resource usersContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/cont
   }
 }
 
+resource postsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
+  parent: sqlDatabase
+  name: names.postsContainer
+  properties: {
+    resource: {
+      id: names.postsContainer
+      partitionKey: {
+        kind: 'Hash'
+        paths: [
+          '/threadId'
+        ]
+        version: 2
+      }
+    }
+    options: {
+      // Cosmos autoscale uses the max RU/s ceiling only, so 10000 yields an effective 1000-10000 RU/s range.
+      autoscaleSettings: {
+        maxThroughput: postsContainerAutoscaleMaxThroughput
+      }
+    }
+  }
+}
+
 output accountName string = cosmosAccount.name
 output databaseName string = sqlDatabase.name
 output endpoint string = cosmosAccount.properties.documentEndpoint
+output postsContainerName string = postsContainer.name
 output usersContainerName string = usersContainer.name
