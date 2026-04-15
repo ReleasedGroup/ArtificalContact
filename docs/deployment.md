@@ -69,3 +69,11 @@ The following repository variables are required:
 The Functions app's managed identity also needs Cosmos DB data-plane access to the
 `users` container because authenticated HTTP middleware resolves user profiles from
 that store.
+
+For the Sprint 3 media upload pipeline, the Functions app also needs:
+
+- Storage Blob Data Contributor on the media storage account so `POST /api/media/upload-url` can request user delegation keys with managed identity
+- `BLOB_SERVICE_URL` set to the Blob service endpoint, for example `https://<account>.blob.core.windows.net`
+- `MEDIA_BASE_URL` set to the eventual public media host when Front Door/CDN is in front of Blob Storage
+- Optional container overrides via `MEDIA_IMAGES_CONTAINER_NAME`, `MEDIA_GIF_CONTAINER_NAME`, `MEDIA_AUDIO_CONTAINER_NAME`, and `MEDIA_VIDEO_CONTAINER_NAME`
+- Optional `MEDIA_UPLOAD_SAS_TTL_MINUTES` between `1` and `15`; the default is `15`
