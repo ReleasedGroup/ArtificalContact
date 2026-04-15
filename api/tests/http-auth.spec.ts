@@ -25,6 +25,19 @@ function createPrincipalRequest(
   } as unknown as HttpRequest
 }
 
+function createAuthenticatedPrincipal(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    identityProvider: 'github',
+    userId: 'abc123',
+    userDetails: 'nickbeau',
+    userRoles: ['authenticated', 'user'],
+    claims: [],
+    ...overrides,
+  }
+}
+
 function createStoredUser(overrides: Partial<UserDocument> = {}): UserDocument {
   return {
     id: 'github:abc123',
@@ -111,6 +124,38 @@ describe('withHttpAuth', () => {
     })
   })
 
+  it('returns 401 for protected routes with a malformed principal header', async () => {
+    const handler = withHttpAuth(
+      async () => createSuccessResponse({ ok: true }),
+      {
+        repositoryFactory: () => ({
+          create: async (user) => user,
+          getById: async () => null,
+          upsert: async (user) => user,
+        }),
+      },
+    )
+
+    const response = await handler(
+      createPrincipalRequest({
+        identityProvider: 'github',
+        claims: [],
+      }),
+      createContext(),
+    )
+
+    expect(response.status).toBe(401)
+    expect(response.jsonBody).toEqual({
+      data: null,
+      errors: [
+        {
+          code: 'auth.invalid_principal',
+          message: 'The authentication context is invalid.',
+        },
+      ],
+    })
+  })
+
   it('returns 403 when the authenticated user has no provisioned profile', async () => {
     const repository: UserRepository = {
       create: async (user) => user,
@@ -148,49 +193,72 @@ describe('withHttpAuth', () => {
     })
   })
 
-  it('attaches the resolved user and roles for an authorized request', async () => {
-    const repository: UserRepository = {
-      create: async (user) => user,
-      getById: vi.fn(async () =>
-        createStoredUser({
-          roles: ['moderator', 'user'],
-        }),
-      ),
-      upsert: async (user) => user,
-    }
-    const innerHandler = vi.fn(
-      async (_request: HttpRequest, context: InvocationContext) =>
-        createSuccessResponse({
-          userId: context.auth?.user?.id ?? null,
-          roles: context.auth?.roles ?? [],
-        }),
-    )
-    const handler = withHttpAuth(innerHandler, {
+  it.each([
+    {
+      label: 'user',
+      principalRoles: ['authenticated', 'user'],
+      storedRoles: ['user'],
+      requiredRoles: ['user'],
+      expectedRoles: ['user'],
+    },
+    {
+      label: 'moderator',
+      principalRoles: ['authenticated', 'user', 'moderator'],
+      storedRoles: ['moderator', 'user'],
       requiredRoles: ['moderator'],
-      repositoryFactory: () => repository,
-    })
+      expectedRoles: ['moderator', 'user'],
+    },
+    {
+      label: 'admin',
+      principalRoles: ['authenticated', 'user', 'admin'],
+      storedRoles: ['admin', 'moderator', 'user'],
+      requiredRoles: ['admin'],
+      expectedRoles: ['admin', 'moderator', 'user'],
+    },
+  ])(
+    'attaches the resolved $label roles for an authorized request',
+    async ({ principalRoles, storedRoles, requiredRoles, expectedRoles }) => {
+      const repository: UserRepository = {
+        create: async (user) => user,
+        getById: vi.fn(async () =>
+          createStoredUser({
+            roles: storedRoles,
+          }),
+        ),
+        upsert: async (user) => user,
+      }
+      const innerHandler = vi.fn(
+        async (_request: HttpRequest, context: InvocationContext) =>
+          createSuccessResponse({
+            userId: context.auth?.user?.id ?? null,
+            roles: context.auth?.roles ?? [],
+          }),
+      )
+      const handler = withHttpAuth(innerHandler, {
+        requiredRoles,
+        repositoryFactory: () => repository,
+      })
 
-    const response = await handler(
-      createPrincipalRequest({
-        identityProvider: 'github',
-        userId: 'abc123',
-        userDetails: 'nickbeau',
-        userRoles: ['authenticated', 'user'],
-        claims: [],
-      }),
-      createContext(),
-    )
+      const response = await handler(
+        createPrincipalRequest(
+          createAuthenticatedPrincipal({
+            userRoles: principalRoles,
+          }),
+        ),
+        createContext(),
+      )
 
-    expect(response.status).toBe(200)
-    expect(response.jsonBody).toEqual({
-      data: {
-        userId: 'github:abc123',
-        roles: ['moderator', 'user'],
-      },
-      errors: [],
-    })
-    expect(innerHandler).toHaveBeenCalledOnce()
-  })
+      expect(response.status).toBe(200)
+      expect(response.jsonBody).toEqual({
+        data: {
+          userId: 'github:abc123',
+          roles: expectedRoles,
+        },
+        errors: [],
+      })
+      expect(innerHandler).toHaveBeenCalledOnce()
+    },
+  )
 
   it('returns 403 when the resolved user lacks a required role', async () => {
     const repository: UserRepository = {
@@ -207,13 +275,7 @@ describe('withHttpAuth', () => {
     )
 
     const response = await handler(
-      createPrincipalRequest({
-        identityProvider: 'github',
-        userId: 'abc123',
-        userDetails: 'nickbeau',
-        userRoles: ['authenticated', 'user'],
-        claims: [],
-      }),
+      createPrincipalRequest(createAuthenticatedPrincipal()),
       createContext(),
     )
 
@@ -245,13 +307,7 @@ describe('withHttpAuth', () => {
     })
 
     const response = await handler(
-      createPrincipalRequest({
-        identityProvider: 'github',
-        userId: 'abc123',
-        userDetails: 'nickbeau',
-        userRoles: ['authenticated', 'user'],
-        claims: [],
-      }),
+      createPrincipalRequest(createAuthenticatedPrincipal()),
       createContext(),
     )
 
@@ -326,11 +382,7 @@ describe('withHttpAuth', () => {
     )
 
     const request = createPrincipalRequest({
-      identityProvider: 'github',
-      userId: 'abc123',
-      userDetails: 'nickbeau',
-      userRoles: ['authenticated', 'user'],
-      claims: [],
+      ...createAuthenticatedPrincipal(),
     })
 
     await handler(request, createContext())
