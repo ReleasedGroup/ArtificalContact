@@ -143,6 +143,7 @@ output cosmosEndpoint string = cosmos.outputs.endpoint
 output cosmosFeedsContainerName string = cosmos.outputs.feedsContainerName
 output cosmosFollowersContainerName string = cosmos.outputs.followersContainerName
 output cosmosFollowsContainerName string = cosmos.outputs.followsContainerName
+output cosmosGithubReposContainerName string = cosmos.outputs.githubReposContainerName
 output cosmosMediaContainerName string = cosmos.outputs.mediaContainerName
 output cosmosModActionsContainerName string = cosmos.outputs.modActionsContainerName
 output cosmosNotificationPrefsContainerName string = cosmos.outputs.notificationPrefsContainerName
