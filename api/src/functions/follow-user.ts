@@ -20,6 +20,7 @@ import {
   lookupPublicUserProfile,
   type UserProfileStore,
 } from '../lib/user-profile.js'
+import { withRateLimit } from '../lib/rate-limit.js'
 
 export interface FollowUserHandlerDependencies {
   now?: () => Date
@@ -235,7 +236,11 @@ export function buildFollowUserHandler(
   }
 }
 
-export const followUserHandler = withHttpAuth(buildFollowUserHandler())
+export const followUserHandler = withHttpAuth(
+  withRateLimit(buildFollowUserHandler(), {
+    endpointClass: 'follows',
+  }),
+)
 
 export function registerFollowUserFunction() {
   app.http('followUser', {

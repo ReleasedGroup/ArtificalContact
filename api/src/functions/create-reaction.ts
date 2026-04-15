@@ -22,6 +22,7 @@ import {
   type ReactionPolicy,
   type ReactionRepository,
 } from '../lib/reactions.js'
+import { withRateLimit } from '../lib/rate-limit.js'
 
 export interface CreateReactionHandlerDependencies {
   now?: () => Date
@@ -271,7 +272,11 @@ export function buildCreateReactionHandler(
   }
 }
 
-export const createReactionHandler = withHttpAuth(buildCreateReactionHandler())
+export const createReactionHandler = withHttpAuth(
+  withRateLimit(buildCreateReactionHandler(), {
+    endpointClass: 'reactions',
+  }),
+)
 
 export function registerCreateReactionFunction() {
   app.http('createReaction', {

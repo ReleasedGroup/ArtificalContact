@@ -18,6 +18,7 @@ import {
   mapReportValidationIssues,
   type ReportRepository,
 } from '../lib/reports.js'
+import { withRateLimit } from '../lib/rate-limit.js'
 
 export interface CreateReportHandlerDependencies {
   idFactory?: () => string
@@ -129,7 +130,11 @@ export function buildCreateReportHandler(
   }
 }
 
-export const createReportHandler = withHttpAuth(buildCreateReportHandler())
+export const createReportHandler = withHttpAuth(
+  withRateLimit(buildCreateReportHandler(), {
+    endpointClass: 'reports',
+  }),
+)
 
 export function registerCreateReportFunction() {
   app.http('createReport', {

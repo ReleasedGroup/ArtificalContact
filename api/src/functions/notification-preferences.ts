@@ -21,6 +21,7 @@ import {
   toNotificationPreferencesView,
   updateNotificationPreferencesRequestSchema,
 } from '../lib/notification-preferences.js'
+import { withRateLimit } from '../lib/rate-limit.js'
 
 export interface NotificationPreferencesHandlerDependencies {
   now?: () => Date
@@ -196,7 +197,9 @@ export function buildUpdateNotificationPreferencesHandler(
 export const getNotificationPreferencesHandler =
   buildGetNotificationPreferencesHandler()
 export const updateNotificationPreferencesHandler =
-  buildUpdateNotificationPreferencesHandler()
+  withRateLimit(buildUpdateNotificationPreferencesHandler(), {
+    endpointClass: 'notifications',
+  })
 
 export function registerNotificationPreferencesFunctions() {
   app.http('getNotificationPreferences', {

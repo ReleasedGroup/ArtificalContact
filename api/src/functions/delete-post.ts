@@ -8,10 +8,16 @@ import { createErrorResponse, createJsonEnvelopeResponse } from '../lib/api-enve
 import { CosmosPostStore } from '../lib/cosmos-post-store.js'
 import { withHttpAuth } from '../lib/http-auth.js'
 import { softDeletePost, type MutablePostStore } from '../lib/posts.js'
+import {
+  createRateLimitRepository,
+  withRateLimit,
+  type RateLimitRepository,
+} from '../lib/rate-limit.js'
 import { createUserRepository, type UserRepository } from '../lib/users.js'
 
 export interface DeletePostHandlerDependencies {
   now?: () => Date
+  rateLimitRepositoryFactory?: () => RateLimitRepository
   repositoryFactory?: () => UserRepository
   storeFactory?: () => MutablePostStore
 }
@@ -27,6 +33,8 @@ export function buildDeletePostHandler(
   dependencies: DeletePostHandlerDependencies = {},
 ) {
   const now = dependencies.now ?? (() => new Date())
+  const rateLimitRepositoryFactory =
+    dependencies.rateLimitRepositoryFactory ?? createRateLimitRepository
   const repositoryFactory =
     dependencies.repositoryFactory ?? (() => createUserRepository())
   const storeFactory = dependencies.storeFactory ?? getStore
@@ -97,9 +105,15 @@ export function buildDeletePostHandler(
     }
   }
 
-  return withHttpAuth(deletePostHandler, {
-    repositoryFactory,
-  })
+  return withHttpAuth(
+    withRateLimit(deletePostHandler, {
+      endpointClass: 'posts',
+      repositoryFactory: rateLimitRepositoryFactory,
+    }),
+    {
+      repositoryFactory,
+    },
+  )
 }
 
 export const deletePostHandler = buildDeletePostHandler()

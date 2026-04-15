@@ -20,6 +20,7 @@ import {
   type ReactionDocument,
   type ReactionRepository,
 } from '../lib/reactions.js'
+import { withRateLimit } from '../lib/rate-limit.js'
 
 export interface DeleteReactionHandlerDependencies {
   now?: () => Date
@@ -269,7 +270,11 @@ export function buildDeleteReactionHandler(
   }
 }
 
-export const deleteReactionHandler = withHttpAuth(buildDeleteReactionHandler())
+export const deleteReactionHandler = withHttpAuth(
+  withRateLimit(buildDeleteReactionHandler(), {
+    endpointClass: 'reactions',
+  }),
+)
 
 export function registerDeleteReactionFunction() {
   app.http('deleteReaction', {

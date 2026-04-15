@@ -20,6 +20,7 @@ import {
   resolvePostMaxLength,
   type ReadablePostRepository,
 } from '../lib/posts.js'
+import { withRateLimit } from '../lib/rate-limit.js'
 
 export interface CreateReplyHandlerDependencies {
   idFactory?: () => string
@@ -192,7 +193,11 @@ export function buildCreateReplyHandler(
   }
 }
 
-export const createReplyHandler = withHttpAuth(buildCreateReplyHandler())
+export const createReplyHandler = withHttpAuth(
+  withRateLimit(buildCreateReplyHandler(), {
+    endpointClass: 'posts',
+  }),
+)
 
 export function registerCreateReplyFunction() {
   app.http('replyToPost', {

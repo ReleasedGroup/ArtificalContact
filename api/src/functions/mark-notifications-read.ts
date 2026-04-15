@@ -17,6 +17,7 @@ import {
   mapMarkNotificationsReadValidationIssues,
   type NotificationRepository,
 } from '../lib/notifications.js'
+import { withRateLimit } from '../lib/rate-limit.js'
 
 export interface MarkNotificationsReadHandlerDependencies {
   now?: () => Date
@@ -205,7 +206,9 @@ export function buildMarkNotificationsReadHandler(
 }
 
 export const markNotificationsReadHandler = withHttpAuth(
-  buildMarkNotificationsReadHandler(),
+  withRateLimit(buildMarkNotificationsReadHandler(), {
+    endpointClass: 'notifications',
+  }),
 )
 
 export function registerMarkNotificationsReadFunction() {
