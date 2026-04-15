@@ -36,7 +36,6 @@ interface NotificationApiRecord {
   actorDisplayName?: string | null
   actorAvatarUrl?: string | null
 }
-
 export interface NotificationActor {
   id: string | null
   handle: string | null

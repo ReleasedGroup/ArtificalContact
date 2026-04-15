@@ -1,4 +1,5 @@
 import { registerCreateReplyFunction } from './functions/create-reply.js'
+import { registerCreateReportFunction } from './functions/create-report.js'
 import { registerCreateReactionFunction } from './functions/create-reaction.js'
 import { registerCounterFunction } from './functions/counter.js'
 import { registerDeleteFollowFunction } from './functions/delete-follow.js'
@@ -20,6 +21,7 @@ import { registerCreatePostFunction } from './functions/create-post.js'
 import { registerListFollowingFunction } from './functions/list-following.js'
 import { registerGetUserFunction } from './functions/get-user.js'
 import { registerHealthFunction } from './functions/health.js'
+import { registerMarkNotificationsReadFunction } from './functions/mark-notifications-read.js'
 import { registerMediaUploadUrlFunction } from './functions/media-upload-url.js'
 import { registerMediaPostProcessFunctions } from './functions/media-post-process.js'
 import { registerNotificationFunctions } from './functions/notification.js'
@@ -31,6 +33,7 @@ import { registerAuthMeFunction } from './functions/me.js'
 import { registerSearchSyncFunctions } from './functions/search-sync.js'
 
 registerCreateReplyFunction()
+registerCreateReportFunction()
 registerCreateReactionFunction()
 registerCounterFunction()
 registerDeleteFollowFunction()
@@ -52,6 +55,7 @@ registerCreatePostFunction()
 registerListFollowingFunction()
 registerGetUserFunction()
 registerHealthFunction()
+registerMarkNotificationsReadFunction()
 registerMediaUploadUrlFunction()
 registerMediaPostProcessFunctions()
 registerNotificationFunctions()

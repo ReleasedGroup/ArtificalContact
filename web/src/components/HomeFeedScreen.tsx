@@ -7,6 +7,7 @@ import {
   useState,
   type TouchEvent,
 } from 'react'
+import { NotificationBell } from './NotificationBell'
 import type { MeProfile } from '../lib/me'
 import { getFeedPage, type FeedEntry } from '../lib/feed'
 import { signOut } from '../lib/auth'
@@ -52,7 +53,10 @@ function getPostHref(postId: string): string {
   return `/p/${encodeURIComponent(postId)}`
 }
 
-function buildMonogram(source: string | null | undefined, fallback: string): string {
+function buildMonogram(
+  source: string | null | undefined,
+  fallback: string,
+): string {
   const resolvedSource = source?.trim() || fallback
   const words = resolvedSource.split(/\s+/).filter(Boolean)
 
@@ -136,7 +140,8 @@ function FeedCard({ entry }: { entry: FeedEntry }) {
             className="mt-4 block rounded-[1.4rem] border border-transparent bg-white/0 px-1 py-1 transition hover:border-white/8 hover:bg-white/4"
           >
             <p className="text-sm leading-7 text-slate-200 sm:text-[15px]">
-              {entry.excerpt?.trim() || 'This feed item does not include an excerpt yet.'}
+              {entry.excerpt?.trim() ||
+                'This feed item does not include an excerpt yet.'}
             </p>
           </a>
 
@@ -154,7 +159,9 @@ function FeedCard({ entry }: { entry: FeedEntry }) {
                     >
                       <img
                         src={media.thumbUrl}
-                        alt={media.kind ? `${media.kind} preview` : 'Media preview'}
+                        alt={
+                          media.kind ? `${media.kind} preview` : 'Media preview'
+                        }
                         className="h-40 w-full object-cover"
                       />
                     </a>
@@ -412,12 +419,7 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
               <HeaderSearchBox />
 
               <div className="flex flex-wrap items-center gap-3">
-                <a
-                  href="/notifications"
-                  className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
-                >
-                  Notifications
-                </a>
+                <NotificationBell />
                 <a
                   href="/me"
                   className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
@@ -468,7 +470,9 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                 className="transition-transform duration-150 ease-out"
                 style={{
                   transform:
-                    pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
+                    pullDistance > 0
+                      ? `translateY(${pullDistance}px)`
+                      : undefined,
                 }}
               >
                 <div
@@ -501,7 +505,9 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
 
                 {isError && (
                   <article className="rounded-[1.75rem] border border-rose-400/20 bg-rose-400/10 p-6 text-rose-50">
-                    <h2 className="text-xl font-semibold">Feed lookup failed</h2>
+                    <h2 className="text-xl font-semibold">
+                      Feed lookup failed
+                    </h2>
                     <p className="mt-3 text-sm leading-7 text-rose-100/90">
                       {error instanceof Error
                         ? error.message
@@ -519,85 +525,79 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                   </article>
                 )}
 
-                {!isPending &&
-                  !isError &&
-                  feedEntries.length === 0 && (
-                    <article className="rounded-[1.75rem] border border-dashed border-white/12 bg-slate-900/55 p-8 text-center">
-                      <p className="text-sm font-medium uppercase tracking-[0.24em] text-cyan-100/80">
-                        Feed waiting for activity
+                {!isPending && !isError && feedEntries.length === 0 && (
+                  <article className="rounded-[1.75rem] border border-dashed border-white/12 bg-slate-900/55 p-8 text-center">
+                    <p className="text-sm font-medium uppercase tracking-[0.24em] text-cyan-100/80">
+                      Feed waiting for activity
+                    </p>
+                    <h2 className="mt-4 text-2xl font-semibold text-white">
+                      No posts have landed in your home feed yet
+                    </h2>
+                    <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-300">
+                      Follow more practitioners and their next posts will
+                      materialise here through the Cosmos-backed feed fan-out
+                      pipeline.
+                    </p>
+                    <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                      <a
+                        href="/me"
+                        className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
+                      >
+                        Finish your profile
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleRefresh()
+                        }}
+                        className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/35 hover:bg-cyan-300/15"
+                      >
+                        Check again
+                      </button>
+                    </div>
+                  </article>
+                )}
+
+                {!isPending && !isError && feedEntries.length > 0 && (
+                  <div className="space-y-4">
+                    {feedEntries.map((entry) => (
+                      <FeedCard key={entry.id} entry={entry} />
+                    ))}
+                  </div>
+                )}
+
+                {!isPending && !isError && feedEntries.length > 0 && (
+                  <div className="pb-4 pt-5">
+                    <div ref={sentinelRef} className="h-1 w-full" />
+
+                    {isFetchingNextPage && (
+                      <p className="mt-4 text-center text-sm text-slate-400">
+                        Loading older feed entries…
                       </p>
-                      <h2 className="mt-4 text-2xl font-semibold text-white">
-                        No posts have landed in your home feed yet
-                      </h2>
-                      <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-300">
-                        Follow more practitioners and their next posts will
-                        materialise here through the Cosmos-backed feed fan-out
-                        pipeline.
+                    )}
+
+                    {!hasNextPage && (
+                      <p className="mt-4 text-center text-sm text-slate-500">
+                        You&apos;ve reached the end of the currently
+                        materialised feed.
                       </p>
-                      <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                        <a
-                          href="/me"
-                          className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
-                        >
-                          Finish your profile
-                        </a>
+                    )}
+
+                    {!intersectionObserverAvailable && hasNextPage && (
+                      <div className="mt-4 flex justify-center">
                         <button
                           type="button"
                           onClick={() => {
-                            void handleRefresh()
+                            void fetchNextPage()
                           }}
-                          className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/35 hover:bg-cyan-300/15"
+                          className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
                         >
-                          Check again
+                          Load older entries
                         </button>
                       </div>
-                    </article>
-                  )}
-
-                {!isPending &&
-                  !isError &&
-                  feedEntries.length > 0 && (
-                    <div className="space-y-4">
-                      {feedEntries.map((entry) => (
-                        <FeedCard key={entry.id} entry={entry} />
-                      ))}
-                    </div>
-                  )}
-
-                {!isPending &&
-                  !isError &&
-                  feedEntries.length > 0 && (
-                    <div className="pb-4 pt-5">
-                      <div ref={sentinelRef} className="h-1 w-full" />
-
-                      {isFetchingNextPage && (
-                        <p className="mt-4 text-center text-sm text-slate-400">
-                          Loading older feed entries…
-                        </p>
-                      )}
-
-                      {!hasNextPage && (
-                        <p className="mt-4 text-center text-sm text-slate-500">
-                          You&apos;ve reached the end of the currently materialised
-                          feed.
-                        </p>
-                      )}
-
-                      {!intersectionObserverAvailable && hasNextPage && (
-                          <div className="mt-4 flex justify-center">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                void fetchNextPage()
-                              }}
-                              className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
-                            >
-                              Load older entries
-                            </button>
-                          </div>
-                        )}
-                    </div>
-                  )}
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </section>

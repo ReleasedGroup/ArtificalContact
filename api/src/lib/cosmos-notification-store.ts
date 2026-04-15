@@ -12,6 +12,19 @@ import {
 import { readOptionalValue } from './strings.js'
 import { DEFAULT_COSMOS_DATABASE_NAME } from './users-by-handle-mirror.js'
 
+type CosmosLikeError = Error & {
+  code?: number | string
+  statusCode?: number
+}
+
+function isNotFound(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  const cosmosError = error as CosmosLikeError
+  return cosmosError.statusCode === 404 || cosmosError.code === 404
+}
 function createCosmosClientFromEnvironment(): CosmosClient {
   const config = getEnvironmentConfig()
 
@@ -129,5 +142,55 @@ export class CosmosNotificationStore
       .fetchAll()
 
     return resources[0] ?? 0
+  }
+
+  async listNotificationsByActorAndWindow(
+    targetUserId: string,
+    eventType: NotificationDocument['eventType'],
+    actorUserId: string,
+    windowStart: string,
+    windowEndExclusive: string,
+  ): Promise<NotificationDocument[]> {
+    const { resources } = await this.notificationsContainer.items
+      .query<NotificationDocument>(
+        {
+          query: `
+            SELECT * FROM c
+            WHERE c.targetUserId = @targetUserId
+              AND c.eventType = @eventType
+              AND c.actorUserId = @actorUserId
+              AND c.createdAt >= @windowStart
+              AND c.createdAt < @windowEndExclusive
+          `,
+          parameters: [
+            { name: '@targetUserId', value: targetUserId },
+            { name: '@eventType', value: eventType },
+            { name: '@actorUserId', value: actorUserId },
+            { name: '@windowStart', value: windowStart },
+            { name: '@windowEndExclusive', value: windowEndExclusive },
+          ],
+        },
+        {
+          partitionKey: targetUserId,
+        },
+      )
+      .fetchAll()
+
+    return resources
+  }
+
+  async deleteNotification(
+    targetUserId: string,
+    notificationId: string,
+  ): Promise<void> {
+    try {
+      await this.notificationsContainer.item(notificationId, targetUserId).delete()
+    } catch (error) {
+      if (isNotFound(error)) {
+        return
+      }
+
+      throw error
+    }
   }
 }

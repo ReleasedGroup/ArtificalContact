@@ -6,7 +6,7 @@ Sprint 0 provisions the Azure and GitHub scaffolding required to start feature d
 
 - Azure Static Web Apps (Standard)
 - Azure Functions (Flex Consumption)
-- Azure Cosmos DB for NoSQL + `acn` database with `users`, `usersByHandle`, `posts`, `follows`, `followers`, `reactions`, `feeds`, `notifications`, `notificationPrefs`, and `media` containers
+- Azure Cosmos DB for NoSQL + `acn` database with `users`, `usersByHandle`, `posts`, `follows`, `followers`, `reactions`, `feeds`, `notifications`, `notificationPrefs`, `media`, `reports`, and `modActions` containers
 - Azure Storage account + placeholder blob containers
 - Azure AI Search (Basic)
 - Azure Front Door (Standard) with cache rules for blob delivery
@@ -93,6 +93,7 @@ For the Sprint 3 media upload pipeline, the Functions app also needs:
 - Optional `MEDIA_UPLOAD_SAS_TTL_MINUTES` between `1` and `15`; the default is `15`
 - `TENOR_API_KEY` set to a Tenor API key so authenticated users can search GIFs from the `/p/{id}` reply picker
 - Optional `TENOR_CLIENT_KEY` override for the Tenor integration identifier; defaults to `artificialcontact-web`
+- Optional `REACTION_NOTIFICATION_HOURLY_THRESHOLD` to control when same-actor reaction notifications coalesce within a UTC hour; the default is `3`
 
 ## Media pipeline settings
 

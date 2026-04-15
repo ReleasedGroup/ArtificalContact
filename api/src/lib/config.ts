@@ -13,6 +13,7 @@ export interface EnvironmentConfig {
   contentSafetyEndpoint: string | undefined
   contentSafetyKey: string | undefined
   contentSafetyThreshold: number
+  reactionNotificationHourlyThreshold: number
   ffmpegPath: string | undefined
   searchEndpoint: string | undefined
   searchPostsIndexName: string
@@ -61,6 +62,12 @@ export function getEnvironmentConfig(
     contentSafetyEndpoint: readOptionalValue(env.CONTENT_SAFETY_ENDPOINT),
     contentSafetyKey: readOptionalValue(env.CONTENT_SAFETY_KEY),
     contentSafetyThreshold: readInteger(env.CONTENT_SAFETY_THRESHOLD, 4, 0, 7),
+    reactionNotificationHourlyThreshold: readInteger(
+      env.REACTION_NOTIFICATION_HOURLY_THRESHOLD,
+      3,
+      1,
+      100,
+    ),
     searchEndpoint:
       readOptionalValue(env.SEARCH_ENDPOINT) ??
       readOptionalValue(env.SEARCH_SERVICE_ENDPOINT) ??
