@@ -4,6 +4,7 @@ import { getEnvironmentConfig, type EnvironmentConfig } from './config.js'
 import { createCosmosClient } from './cosmos-client.js'
 
 const defaultUsersContainerName = 'users'
+let cachedUserRepository: UserRepository | undefined
 
 export type UserStatus =
   | 'active'
@@ -143,22 +144,29 @@ function createCosmosUserRepository(container: Container): UserRepository {
   }
 }
 
-export function createUserRepository(
-  config: EnvironmentConfig = getEnvironmentConfig(),
+export function createUserRepositoryFromConfig(
+  config: EnvironmentConfig,
+  env: NodeJS.ProcessEnv = process.env,
 ): UserRepository {
   if (!config.cosmosDatabaseName) {
     throw new Error('COSMOS_DATABASE_NAME is required to resolve users.')
   }
 
   const usersContainerName =
-    readOptionalValue(process.env.USERS_CONTAINER_NAME) ??
-    defaultUsersContainerName
+    readOptionalValue(env.USERS_CONTAINER_NAME) ?? defaultUsersContainerName
   const client = createCosmosClient(config)
   const container = client
     .database(config.cosmosDatabaseName)
     .container(usersContainerName)
 
   return createCosmosUserRepository(container)
+}
+
+export function createUserRepository(): UserRepository {
+  cachedUserRepository ??= createUserRepositoryFromConfig(
+    getEnvironmentConfig(),
+  )
+  return cachedUserRepository
 }
 
 export function createPendingUserDocument(
@@ -286,4 +294,19 @@ export function applyProfileUpdate(
   writeNullableField(nextUser, 'bannerUrl', update.bannerUrl)
 
   return nextUser
+}
+
+export function resolveUserRoles(
+  principal: AuthenticatedPrincipal,
+  user: UserDocument | null,
+): string[] {
+  if (user?.roles.length) {
+    return [
+      ...new Set(
+        user.roles.map((role) => role.trim().toLowerCase()).filter(Boolean),
+      ),
+    ]
+  }
+
+  return principal.userRoles
 }

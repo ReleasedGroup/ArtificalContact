@@ -24,7 +24,7 @@ describe('App', () => {
     window.history.pushState({}, '', '/')
   })
 
-  it('renders the foundation shell and shows a healthy API check', async () => {
+  it('renders the sign-in screen and exposes both SWA auth providers', async () => {
     mockFetch.mockResolvedValue(
       createJsonResponse({
         data: {
@@ -46,9 +46,22 @@ describe('App', () => {
 
     expect(
       screen.getByRole('heading', {
-        name: 'ArtificialContact is ready for feature work.',
+        name: 'Sign in to ArtificialContact.',
       }),
     ).toBeInTheDocument()
+
+    expect(
+      screen.getByRole('link', { name: /continue with microsoft/i }),
+    ).toHaveAttribute(
+      'href',
+      '/.auth/login/aad?post_login_redirect_uri=%2F',
+    )
+    expect(
+      screen.getByRole('link', { name: /continue with github/i }),
+    ).toHaveAttribute(
+      'href',
+      '/.auth/login/github?post_login_redirect_uri=%2F',
+    )
 
     expect(await screen.findByText('Healthy')).toBeInTheDocument()
     expect(screen.getByText(/sha-1234/)).toBeInTheDocument()

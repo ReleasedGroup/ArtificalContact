@@ -15,7 +15,7 @@ npm run test
 
 ### `web`
 
-- Vitest + Testing Library validate both the foundation shell `/api/health` experience and the authenticated `/me` profile editor flow, including `PUT /api/me` saves
+- Vitest + Testing Library validate both the sign-in screen `/api/health` experience and the authenticated `/me` profile editor flow, including `PUT /api/me` saves
 - ESLint enforces the TypeScript/React code style
 - Vite production build verifies the SPA compiles cleanly
 
