@@ -68,8 +68,8 @@ It does **not** specify UI visual design or detailed copy — those live in `des
 ### 3.4 Request Flow (publish post)
 1. Browser issues `POST /api/posts` with text content and media references.
 2. HTTP function validates the principal, validates content, and writes a `post` document to `posts` (pk `/threadId`).
-3. The Cosmos change feed (latest version mode) fires `feedFanOutFn`, which:
-   - reads the author's followers (paginated from the `follows` mirror container, pk `/followedId`)
+3. The Cosmos change feed (latest version mode) fires `feedFanOutFn` for eligible root user posts, which:
+   - reads the author's followers (paginated from the `followers` mirror container, pk `/followedId`)
    - upserts a denormalised feed entry into each follower's `feeds` partition, capped at `MAX_FANOUT_FOLLOWERS` (e.g. 5,000)
 4. The same change feed fires `searchSyncFn`, which pushes/upserts the post into the `posts` index in Azure AI Search.
 5. The same change feed fires `counterFn`, which updates the author's profile post count.
@@ -166,7 +166,7 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 |---|---|---|
 | `usersByHandleMirrorFn` | `users` | Maintain the `usersByHandle` lookup mirror with deterministic ids and per-user sync state |
 | `followersMirrorFn` | `follows` | Maintain the reverse `followers` lookup mirror with deterministic ids for reverse social-graph queries |
-| `feedFanOutFn` | `posts` | Materialise feed entries into followers' `feeds` partitions |
+| `feedFanOutFn` | `posts` | Materialise root user posts into followers' `feeds` partitions |
 | `searchSyncFn` | `posts`, `users` | Upsert/delete documents in AI Search indexes |
 | `counterFn` | `posts`, `reactions`, `follows` | Update aggregate counters on parent documents |
 | `notificationFn` | `posts`, `reactions`, `follows` | Create `notification` documents and dispatch external channels |
@@ -313,11 +313,12 @@ A GitHub-sourced post uses the same container but sets `kind: "github"` and adds
 #### feeds
 ```jsonc
 {
-  "id": "f_${feedOwnerId}_${postId}",
+  "id": "${feedOwnerId}:${postId}",
   "feedOwnerId": "u_...",
   "postId": "p_...",
   "authorId": "u_...",
   "authorHandle": "ada",
+  "authorDisplayName": "Ada Lovelace",
   "authorAvatarUrl": "...",
   "excerpt": "Trying out a new eval harness...",
   "media": [ { "kind": "image", "thumbUrl": "..." } ],
