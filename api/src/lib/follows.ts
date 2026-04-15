@@ -26,7 +26,20 @@ export interface FollowRepository {
   ): Promise<void>
 }
 
-export type MutableFollowRepository = FollowRepository
+export interface FollowingListRepository {
+  listByFollowerId(
+    followerId: string,
+    options: {
+      limit: number
+      continuationToken?: string
+    },
+  ): Promise<{
+    follows: FollowDocument[]
+    continuationToken?: string
+  }>
+}
+
+export type MutableFollowRepository = FollowRepository & FollowingListRepository
 
 function getErrorStatusCode(error: unknown): number | undefined {
   if (typeof error !== 'object' || error === null) {
@@ -106,6 +119,46 @@ function createCosmosFollowRepository(
         throw error
       }
     },
+    async listByFollowerId(
+      followerId: string,
+      options: {
+        limit: number
+        continuationToken?: string
+      },
+    ): Promise<{
+      follows: FollowDocument[]
+      continuationToken?: string
+    }> {
+      const queryIterator = container.items.query<FollowDocument>(
+        {
+          query: `
+            SELECT * FROM c
+            WHERE c.followerId = @followerId
+              AND c.type = @type
+            ORDER BY c.createdAt DESC, c.id DESC
+          `,
+          parameters: [
+            { name: '@followerId', value: followerId },
+            { name: '@type', value: 'follow' },
+          ],
+        },
+        {
+          partitionKey: followerId,
+          maxItemCount: options.limit,
+          enableQueryControl: true,
+          ...(options.continuationToken === undefined
+            ? {}
+            : { continuationToken: options.continuationToken }),
+        },
+      )
+
+      const { resources, continuationToken } = await queryIterator.fetchNext()
+
+      return {
+        follows: resources ?? [],
+        ...(continuationToken === undefined ? {} : { continuationToken }),
+      }
+    },
   }
 }
 
@@ -128,6 +181,13 @@ export function createFollowRepositoryFromConfig(
 }
 
 export function createFollowRepository(): MutableFollowRepository {
+  cachedFollowRepository ??= createFollowRepositoryFromConfig(
+    getEnvironmentConfig(),
+  )
+  return cachedFollowRepository
+}
+
+export function createFollowingListRepository(): FollowingListRepository {
   cachedFollowRepository ??= createFollowRepositoryFromConfig(
     getEnvironmentConfig(),
   )

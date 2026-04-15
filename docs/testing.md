@@ -37,6 +37,7 @@ npm run test
 - Vitest covers authenticated follow creation and removal at `POST/DELETE /api/users/{handle}/follow`, including idempotent writes, self-target rejection, validation, and follow-store failure handling
 - Vitest covers the user-profile change-feed worker that refreshes denormalised post author fields after profile updates, including avatar removal and duplicate change-feed image collapse
 - Vitest covers the public profile lookup at `GET /api/users/{handle}`, including case-insensitive mirror resolution and safe not-found behavior
+- Vitest covers the paginated following lookup at `GET /api/users/{handle}/following`, including invalid limits, continuation tokens, and filtering of missing or non-public followees
 - Vitest covers Static Web Apps principal decoding and HTTP auth role attachment for anonymous, user, moderator, admin, and malformed-principal request paths
 - Vitest covers `PUT /api/me`, including duplicate-handle rejection via `usersByHandle`
 - Vitest covers the `usersByHandle` change-feed mirror logic, including stale-handle cleanup and non-fatal collision handling

@@ -80,16 +80,13 @@ function isPubliclyVisibleUser(user: StoredUserDocument): boolean {
   return status === null || status === 'active'
 }
 
-export function buildPublicUserProfile(
+function buildPublicUserProfileWithHandle(
   user: StoredUserDocument,
-  mirror: ExistingMirrorRecord,
+  handle: string,
 ): PublicUserProfile {
   return {
     id: user.id,
-    handle:
-      toNullableString(user.handle) ??
-      toNullableString(user.handleLower) ??
-      mirror.handle,
+    handle,
     displayName: toNullableString(user.displayName),
     bio: toNullableString(user.bio),
     avatarUrl: toNullableString(user.avatarUrl),
@@ -103,6 +100,34 @@ export function buildPublicUserProfile(
     createdAt: toNullableString(user.createdAt),
     updatedAt: toNullableString(user.updatedAt),
   }
+}
+
+export function buildPublicUserProfile(
+  user: StoredUserDocument,
+  mirror: ExistingMirrorRecord,
+): PublicUserProfile {
+  return buildPublicUserProfileWithHandle(
+    user,
+    toNullableString(user.handle) ??
+      toNullableString(user.handleLower) ??
+      mirror.handle,
+  )
+}
+
+export function buildPublicUserProfileFromUser(
+  user: StoredUserDocument,
+): PublicUserProfile | null {
+  if (!isPubliclyVisibleUser(user)) {
+    return null
+  }
+
+  const handle =
+    toNullableString(user.handle) ?? toNullableString(user.handleLower)
+  if (handle === null) {
+    return null
+  }
+
+  return buildPublicUserProfileWithHandle(user, handle)
 }
 
 export async function lookupPublicUserProfile(
