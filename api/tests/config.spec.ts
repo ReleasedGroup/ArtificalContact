@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { API_BUILD_SHA } from '../src/build-meta.generated.js'
 import { getEnvironmentConfig } from '../src/lib/config.js'
 
 describe('getEnvironmentConfig', () => {
   it('falls back to generated build metadata and local region defaults', () => {
     const config = getEnvironmentConfig({})
 
-    expect(config.buildSha).toBe('local-dev')
+    expect(config.buildSha).toBe(API_BUILD_SHA)
     expect(config.region).toBe('local')
     expect(config.serviceName).toBe('artificialcontact-api')
   })
