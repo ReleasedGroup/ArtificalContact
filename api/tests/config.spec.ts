@@ -25,6 +25,7 @@ describe('getEnvironmentConfig', () => {
       SEARCH_ENDPOINT: 'https://search.example.com',
       SEARCH_INDEX_POSTS_NAME: 'posts-test',
       SEARCH_INDEX_USERS_NAME: 'users-test',
+      SEARCH_INDEX_HASHTAGS_NAME: 'hashtags-test',
       FFMPEG_PATH: '/tools/ffmpeg',
     })
 
@@ -40,6 +41,7 @@ describe('getEnvironmentConfig', () => {
     expect(config.searchEndpoint).toBe('https://search.example.com')
     expect(config.searchPostsIndexName).toBe('posts-test')
     expect(config.searchUsersIndexName).toBe('users-test')
+    expect(config.searchHashtagsIndexName).toBe('hashtags-test')
     expect(config.ffmpegPath).toBe('/tools/ffmpeg')
   })
 
@@ -59,11 +61,26 @@ describe('getEnvironmentConfig', () => {
     expect(config.searchEndpoint).toBe('https://legacy-search.example')
   })
 
+  it('falls back to legacy Azure AI Search environment names when needed', () => {
+    const config = getEnvironmentConfig({
+      AZURE_AI_SEARCH_ENDPOINT: 'https://legacy-ai-search.example',
+      AZURE_AI_SEARCH_POSTS_INDEX: 'legacy-posts',
+      AZURE_AI_SEARCH_USERS_INDEX: 'legacy-users',
+      AZURE_AI_SEARCH_HASHTAGS_INDEX: 'legacy-hashtags',
+    })
+
+    expect(config.searchEndpoint).toBe('https://legacy-ai-search.example')
+    expect(config.searchPostsIndexName).toBe('legacy-posts')
+    expect(config.searchUsersIndexName).toBe('legacy-users')
+    expect(config.searchHashtagsIndexName).toBe('legacy-hashtags')
+  })
+
   it('falls back to default search index names when not configured', () => {
     const config = getEnvironmentConfig({})
 
     expect(config.searchPostsIndexName).toBe('posts-v1')
     expect(config.searchUsersIndexName).toBe('users-v1')
+    expect(config.searchHashtagsIndexName).toBe('hashtags-v1')
   })
 
   it('clamps invalid content safety threshold values to the supported range', () => {

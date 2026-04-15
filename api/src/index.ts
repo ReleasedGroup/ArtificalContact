@@ -16,6 +16,7 @@ import { registerListPostReactionsFunction } from './functions/list-post-reactio
 import { registerCreatePostFunction } from './functions/create-post.js'
 import { registerListFollowingFunction } from './functions/list-following.js'
 import { registerGetUserFunction } from './functions/get-user.js'
+import { registerSearchFunction } from './functions/search.js'
 import { registerHealthFunction } from './functions/health.js'
 import { registerMediaUploadUrlFunction } from './functions/media-upload-url.js'
 import { registerMediaPostProcessFunctions } from './functions/media-post-process.js'
@@ -43,6 +44,7 @@ registerListPostReactionsFunction()
 registerCreatePostFunction()
 registerListFollowingFunction()
 registerGetUserFunction()
+registerSearchFunction()
 registerHealthFunction()
 registerMediaUploadUrlFunction()
 registerMediaPostProcessFunctions()
