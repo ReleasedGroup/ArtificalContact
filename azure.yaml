@@ -1,0 +1,16 @@
+name: artificialcontact
+metadata:
+  template: artificialcontact-foundations@0.1.0
+infra:
+  provider: bicep
+  path: infra
+services:
+  api:
+    host: function
+    language: js
+    project: ./api
+  web:
+    dist: dist
+    host: staticwebapp
+    language: js
+    project: ./web

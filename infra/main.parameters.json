@@ -1,0 +1,17 @@
+{
+  "$schema": "https://aka.ms/azure/dev/parameters.json",
+  "parameters": {
+    "appName": {
+      "value": "acn"
+    },
+    "environmentName": {
+      "value": "${AZURE_ENV_NAME}"
+    },
+    "frontDoorCustomDomainHostName": {
+      "value": "cdn-${AZURE_ENV_NAME}.example.com"
+    },
+    "location": {
+      "value": "${AZURE_LOCATION}"
+    }
+  }
+}

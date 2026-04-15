@@ -1,0 +1,6 @@
+coverage
+dist
+node_modules
+.azd
+infra/main.json
+api/local.settings.json
