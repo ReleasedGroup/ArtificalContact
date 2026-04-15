@@ -26,6 +26,7 @@ import {
   toMeProfile,
   type UserRepository,
 } from '../lib/users.js'
+import { withRateLimit } from '../lib/rate-limit.js'
 
 export interface UpdateProfileHandlerDependencies {
   now?: () => Date
@@ -190,7 +191,9 @@ export function buildUpdateProfileHandler(
   }
 }
 
-export const updateProfileHandler = buildUpdateProfileHandler()
+export const updateProfileHandler = withRateLimit(buildUpdateProfileHandler(), {
+  endpointClass: 'profile',
+})
 
 export function registerUpdateProfileFunction() {
   app.http('updateProfile', {

@@ -19,6 +19,7 @@ import {
   resolvePostMaxLength,
   type PostRepository,
 } from '../lib/posts.js'
+import { withRateLimit } from '../lib/rate-limit.js'
 
 export interface CreatePostHandlerDependencies {
   idFactory?: () => string
@@ -129,7 +130,11 @@ export function buildCreatePostHandler(
   }
 }
 
-export const createPostHandler = withHttpAuth(buildCreatePostHandler())
+export const createPostHandler = withHttpAuth(
+  withRateLimit(buildCreatePostHandler(), {
+    endpointClass: 'posts',
+  }),
+)
 
 export function registerCreatePostFunction() {
   app.http('createPost', {

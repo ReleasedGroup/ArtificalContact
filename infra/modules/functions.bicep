@@ -180,6 +180,10 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
           value: names.notificationPrefsContainer
         }
         {
+          name: 'RATE_LIMITS_CONTAINER_NAME'
+          value: names.rateLimitsContainer
+        }
+        {
           name: 'CONTENT_SAFETY_THRESHOLD'
           value: string(contentSafetyThreshold)
         }

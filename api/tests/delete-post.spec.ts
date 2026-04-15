@@ -7,6 +7,10 @@ import {
   type MutablePostStore,
   type StoredPostDocument,
 } from '../src/lib/posts.js'
+import type {
+  RateLimitConsumeResult,
+  RateLimitRepository,
+} from '../src/lib/rate-limit.js'
 import type { UserDocument, UserRepository } from '../src/lib/users.js'
 
 class InMemoryMutablePostStore implements MutablePostStore {
@@ -100,6 +104,16 @@ function createRepository(user: UserDocument | null): UserRepository {
     create: async (createdUser) => createdUser,
     getById: vi.fn(async () => user),
     upsert: async (updatedUser) => updatedUser,
+  }
+}
+
+function createPermissiveRateLimitRepository(): RateLimitRepository {
+  return {
+    consumeToken: vi.fn(async (): Promise<RateLimitConsumeResult> => ({
+      allowed: true,
+      remainingTokens: 5,
+      retryAfterSeconds: 0,
+    })),
   }
 }
 
@@ -341,6 +355,7 @@ describe('deletePostHandler', () => {
     const context = createContext()
     const handler = buildDeletePostHandler({
       now: () => new Date('2026-04-15T11:30:00.000Z'),
+      rateLimitRepositoryFactory: () => createPermissiveRateLimitRepository(),
       repositoryFactory: () => createRepository(createStoredUser()),
       storeFactory: () => store,
     })
@@ -375,6 +390,7 @@ describe('deletePostHandler', () => {
   it('returns a store configuration error before attempting authz work', async () => {
     const context = createContext()
     const handler = buildDeletePostHandler({
+      rateLimitRepositoryFactory: () => createPermissiveRateLimitRepository(),
       repositoryFactory: () => createRepository(createStoredUser()),
       storeFactory: () => {
         throw new Error('Missing Cosmos config')
@@ -406,6 +422,7 @@ describe('deletePostHandler', () => {
 
   it('requires authentication before deleting a post', async () => {
     const handler = buildDeletePostHandler({
+      rateLimitRepositoryFactory: () => createPermissiveRateLimitRepository(),
       repositoryFactory: () => createRepository(createStoredUser()),
       storeFactory: () =>
         new InMemoryMutablePostStore(new Map([['p_01HXYZ', createStoredPost()]])),

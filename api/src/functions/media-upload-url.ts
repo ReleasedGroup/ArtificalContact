@@ -19,6 +19,7 @@ import {
   mapCreateMediaUploadValidationIssues,
   type MediaUploadUrlIssuer,
 } from '../lib/media-upload.js'
+import { withRateLimit } from '../lib/rate-limit.js'
 
 export interface MediaUploadUrlHandlerDependencies {
   issuerFactory?: () => MediaUploadUrlIssuer
@@ -144,7 +145,9 @@ export function buildMediaUploadUrlHandler(
 }
 
 export const mediaUploadUrlHandler = withHttpAuth(
-  buildMediaUploadUrlHandler(),
+  withRateLimit(buildMediaUploadUrlHandler(), {
+    endpointClass: 'media',
+  }),
 )
 
 export function registerMediaUploadUrlFunction() {

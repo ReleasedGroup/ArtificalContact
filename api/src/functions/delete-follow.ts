@@ -20,6 +20,7 @@ import {
   lookupPublicUserProfile,
   type UserProfileStore,
 } from '../lib/user-profile.js'
+import { withRateLimit } from '../lib/rate-limit.js'
 
 export interface DeleteFollowHandlerDependencies {
   repositoryFactory?: () => FollowRepository
@@ -199,7 +200,11 @@ export function buildDeleteFollowHandler(
   }
 }
 
-export const deleteFollowHandler = withHttpAuth(buildDeleteFollowHandler())
+export const deleteFollowHandler = withHttpAuth(
+  withRateLimit(buildDeleteFollowHandler(), {
+    endpointClass: 'follows',
+  }),
+)
 
 export function registerDeleteFollowFunction() {
   app.http('deleteFollow', {

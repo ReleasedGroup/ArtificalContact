@@ -31,6 +31,7 @@ import {
   createUserRepository,
   type MutableUserRepository,
 } from '../lib/users.js'
+import { withRateLimit } from '../lib/rate-limit.js'
 
 export interface CreateModActionHandlerDependencies {
   idFactory?: () => string
@@ -491,7 +492,12 @@ export function buildCreateModActionHandler(
   })
 }
 
-export const createModActionHandler = buildCreateModActionHandler()
+export const createModActionHandler = withRateLimit(
+  buildCreateModActionHandler(),
+  {
+    endpointClass: 'moderation',
+  },
+)
 
 export function registerCreateModActionFunction() {
   app.http('createModAction', {

@@ -22,6 +22,7 @@ import {
   validateReportTarget,
   type MutableReportRepository,
 } from '../lib/reports.js'
+import { withRateLimit } from '../lib/rate-limit.js'
 import { createUserRepository, type UserRepository } from '../lib/users.js'
 
 export interface CreateReportHandlerDependencies {
@@ -165,7 +166,11 @@ export function buildCreateReportHandler(
   }
 }
 
-export const createReportHandler = withHttpAuth(buildCreateReportHandler())
+export const createReportHandler = withHttpAuth(
+  withRateLimit(buildCreateReportHandler(), {
+    endpointClass: 'reports',
+  }),
+)
 
 export function registerCreateReportFunction() {
   app.http('createReport', {
