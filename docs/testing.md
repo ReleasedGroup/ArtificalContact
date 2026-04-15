@@ -20,8 +20,10 @@ npm run test
 - Vitest + Testing Library validate that `/p/{id}` loads the standalone post detail view, fetches thread context, and handles missing-post states safely
 - Vitest + Testing Library validate that `/p/{id}` renders mixed-media posts with inline image, GIF, video, and audio attachments
 - Vitest + Testing Library validate the authenticated `/me` profile editor flow, including initial profile loading, error rendering, and `PUT /api/me` saves
+- Vitest + Testing Library validate the authenticated `/me` thread workspace publish flow, plus authenticated reply and delete actions on `/p/{id}`
 - Playwright covers the Sprint 1 golden path: GitHub sign-in handoff to `/me`, initial handle claim, and navigation to the resulting public profile at `/u/{handle}`
 - Playwright covers the mixed-media `/p/{id}` route on desktop and mobile viewports, including image, GIF, video, and audio attachments
+- Playwright covers the Sprint 2 thread path: user A publishes a root post, user B replies on the standalone thread page, both users see the shared thread, and a soft-deleted reply disappears from view while the backing document remains in the mocked store
 - ESLint enforces the TypeScript/React code style
 - Vite production build verifies the SPA compiles cleanly
 

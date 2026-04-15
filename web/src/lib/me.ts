@@ -95,6 +95,16 @@ export async function getMe(signal?: AbortSignal): Promise<ResolvedMeProfile> {
   return payload.data
 }
 
+export async function getOptionalMe(
+  signal?: AbortSignal,
+): Promise<ResolvedMeProfile | null> {
+  try {
+    return await getMe(signal)
+  } catch {
+    return null
+  }
+}
+
 export async function updateMe(
   input: UpdateMeInput,
   signal?: AbortSignal,

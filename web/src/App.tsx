@@ -9,6 +9,7 @@ import {
 import { ComposerPreviewPanel } from './components/ComposerPreviewPanel'
 import { DirectBlobUploadCard } from './components/DirectBlobUploadCard'
 import { PostDetailScreen } from './components/PostDetailScreen'
+import { ThreadWorkspacePanel } from './components/ThreadWorkspacePanel'
 import { WEB_BUILD_SHA } from './build-meta.generated'
 import { signOut } from './lib/auth'
 import { getHealth, type HealthPayload } from './lib/health'
@@ -1163,6 +1164,12 @@ function ProfileEditorScreen() {
             authorBadge={getEditorInitials(draft.displayName)}
             authorHandle={previewHandle}
             authorName={draft.displayName.trim() || 'Display name'}
+          />
+          <ThreadWorkspacePanel
+            authorBadge={getEditorInitials(draft.displayName)}
+            authorHandle={previewHandle}
+            authorName={draft.displayName.trim() || 'Display name'}
+            user={currentUser}
           />
         </div>
       </section>
