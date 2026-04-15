@@ -64,6 +64,7 @@ describe('authMeHandler', () => {
     const repository: UserRepository = {
       getById: vi.fn(async () => existingUser),
       create: vi.fn(async (user) => user),
+      upsert: vi.fn(async (user) => user),
     }
 
     const handler = buildAuthMeHandler({
@@ -101,6 +102,7 @@ describe('authMeHandler', () => {
     const repository: UserRepository = {
       getById: vi.fn(async () => null),
       create: vi.fn(async (user) => user),
+      upsert: vi.fn(async (user) => user),
     }
 
     const handler = buildAuthMeHandler({
@@ -163,6 +165,7 @@ describe('authMeHandler', () => {
         ;(error as Error & { statusCode: number }).statusCode = 409
         throw error
       }),
+      upsert: vi.fn(async (user) => user),
     }
 
     const handler = buildAuthMeHandler({
@@ -199,6 +202,7 @@ describe('authMeHandler', () => {
       repositoryFactory: () => ({
         getById: async () => null,
         create: async (user) => user,
+        upsert: async (user) => user,
       }),
     })
 
