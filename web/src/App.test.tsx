@@ -1127,9 +1127,11 @@ describe('App', () => {
       name: 'Like reactions',
     })
     expect(likeDialog).toBeInTheDocument()
-    const graceLink = within(likeDialog).getByText('Grace Hopper').closest('a')
+    const graceLink = (
+      await within(likeDialog).findByText('Grace Hopper')
+    ).closest('a')
     expect(graceLink).toHaveAttribute('href', '/u/grace')
-    expect(within(likeDialog).getByText('@ada')).toBeInTheDocument()
+    expect(await within(likeDialog).findByText('@ada')).toBeInTheDocument()
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Load more likes' }))
