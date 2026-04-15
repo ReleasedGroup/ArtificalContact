@@ -18,14 +18,14 @@ import {
   isPubliclyVisiblePost,
   mapCreatePostValidationIssues,
   resolvePostMaxLength,
-  type PostRepository,
+  type ReadablePostRepository,
 } from '../lib/posts.js'
 
 export interface CreateReplyHandlerDependencies {
   idFactory?: () => string
   maxTextLength?: number
   now?: () => Date
-  repositoryFactory?: () => PostRepository
+  repositoryFactory?: () => ReadablePostRepository
 }
 
 let cachedStore: CosmosPostStore | undefined
@@ -100,7 +100,7 @@ export function buildCreateReplyHandler(
       })
     }
 
-    let repository: PostRepository
+    let repository: ReadablePostRepository
 
     try {
       repository = repositoryFactory()

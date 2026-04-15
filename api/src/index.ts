@@ -2,6 +2,7 @@ import { registerCreateReplyFunction } from './functions/create-reply.js'
 import { registerDeletePostFunction } from './functions/delete-post.js'
 import { registerGetPostFunction } from './functions/get-post.js'
 import { registerGetThreadFunction } from './functions/get-thread.js'
+import { registerCreatePostFunction } from './functions/create-post.js'
 import { registerGetUserFunction } from './functions/get-user.js'
 import { registerHealthFunction } from './functions/health.js'
 import { registerUpdateProfileFunction } from './functions/update-profile.js'
@@ -12,6 +13,7 @@ registerCreateReplyFunction()
 registerDeletePostFunction()
 registerGetPostFunction()
 registerGetThreadFunction()
+registerCreatePostFunction()
 registerGetUserFunction()
 registerHealthFunction()
 registerUpdateProfileFunction()

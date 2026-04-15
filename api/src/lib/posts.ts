@@ -1,12 +1,18 @@
+import type { Container } from '@azure/cosmos'
 import { z, type ZodIssue } from 'zod'
 import type { ApiEnvelope, ApiError } from './api-envelope.js'
+import { getEnvironmentConfig, type EnvironmentConfig } from './config.js'
+import { createCosmosClient } from './cosmos-client.js'
+import { readOptionalValue } from './strings.js'
 import type { UserDocument } from './users.js'
 
 export const DEFAULT_POSTS_CONTAINER_NAME = 'posts'
 export const DEFAULT_POST_MAX_LENGTH = 280
 
 const hashtagPattern = /(?<![A-Za-z0-9_])#([A-Za-z0-9_]+)/g
-const mentionPattern = /(?<![A-Za-z0-9_])@([A-Za-z0-9_-]+)/g
+const mentionPattern = /(?<![A-Za-z0-9_])@([A-Za-z0-9._/-]+)/g
+
+let cachedPostRepository: MutablePostRepository | undefined
 
 export interface StoredPostMediaDocument {
   id?: string | null
@@ -63,6 +69,12 @@ export interface StoredPostDocument {
   github?: StoredGitHubPostMetadataDocument | null
 }
 
+export interface PostContent {
+  text: string
+  hashtags: string[]
+  mentions: string[]
+}
+
 export interface PublicPostMedia {
   id: string | null
   kind: string | null
@@ -116,11 +128,11 @@ export interface PublicPost {
   github: PublicGitHubPostMetadata | null
 }
 
-export interface PostStore {
-  getPostById(
-    postId: string,
-    threadId?: string,
-  ): Promise<StoredPostDocument | null>
+export interface PostCounters {
+  likes: number
+  dislikes: number
+  emoji: number
+  replies: number
 }
 
 export interface UserPostDocument extends StoredPostDocument {
@@ -135,12 +147,7 @@ export interface UserPostDocument extends StoredPostDocument {
   text: string
   hashtags: string[]
   mentions: string[]
-  counters: {
-    likes: number
-    dislikes: number
-    emoji: number
-    replies: number
-  }
+  counters: PostCounters
   visibility: 'public'
   moderationState: 'ok'
   createdAt: string
@@ -148,13 +155,29 @@ export interface UserPostDocument extends StoredPostDocument {
   deletedAt: null
 }
 
-export interface PostRepository extends PostStore {
+export interface PostDocument extends UserPostDocument {
+  type: 'post'
+  parentId: null
+}
+
+export interface PostStore {
+  getPostById(
+    postId: string,
+    threadId?: string,
+  ): Promise<StoredPostDocument | null>
+}
+
+export interface PostRepository {
   create(post: UserPostDocument): Promise<UserPostDocument>
 }
+
+export interface ReadablePostRepository extends PostStore, PostRepository {}
 
 export interface MutablePostStore extends PostStore {
   upsertPost(post: StoredPostDocument): Promise<StoredPostDocument>
 }
+
+export type MutablePostRepository = PostRepository
 
 export interface PostLookupResult {
   status: 200 | 400 | 404
@@ -220,6 +243,21 @@ function normalizePostText(value: unknown): unknown {
   }
 
   return value.trim()
+}
+
+function readUniqueMatches(text: string, pattern: RegExp): string[] {
+  const values = new Set<string>()
+
+  for (const match of text.matchAll(pattern)) {
+    const value = match[1]?.trim().toLowerCase()
+    if (!value) {
+      continue
+    }
+
+    values.add(value)
+  }
+
+  return [...values]
 }
 
 function toStringArray(value: unknown): string[] {
@@ -331,26 +369,22 @@ export function isPubliclyVisiblePost(post: StoredPostDocument): boolean {
   return moderationState !== 'hidden' && moderationState !== 'removed'
 }
 
-function readUniqueMatches(text: string, pattern: RegExp): string[] {
-  const values = new Set<string>()
-
-  for (const match of text.matchAll(pattern)) {
-    const value = match[1]?.trim().toLowerCase()
-    if (!value) {
-      continue
-    }
-
-    values.add(value)
+function createPostRepositoryForContainer(
+  container: Container,
+): MutablePostRepository {
+  return {
+    async create(post: UserPostDocument) {
+      const response = await container.items.create<UserPostDocument>(post)
+      return response.resource ?? post
+    },
   }
-
-  return [...values]
 }
 
 export function resolvePostMaxLength(
   env: NodeJS.ProcessEnv = process.env,
 ): number {
-  const configuredValue = toNullableString(env.POST_MAX_LENGTH)
-  if (configuredValue === null) {
+  const configuredValue = readOptionalValue(env.POST_MAX_LENGTH)
+  if (!configuredValue) {
     return DEFAULT_POST_MAX_LENGTH
   }
 
@@ -359,14 +393,24 @@ export function resolvePostMaxLength(
   }
 
   const parsedValue = Number(configuredValue)
-  if (!Number.isInteger(parsedValue) || parsedValue <= 0) {
+  if (!Number.isSafeInteger(parsedValue) || parsedValue <= 0) {
     throw new Error('POST_MAX_LENGTH must be a positive integer.')
   }
 
   return parsedValue
 }
 
-export function buildCreatePostRequestSchema(maxTextLength: number) {
+export function extractHashtags(text: string): string[] {
+  return readUniqueMatches(text, hashtagPattern)
+}
+
+export function extractMentions(text: string): string[] {
+  return readUniqueMatches(text, mentionPattern)
+}
+
+export function buildPostContentSchema(
+  maxTextLength: number = DEFAULT_POST_MAX_LENGTH,
+) {
   return z
     .object({
       text: z.preprocess(
@@ -375,11 +419,20 @@ export function buildCreatePostRequestSchema(maxTextLength: number) {
       ),
     })
     .strict()
+    .transform(
+      (value): PostContent => ({
+        text: value.text,
+        hashtags: extractHashtags(value.text),
+        mentions: extractMentions(value.text),
+      }),
+    )
 }
 
-export type CreatePostRequest = z.infer<
-  ReturnType<typeof buildCreatePostRequestSchema>
->
+export function buildCreatePostRequestSchema(maxTextLength: number) {
+  return buildPostContentSchema(maxTextLength)
+}
+
+export type CreatePostRequest = PostContent
 
 export function mapCreatePostValidationIssues(
   issues: readonly ZodIssue[],
@@ -389,14 +442,6 @@ export function mapCreatePostValidationIssues(
     message: issue.message,
     ...(issue.path.length > 0 ? { field: issue.path.join('.') } : {}),
   }))
-}
-
-export function extractHashtags(text: string): string[] {
-  return readUniqueMatches(text, hashtagPattern)
-}
-
-export function extractMentions(text: string): string[] {
-  return readUniqueMatches(text, mentionPattern)
 }
 
 export function createUserReplyDocument(
@@ -421,8 +466,8 @@ export function createUserReplyDocument(
     authorDisplayName: user.displayName,
     ...(user.avatarUrl ? { authorAvatarUrl: user.avatarUrl } : {}),
     text: request.text,
-    hashtags: extractHashtags(request.text),
-    mentions: extractMentions(request.text),
+    hashtags: request.hashtags,
+    mentions: request.mentions,
     counters: {
       likes: 0,
       dislikes: 0,
@@ -607,4 +652,65 @@ export async function lookupPublicPost(
       errors: [],
     },
   }
+}
+
+export function createUserPostDocument(
+  user: UserDocument,
+  request: CreatePostRequest,
+  createdAt: Date,
+  idFactory: () => string,
+): PostDocument {
+  const id = idFactory()
+  const timestamp = createdAt.toISOString()
+
+  return {
+    id,
+    type: 'post',
+    kind: 'user',
+    threadId: id,
+    parentId: null,
+    authorId: user.id,
+    authorHandle: user.handle ?? user.handleLower ?? '',
+    authorDisplayName: user.displayName,
+    ...(user.avatarUrl ? { authorAvatarUrl: user.avatarUrl } : {}),
+    text: request.text,
+    hashtags: request.hashtags,
+    mentions: request.mentions,
+    counters: {
+      likes: 0,
+      dislikes: 0,
+      emoji: 0,
+      replies: 0,
+    },
+    visibility: 'public',
+    moderationState: 'ok',
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    deletedAt: null,
+  }
+}
+
+export function createPostRepositoryFromConfig(
+  config: EnvironmentConfig,
+  env: NodeJS.ProcessEnv = process.env,
+): MutablePostRepository {
+  if (!config.cosmosDatabaseName) {
+    throw new Error('COSMOS_DATABASE_NAME is required to resolve posts.')
+  }
+
+  const postsContainerName =
+    readOptionalValue(env.POSTS_CONTAINER_NAME) ?? DEFAULT_POSTS_CONTAINER_NAME
+  const client = createCosmosClient(config)
+  const container = client
+    .database(config.cosmosDatabaseName)
+    .container(postsContainerName)
+
+  return createPostRepositoryForContainer(container)
+}
+
+export function createPostRepository(): MutablePostRepository {
+  cachedPostRepository ??= createPostRepositoryFromConfig(
+    getEnvironmentConfig(),
+  )
+  return cachedPostRepository
 }

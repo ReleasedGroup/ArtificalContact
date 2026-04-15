@@ -2,7 +2,7 @@ import type { HttpRequest, InvocationContext } from '@azure/functions'
 import { describe, expect, it, vi } from 'vitest'
 import { buildCreateReplyHandler } from '../src/functions/create-reply.js'
 import type {
-  PostRepository,
+  ReadablePostRepository,
   StoredPostDocument,
   UserPostDocument,
 } from '../src/lib/posts.js'
@@ -107,7 +107,7 @@ function createContext(user: UserDocument | null = createStoredUser()) {
 describe('createReplyHandler', () => {
   it('creates a nested reply that inherits the root thread id', async () => {
     const parentPost = createStoredPost()
-    const repository: PostRepository = {
+    const repository: ReadablePostRepository = {
       getPostById: vi.fn(async () => parentPost),
       create: vi.fn(async (post) => post),
     }
@@ -192,7 +192,7 @@ describe('createReplyHandler', () => {
   })
 
   it('returns 400 when the post id path parameter is missing', async () => {
-    const repository: PostRepository = {
+    const repository: ReadablePostRepository = {
       getPostById: vi.fn(async () => null),
       create: vi.fn(async (post) => post),
     }
@@ -359,7 +359,7 @@ describe('createReplyHandler', () => {
   })
 
   it('rejects users who do not have an active profile with a handle', async () => {
-    const repository: PostRepository = {
+    const repository: ReadablePostRepository = {
       getPostById: vi.fn(async () => createStoredPost()),
       create: vi.fn(async (post) => post),
     }

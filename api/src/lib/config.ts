@@ -1,4 +1,5 @@
 import { API_BUILD_SHA } from '../build-meta.generated.js'
+import { readOptionalValue } from './strings.js'
 
 export interface EnvironmentConfig {
   serviceName: string
@@ -7,11 +8,6 @@ export interface EnvironmentConfig {
   cosmosConnectionString: string | undefined
   cosmosDatabaseName: string | undefined
   cosmosEndpoint: string | undefined
-}
-
-function readOptionalValue(value?: string) {
-  const trimmed = value?.trim()
-  return trimmed ? trimmed : undefined
 }
 
 function readCosmosEndpoint(env: NodeJS.ProcessEnv) {
