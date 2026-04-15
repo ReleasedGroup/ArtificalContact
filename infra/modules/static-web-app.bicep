@@ -1,3 +1,4 @@
+param backendLocation string
 param location string
 param names object
 param tags object = {}
@@ -34,9 +35,10 @@ resource linkedBackend 'Microsoft.Web/staticSites/linkedBackends@2024-04-01' = {
   name: functionAppName
   properties: {
     backendResourceId: functionAppResourceId
-    region: location
+    region: backendLocation
   }
 }
 
 output defaultHostname string = staticWebApp.properties.defaultHostname
+output location string = staticWebApp.location
 output resourceId string = staticWebApp.id

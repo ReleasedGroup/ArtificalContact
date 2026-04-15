@@ -3,7 +3,22 @@ targetScope = 'resourceGroup'
 param appName string = 'acn'
 param environmentName string = 'dev'
 param location string = resourceGroup().location
+@description('Optional override for the Azure Static Web App region. When omitted, the deployment uses the primary location if supported by Static Web Apps, otherwise it falls back to eastasia.')
+param staticWebAppLocation string = ''
 param frontDoorCustomDomainHostName string = 'cdn-placeholder.example.com'
+
+var supportedStaticWebAppLocations = [
+  'centralus'
+  'eastasia'
+  'eastus2'
+  'westeurope'
+  'westus2'
+]
+var normalizedLocation = toLower(replace(location, ' ', ''))
+var normalizedStaticWebAppLocation = empty(staticWebAppLocation) ? '' : toLower(replace(staticWebAppLocation, ' ', ''))
+var resolvedStaticWebAppLocation = !empty(normalizedStaticWebAppLocation)
+  ? normalizedStaticWebAppLocation
+  : (contains(supportedStaticWebAppLocations, normalizedLocation) ? normalizedLocation : 'eastasia')
 
 var tags = {
   application: 'ArtificialContact'
@@ -75,7 +90,8 @@ module functions './modules/functions.bicep' = {
 module staticWebApp './modules/static-web-app.bicep' = {
   name: 'staticWebApp'
   params: {
-    location: location
+    backendLocation: location
+    location: resolvedStaticWebAppLocation
     names: naming.outputs.names
     tags: tags
     applicationInsightsConnectionString: observability.outputs.applicationInsightsConnectionString
@@ -100,4 +116,5 @@ output frontDoorCustomDomainHostName string = frontDoor.outputs.customDomainHost
 output frontDoorHostName string = frontDoor.outputs.endpointHostName
 output functionAppName string = functions.outputs.functionAppName
 output keyVaultUri string = observability.outputs.keyVaultUri
+output staticWebAppLocation string = staticWebApp.outputs.location
 output staticWebAppUrl string = 'https://${staticWebApp.outputs.defaultHostname}'
