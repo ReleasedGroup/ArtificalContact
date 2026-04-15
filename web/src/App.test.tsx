@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
@@ -10,6 +10,15 @@ function createJsonResponse<T>(status: number, payload: T) {
     status,
     json: async () => payload,
   }
+}
+
+function createDeferredResponse<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+
+  return { promise, resolve }
 }
 
 describe('App', () => {
@@ -152,5 +161,99 @@ describe('App', () => {
       'href',
       '/',
     )
+  })
+
+  it('returns to loading immediately when the handle changes', async () => {
+    window.history.replaceState({}, '', '/u/Ada')
+
+    const firstResponse = createDeferredResponse<{
+      ok: boolean
+      status: number
+      json: () => Promise<unknown>
+    }>()
+    const secondResponse = createDeferredResponse<{
+      ok: boolean
+      status: number
+      json: () => Promise<unknown>
+    }>()
+    let profileRequestCount = 0
+
+    mockFetch.mockImplementation(async (input) => {
+      if (String(input).startsWith('/api/users/')) {
+        profileRequestCount += 1
+        return profileRequestCount === 1
+          ? firstResponse.promise
+          : secondResponse.promise
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    render(<App />)
+
+    await act(async () => {
+      firstResponse.resolve(
+        createJsonResponse(200, {
+          data: {
+            id: 'u1',
+            handle: 'Ada',
+            displayName: 'Ada Lovelace',
+            bio: 'Symbolic AI nerd.',
+            avatarUrl: null,
+            bannerUrl: null,
+            expertise: ['llm'],
+            counters: {
+              posts: 12,
+              followers: 34,
+              following: 5,
+            },
+            createdAt: '2026-04-15T00:00:00.000Z',
+            updatedAt: '2026-04-16T00:00:00.000Z',
+          },
+          errors: [],
+        }),
+      )
+    })
+
+    expect(
+      await screen.findByRole('heading', { name: 'Ada Lovelace' }),
+    ).toBeInTheDocument()
+
+    await act(async () => {
+      window.history.pushState({}, '', '/u/Grace')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+
+    expect(
+      await screen.findByRole('heading', { name: 'Loading public profile' }),
+    ).toBeInTheDocument()
+
+    await act(async () => {
+      secondResponse.resolve(
+        createJsonResponse(200, {
+          data: {
+            id: 'u2',
+            handle: 'Grace',
+            displayName: 'Grace Hopper',
+            bio: 'Compiler pioneer.',
+            avatarUrl: null,
+            bannerUrl: null,
+            expertise: ['compilers'],
+            counters: {
+              posts: 8,
+              followers: 21,
+              following: 3,
+            },
+            createdAt: '2026-04-15T00:00:00.000Z',
+            updatedAt: '2026-04-16T00:00:00.000Z',
+          },
+          errors: [],
+        }),
+      )
+    })
+
+    expect(
+      await screen.findByRole('heading', { name: 'Grace Hopper' }),
+    ).toBeInTheDocument()
   })
 })

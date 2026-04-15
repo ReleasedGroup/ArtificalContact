@@ -345,6 +345,10 @@ function PublicProfileScreen({ handle }: { handle: string }) {
   })
 
   useEffect(() => {
+    startTransition(() => {
+      setProfileState({ status: 'loading' })
+    })
+
     const controller = new AbortController()
 
     const loadProfile = async () => {

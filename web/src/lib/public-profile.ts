@@ -34,7 +34,7 @@ export class PublicProfileNotFoundError extends Error {
 }
 
 function readErrorMessage(payload: PublicProfileEnvelope | null): string | null {
-  const firstError = payload?.errors[0]
+  const firstError = payload?.errors?.[0]
   return firstError?.message?.trim() ? firstError.message : null
 }
 
