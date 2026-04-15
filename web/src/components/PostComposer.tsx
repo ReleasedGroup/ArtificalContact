@@ -450,7 +450,7 @@ export function PostComposer({
               role="status"
             >
               {mediaFiles.length > 0
-                ? `${formatImageCount(mediaFiles.length)} attached. Add alt text for each image before publishing.`
+                ? `${formatImageCount(mediaFiles.length)} attached. Consider adding alt text for each image.`
                 : 'No image attachments selected yet.'}
             </p>
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -479,7 +479,6 @@ export function PostComposer({
                 )}
                 {isMediaInputDisabled ? (
                   <button
-                    aria-disabled="true"
                     className="cursor-not-allowed rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-slate-500 transition"
                     disabled
                     type="button"
@@ -509,6 +508,7 @@ export function PostComposer({
               multiple
               onChange={handleMediaInputChange}
               ref={mediaInputRef}
+              tabIndex={-1}
               type="file"
             />
           </div>
