@@ -2,7 +2,11 @@ import { startTransition, useEffect, useState, type ReactNode } from 'react'
 import type { MeProfile } from '../lib/me'
 import { getOptionalMe } from '../lib/me'
 import { createReply, deletePost } from '../lib/post-write'
-import { PostComposer } from './PostComposer'
+import {
+  PostComposer,
+  type PostComposerMediaFile,
+  type PostComposerSubmission,
+} from './PostComposer'
 import { getComposerSegments } from '../lib/composer'
 import {
   getPublicPost,
@@ -698,19 +702,23 @@ function ReadyPostDetail({
   deleteState,
   getActionSlot,
   replyDraft,
+  replyMediaFiles,
   replyState,
   viewer,
   onReplyDraftChange,
+  onReplyMediaFilesChange,
   onReplySubmit,
 }: {
   data: PostDetailData
   deleteState: DeleteState
   getActionSlot: (post: RenderablePost) => ReactNode
   replyDraft: string
+  replyMediaFiles: PostComposerMediaFile[]
   replyState: ReplyState
   viewer: MeProfile | null
   onReplyDraftChange: (nextValue: string) => void
-  onReplySubmit: (value: string) => void
+  onReplyMediaFilesChange: (nextFiles: PostComposerMediaFile[]) => void
+  onReplySubmit: (submission: PostComposerSubmission) => void
 }) {
   const orderedPosts = [...data.thread.posts].sort(compareThreadPosts)
   const postsById = new Map(orderedPosts.map((post) => [post.id, post]))
@@ -791,7 +799,8 @@ function ReadyPostDetail({
                   </p>
                   <p className="mt-2 text-sm leading-7 text-slate-400">
                     Publish a reply to the currently selected post and refresh
-                    the public thread view in place.
+                    the public thread view in place. Attached image previews
+                    stay local until the reply upload path is available.
                   </p>
                 </div>
 
@@ -833,7 +842,9 @@ function ReadyPostDetail({
                   authorName={viewer.displayName}
                   disabled={!canReply || deleteState.status === 'deleting'}
                   label="Thread reply body"
+                  mediaFiles={replyMediaFiles}
                   onChange={onReplyDraftChange}
+                  onMediaFilesChange={onReplyMediaFilesChange}
                   onSubmit={onReplySubmit}
                   placeholder={`Reply to ${replyTargetLabel}…`}
                   submitLabel="Reply in thread"
@@ -1031,6 +1042,9 @@ export function PostDetailScreen({ postId }: { postId: string }) {
   })
   const [viewer, setViewer] = useState<MeProfile | null>(null)
   const [replyDraft, setReplyDraft] = useState('')
+  const [replyMediaFiles, setReplyMediaFiles] = useState<
+    PostComposerMediaFile[]
+  >([])
   const [replyState, setReplyState] = useState<ReplyState>({
     status: 'idle',
   })
@@ -1133,7 +1147,7 @@ export function PostDetailScreen({ postId }: { postId: string }) {
     }
   }, [postId, refreshToken])
 
-  const handleReplySubmit = async (value: string) => {
+  const handleReplySubmit = async ({ value }: PostComposerSubmission) => {
     if (postState.status !== 'ready' || viewer?.status !== 'active' || !viewer.handle) {
       return
     }
@@ -1147,6 +1161,7 @@ export function PostDetailScreen({ postId }: { postId: string }) {
       })
 
       setReplyDraft('')
+      setReplyMediaFiles([])
       setReplyState({
         status: 'success',
         message: 'Reply published and thread refreshed.',
@@ -1244,6 +1259,7 @@ export function PostDetailScreen({ postId }: { postId: string }) {
               deleteState={deleteState}
               getActionSlot={getActionSlot}
               replyDraft={replyDraft}
+              replyMediaFiles={replyMediaFiles}
               replyState={replyState}
               viewer={viewer}
               onReplyDraftChange={(nextValue) => {
@@ -1255,8 +1271,17 @@ export function PostDetailScreen({ postId }: { postId: string }) {
                   setDeleteState({ status: 'idle' })
                 }
               }}
-              onReplySubmit={(value) => {
-                void handleReplySubmit(value)
+              onReplyMediaFilesChange={(nextFiles) => {
+                setReplyMediaFiles(nextFiles)
+                if (replyState.status !== 'submitting') {
+                  setReplyState({ status: 'idle' })
+                }
+                if (deleteState.status !== 'deleting') {
+                  setDeleteState({ status: 'idle' })
+                }
+              }}
+              onReplySubmit={(submission) => {
+                void handleReplySubmit(submission)
               }}
             />
           ) : (
