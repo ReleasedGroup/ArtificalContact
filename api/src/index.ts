@@ -1,6 +1,7 @@
 import { registerCreateReplyFunction } from './functions/create-reply.js'
 import { registerCounterFunction } from './functions/counter.js'
 import { registerDeletePostFunction } from './functions/delete-post.js'
+import { registerFollowUserFunction } from './functions/follow-user.js'
 import { registerGetPostFunction } from './functions/get-post.js'
 import { registerGetThreadFunction } from './functions/get-thread.js'
 import { registerCreatePostFunction } from './functions/create-post.js'
@@ -15,6 +16,7 @@ import { registerAuthMeFunction } from './functions/me.js'
 registerCreateReplyFunction()
 registerCounterFunction()
 registerDeletePostFunction()
+registerFollowUserFunction()
 registerGetPostFunction()
 registerGetThreadFunction()
 registerCreatePostFunction()
