@@ -72,4 +72,28 @@ describe('healthHandler', () => {
       errors: [],
     })
   })
+
+  it('returns a predictable 500 envelope when the health payload is missing', async () => {
+    const handler = buildHealthHandler(async () => ({
+      data: null,
+      errors: [],
+    }))
+
+    const context = {
+      log: vi.fn(),
+    } as unknown as InvocationContext
+
+    const response = await handler({} as HttpRequest, context)
+
+    expect(response.status).toBe(500)
+    expect(response.jsonBody).toEqual({
+      data: null,
+      errors: [
+        {
+          code: 'server.invalid_health_report',
+          message: 'The health report payload was not available.',
+        },
+      ],
+    })
+  })
 })

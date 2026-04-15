@@ -214,10 +214,7 @@ export function resolveAuthenticatedPrincipal(
   }
 
   const normalizedRoles = principal.userRoles.map((role) => role.toLowerCase())
-  if (
-    normalizedRoles.includes('anonymous') &&
-    !normalizedRoles.includes('authenticated')
-  ) {
+  if (!normalizedRoles.includes('authenticated')) {
     return {
       ok: false,
       errorCode: 'auth.unauthenticated',

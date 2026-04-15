@@ -1,7 +1,7 @@
-import { CosmosClient, type Container } from '@azure/cosmos'
-import { DefaultAzureCredential } from '@azure/identity'
+import type { Container } from '@azure/cosmos'
 import type { AuthenticatedPrincipal } from './auth.js'
 import { getEnvironmentConfig, type EnvironmentConfig } from './config.js'
+import { createCosmosClient } from './cosmos-client.js'
 
 const defaultUsersContainerName = 'users'
 
@@ -105,23 +105,6 @@ function isExpectedCosmosStatusCode(error: unknown, statusCode: number) {
 function readOptionalValue(value?: string): string | undefined {
   const trimmed = value?.trim()
   return trimmed ? trimmed : undefined
-}
-
-function createCosmosClient(config: EnvironmentConfig) {
-  if (config.cosmosConnectionString) {
-    return new CosmosClient(config.cosmosConnectionString)
-  }
-
-  if (!config.cosmosEndpoint) {
-    throw new Error(
-      'COSMOS_ENDPOINT is required when no connection string is set.',
-    )
-  }
-
-  return new CosmosClient({
-    endpoint: config.cosmosEndpoint,
-    aadCredentials: new DefaultAzureCredential(),
-  })
 }
 
 function createCosmosUserRepository(container: Container): UserRepository {

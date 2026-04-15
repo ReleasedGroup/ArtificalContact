@@ -98,6 +98,24 @@ describe('resolveAuthenticatedPrincipal', () => {
     })
   })
 
+  it('rejects principals that omit the authenticated role', () => {
+    const result = resolveAuthenticatedPrincipal(
+      createRequestWithPrincipal({
+        identityProvider: 'aad',
+        userId: 'abc123',
+        userDetails: 'Nick',
+        userRoles: [],
+        claims: [],
+      }),
+    )
+
+    expect(result).toEqual({
+      ok: false,
+      errorCode: 'auth.unauthenticated',
+      message: 'Authentication is required.',
+    })
+  })
+
   it('rejects malformed authentication headers', () => {
     const result = resolveAuthenticatedPrincipal({
       headers: {
