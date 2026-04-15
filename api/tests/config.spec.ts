@@ -22,6 +22,9 @@ describe('getEnvironmentConfig', () => {
       CONTENT_SAFETY_ENDPOINT: 'https://safety.example.com',
       CONTENT_SAFETY_KEY: 'secret-key',
       CONTENT_SAFETY_THRESHOLD: '6',
+      SEARCH_ENDPOINT: 'https://search.example.com',
+      SEARCH_INDEX_POSTS_NAME: 'posts-test',
+      SEARCH_INDEX_USERS_NAME: 'users-test',
       FFMPEG_PATH: '/tools/ffmpeg',
     })
 
@@ -34,6 +37,9 @@ describe('getEnvironmentConfig', () => {
     expect(config.contentSafetyEndpoint).toBe('https://safety.example.com')
     expect(config.contentSafetyKey).toBe('secret-key')
     expect(config.contentSafetyThreshold).toBe(6)
+    expect(config.searchEndpoint).toBe('https://search.example.com')
+    expect(config.searchPostsIndexName).toBe('posts-test')
+    expect(config.searchUsersIndexName).toBe('users-test')
     expect(config.ffmpegPath).toBe('/tools/ffmpeg')
   })
 
@@ -43,6 +49,21 @@ describe('getEnvironmentConfig', () => {
     })
 
     expect(config.cosmosEndpoint).toBe('https://legacy-cosmos.example')
+  })
+
+  it('falls back to SEARCH_SERVICE_ENDPOINT when SEARCH_ENDPOINT is not set', () => {
+    const config = getEnvironmentConfig({
+      SEARCH_SERVICE_ENDPOINT: 'https://legacy-search.example',
+    })
+
+    expect(config.searchEndpoint).toBe('https://legacy-search.example')
+  })
+
+  it('falls back to default search index names when not configured', () => {
+    const config = getEnvironmentConfig({})
+
+    expect(config.searchPostsIndexName).toBe('posts-v1')
+    expect(config.searchUsersIndexName).toBe('users-v1')
   })
 
   it('clamps invalid content safety threshold values to the supported range', () => {

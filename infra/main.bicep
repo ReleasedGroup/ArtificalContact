@@ -103,6 +103,10 @@ module functions './modules/functions.bicep' = {
     storageAccountName: storage.outputs.accountName
     storageAccountResourceId: storage.outputs.accountResourceId
     deploymentContainerName: storage.outputs.deploymentContainerName
+    searchEndpoint: search.outputs.endpoint
+    searchPostsIndexName: search.outputs.postsIndexName
+    searchUsersIndexName: search.outputs.usersIndexName
+    searchResourceId: search.outputs.resourceId
   }
 }
 
