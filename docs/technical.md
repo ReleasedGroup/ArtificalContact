@@ -154,7 +154,7 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 | `notifications` | GET `/api/notifications` | Personal notification feed |
 | `markNotificationsRead` | POST `/api/notifications/read` | |
 | `notificationPrefs` | GET/PUT `/api/me/notifications` | |
-| `report` | POST `/api/reports` | User-submitted reports |
+| `report` | POST `/api/reports` | `{ targetType: "post" \| "reply" \| "media" \| "user", targetId, reason, details? }` |
 | `modQueue` | GET `/api/mod/queue` | Moderator role only |
 | `modAction` | POST `/api/mod/actions` | Moderator role only |
 | `adminMetrics` | GET `/api/admin/metrics` | Administrator role only |
