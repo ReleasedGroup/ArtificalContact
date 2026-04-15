@@ -41,6 +41,41 @@ class InMemoryNotificationDependencyStore
     this.upsertedNotifications.push(document)
   }
 
+  async listNotificationsByActorAndWindow(
+    targetUserId: string,
+    eventType: NotificationDocument['eventType'],
+    actorUserId: string,
+    windowStart: string,
+    windowEndExclusive: string,
+  ): Promise<NotificationDocument[]> {
+    return this.snapshotNotifications().filter((notification) => {
+      if (
+        notification.targetUserId !== targetUserId ||
+        notification.eventType !== eventType ||
+        notification.actorUserId !== actorUserId
+      ) {
+        return false
+      }
+
+      return (
+        notification.createdAt >= windowStart &&
+        notification.createdAt < windowEndExclusive
+      )
+    })
+  }
+
+  async deleteNotification(
+    targetUserId: string,
+    notificationId: string,
+  ): Promise<void> {
+    const existingNotification = this.notifications.get(notificationId)
+    if (existingNotification?.targetUserId !== targetUserId) {
+      return
+    }
+
+    this.notifications.delete(notificationId)
+  }
+
   async getByHandle(handle: string): Promise<ExistingMirrorRecord | null> {
     return this.mirrors.get(handle) ?? null
   }
@@ -261,6 +296,10 @@ describe('syncFollowNotificationsBatch', () => {
         readAt: null,
         createdAt: '2026-04-15T08:00:00.000Z',
         updatedAt: '2026-04-15T08:00:00.000Z',
+        eventCount: 1,
+        coalesced: false,
+        coalescedWindowStart: null,
+        coalescedRelatedEntityIds: [],
         ttl: 7776000,
       },
     ])
@@ -310,6 +349,10 @@ describe('syncPostNotificationsBatch', () => {
         readAt: null,
         createdAt: '2026-04-15T10:00:00.000Z',
         updatedAt: '2026-04-15T10:00:00.000Z',
+        eventCount: 1,
+        coalesced: false,
+        coalescedWindowStart: null,
+        coalescedRelatedEntityIds: [],
         ttl: 7776000,
       },
       {
@@ -331,6 +374,10 @@ describe('syncPostNotificationsBatch', () => {
         readAt: null,
         createdAt: '2026-04-15T10:00:00.000Z',
         updatedAt: '2026-04-15T10:00:00.000Z',
+        eventCount: 1,
+        coalesced: false,
+        coalescedWindowStart: null,
+        coalescedRelatedEntityIds: [],
         ttl: 7776000,
       },
     ])
@@ -415,8 +462,326 @@ describe('syncReactionNotificationsBatch', () => {
         readAt: null,
         createdAt: '2026-04-15T11:00:00.000Z',
         updatedAt: '2026-04-15T11:05:00.000Z',
+        eventCount: 1,
+        coalesced: false,
+        coalescedWindowStart: null,
+        coalescedRelatedEntityIds: [],
         ttl: 7776000,
       },
+    ])
+  })
+
+  it('coalesces more than the hourly threshold into a single actor notification', async () => {
+    const posts = new Map<string, StoredPostDocument>([
+      [
+        'p_root:p_root',
+        createStoredPost({
+          id: 'p_root',
+          threadId: 'p_root',
+          authorId: 'u_target',
+          text: 'Root post',
+        }),
+      ],
+      [
+        'p_second:p_second',
+        createStoredPost({
+          id: 'p_second',
+          threadId: 'p_second',
+          authorId: 'u_target',
+          text: 'Second post',
+        }),
+      ],
+      [
+        'p_third:p_third',
+        createStoredPost({
+          id: 'p_third',
+          threadId: 'p_third',
+          authorId: 'u_target',
+          text: 'Third post',
+        }),
+      ],
+    ])
+    const store = new InMemoryNotificationDependencyStore(
+      posts,
+      new Map([
+        [
+          'u_reactor',
+          createStoredUser({
+            id: 'u_reactor',
+            handle: 'mira',
+            displayName: 'Mira Patel',
+            avatarUrl: 'https://cdn.example.com/mira.png',
+          }),
+        ],
+      ]),
+    )
+
+    await syncReactionNotificationsBatch(
+      [
+        createReactionChange(),
+        createReactionChange({
+          id: 'p_second:u_reactor',
+          postId: 'p_second',
+          createdAt: '2026-04-15T11:10:00.000Z',
+          updatedAt: '2026-04-15T11:10:00.000Z',
+        }),
+        createReactionChange({
+          id: 'p_third:u_reactor',
+          postId: 'p_third',
+          sentiment: null,
+          emojiValues: ['🔥'],
+          createdAt: '2026-04-15T11:20:00.000Z',
+          updatedAt: '2026-04-15T11:21:00.000Z',
+        }),
+      ],
+      store,
+      store,
+      store,
+      undefined,
+      {
+        hourlyActorThrottleThreshold: 2,
+      },
+    )
+
+    expect(store.snapshotNotifications()).toEqual([
+      {
+        id: 'u_target:reaction:coalesced:u_reactor:2026-04-15T11:00:00.000Z',
+        type: 'notification',
+        targetUserId: 'u_target',
+        actorUserId: 'u_reactor',
+        actorHandle: 'mira',
+        actorDisplayName: 'Mira Patel',
+        actorAvatarUrl: 'https://cdn.example.com/mira.png',
+        eventType: 'reaction',
+        relatedEntityId: 'p_third:u_reactor',
+        postId: 'p_third',
+        threadId: 'p_third',
+        parentId: null,
+        reactionType: 'emoji',
+        reactionValues: ['🔥'],
+        excerpt: 'Third post',
+        readAt: null,
+        createdAt: '2026-04-15T11:00:00.000Z',
+        updatedAt: '2026-04-15T11:21:00.000Z',
+        eventCount: 3,
+        coalesced: true,
+        coalescedWindowStart: '2026-04-15T11:00:00.000Z',
+        coalescedRelatedEntityIds: [
+          'p_root:u_reactor',
+          'p_second:u_reactor',
+          'p_third:u_reactor',
+        ],
+        ttl: 7776000,
+      },
+    ])
+  })
+
+  it('falls back to the default threshold when the injected threshold is non-finite', async () => {
+    const posts = new Map<string, StoredPostDocument>([
+      [
+        'p_root:p_root',
+        createStoredPost({
+          id: 'p_root',
+          threadId: 'p_root',
+          authorId: 'u_target',
+          text: 'Root post',
+        }),
+      ],
+      [
+        'p_second:p_second',
+        createStoredPost({
+          id: 'p_second',
+          threadId: 'p_second',
+          authorId: 'u_target',
+          text: 'Second post',
+        }),
+      ],
+      [
+        'p_third:p_third',
+        createStoredPost({
+          id: 'p_third',
+          threadId: 'p_third',
+          authorId: 'u_target',
+          text: 'Third post',
+        }),
+      ],
+      [
+        'p_fourth:p_fourth',
+        createStoredPost({
+          id: 'p_fourth',
+          threadId: 'p_fourth',
+          authorId: 'u_target',
+          text: 'Fourth post',
+        }),
+      ],
+    ])
+    const store = new InMemoryNotificationDependencyStore(
+      posts,
+      new Map([
+        [
+          'u_reactor',
+          createStoredUser({
+            id: 'u_reactor',
+            handle: 'mira',
+            displayName: 'Mira Patel',
+          }),
+        ],
+      ]),
+    )
+
+    await syncReactionNotificationsBatch(
+      [
+        createReactionChange(),
+        createReactionChange({
+          id: 'p_second:u_reactor',
+          postId: 'p_second',
+          createdAt: '2026-04-15T11:10:00.000Z',
+          updatedAt: '2026-04-15T11:10:00.000Z',
+        }),
+        createReactionChange({
+          id: 'p_third:u_reactor',
+          postId: 'p_third',
+          createdAt: '2026-04-15T11:20:00.000Z',
+          updatedAt: '2026-04-15T11:20:00.000Z',
+        }),
+        createReactionChange({
+          id: 'p_fourth:u_reactor',
+          postId: 'p_fourth',
+          createdAt: '2026-04-15T11:25:00.000Z',
+          updatedAt: '2026-04-15T11:26:00.000Z',
+        }),
+      ],
+      store,
+      store,
+      store,
+      undefined,
+      {
+        hourlyActorThrottleThreshold: Number.NaN,
+      },
+    )
+
+    expect(store.snapshotNotifications()).toEqual([
+      expect.objectContaining({
+        id: 'u_target:reaction:coalesced:u_reactor:2026-04-15T11:00:00.000Z',
+        relatedEntityId: 'p_fourth:u_reactor',
+        eventCount: 4,
+        coalesced: true,
+        coalescedRelatedEntityIds: [
+          'p_fourth:u_reactor',
+          'p_root:u_reactor',
+          'p_second:u_reactor',
+          'p_third:u_reactor',
+        ],
+      }),
+    ])
+  })
+
+  it('keeps the coalesced count stable when an already-represented reaction changes shape', async () => {
+    const posts = new Map<string, StoredPostDocument>([
+      [
+        'p_root:p_root',
+        createStoredPost({
+          id: 'p_root',
+          threadId: 'p_root',
+          authorId: 'u_target',
+          text: 'Root post',
+        }),
+      ],
+      [
+        'p_second:p_second',
+        createStoredPost({
+          id: 'p_second',
+          threadId: 'p_second',
+          authorId: 'u_target',
+          text: 'Second post',
+        }),
+      ],
+      [
+        'p_third:p_third',
+        createStoredPost({
+          id: 'p_third',
+          threadId: 'p_third',
+          authorId: 'u_target',
+          text: 'Third post',
+        }),
+      ],
+    ])
+    const store = new InMemoryNotificationDependencyStore(
+      posts,
+      new Map([
+        [
+          'u_reactor',
+          createStoredUser({
+            id: 'u_reactor',
+            handle: 'mira',
+            displayName: 'Mira Patel',
+          }),
+        ],
+      ]),
+    )
+
+    await syncReactionNotificationsBatch(
+      [
+        createReactionChange(),
+        createReactionChange({
+          id: 'p_second:u_reactor',
+          postId: 'p_second',
+          createdAt: '2026-04-15T11:10:00.000Z',
+          updatedAt: '2026-04-15T11:10:00.000Z',
+        }),
+        createReactionChange({
+          id: 'p_third:u_reactor',
+          postId: 'p_third',
+          createdAt: '2026-04-15T11:20:00.000Z',
+          updatedAt: '2026-04-15T11:20:00.000Z',
+        }),
+      ],
+      store,
+      store,
+      store,
+      undefined,
+      {
+        hourlyActorThrottleThreshold: 2,
+      },
+    )
+
+    await syncReactionNotificationsBatch(
+      [
+        createReactionChange({
+          id: 'p_second:u_reactor',
+          postId: 'p_second',
+          sentiment: null,
+          emojiValues: ['👏'],
+          createdAt: '2026-04-15T11:10:00.000Z',
+          updatedAt: '2026-04-15T11:45:00.000Z',
+        }),
+      ],
+      store,
+      store,
+      store,
+      undefined,
+      {
+        hourlyActorThrottleThreshold: 2,
+      },
+    )
+
+    expect(store.snapshotNotifications()).toEqual([
+      expect.objectContaining({
+        id: 'u_target:reaction:coalesced:u_reactor:2026-04-15T11:00:00.000Z',
+        relatedEntityId: 'p_second:u_reactor',
+        postId: 'p_second',
+        reactionType: 'emoji',
+        reactionValues: ['👏'],
+        updatedAt: '2026-04-15T11:45:00.000Z',
+        eventCount: 3,
+        coalesced: true,
+        coalescedWindowStart: '2026-04-15T11:00:00.000Z',
+        coalescedRelatedEntityIds: [
+          'p_root:u_reactor',
+          'p_second:u_reactor',
+          'p_third:u_reactor',
+        ],
+      }),
     ])
   })
 

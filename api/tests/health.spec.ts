@@ -19,6 +19,7 @@ describe('createHealthReport', () => {
         contentSafetyEndpoint: undefined,
         contentSafetyKey: undefined,
         contentSafetyThreshold: 4,
+        reactionNotificationHourlyThreshold: 3,
         searchEndpoint: undefined,
         searchPostsIndexName: 'posts-v1',
         searchUsersIndexName: 'users-v1',

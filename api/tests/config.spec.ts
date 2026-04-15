@@ -22,6 +22,7 @@ describe('getEnvironmentConfig', () => {
       CONTENT_SAFETY_ENDPOINT: 'https://safety.example.com',
       CONTENT_SAFETY_KEY: 'secret-key',
       CONTENT_SAFETY_THRESHOLD: '6',
+      REACTION_NOTIFICATION_HOURLY_THRESHOLD: '5',
       SEARCH_ENDPOINT: 'https://search.example.com',
       SEARCH_INDEX_POSTS_NAME: 'posts-test',
       SEARCH_INDEX_USERS_NAME: 'users-test',
@@ -38,6 +39,7 @@ describe('getEnvironmentConfig', () => {
     expect(config.contentSafetyEndpoint).toBe('https://safety.example.com')
     expect(config.contentSafetyKey).toBe('secret-key')
     expect(config.contentSafetyThreshold).toBe(6)
+    expect(config.reactionNotificationHourlyThreshold).toBe(5)
     expect(config.searchEndpoint).toBe('https://search.example.com')
     expect(config.searchPostsIndexName).toBe('posts-test')
     expect(config.searchUsersIndexName).toBe('users-test')
@@ -93,5 +95,21 @@ describe('getEnvironmentConfig', () => {
 
     expect(invalidThreshold.contentSafetyThreshold).toBe(4)
     expect(highThreshold.contentSafetyThreshold).toBe(7)
+  })
+
+  it('clamps invalid reaction notification thresholds to the supported range', () => {
+    const invalidThreshold = getEnvironmentConfig({
+      REACTION_NOTIFICATION_HOURLY_THRESHOLD: 'nan',
+    })
+    const lowThreshold = getEnvironmentConfig({
+      REACTION_NOTIFICATION_HOURLY_THRESHOLD: '0',
+    })
+    const highThreshold = getEnvironmentConfig({
+      REACTION_NOTIFICATION_HOURLY_THRESHOLD: '999',
+    })
+
+    expect(invalidThreshold.reactionNotificationHourlyThreshold).toBe(3)
+    expect(lowThreshold.reactionNotificationHourlyThreshold).toBe(1)
+    expect(highThreshold.reactionNotificationHourlyThreshold).toBe(100)
   })
 })
