@@ -169,7 +169,9 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 | `followersMirrorFn` | `follows` | Maintain the reverse `followers` lookup mirror with deterministic ids for reverse social-graph queries |
 | `feedFanOutFn` | `posts` | Materialise root user posts into followers' `feeds` partitions |
 | `searchSyncFn` | `posts`, `users` | Upsert/delete documents in AI Search indexes |
-| `counterFn` | `posts`, `reactions`, `follows` | Update aggregate counters on parent documents |
+| `counterFn` | `posts` | Update reply counters on parent posts |
+| `reactionCounterFn` | `reactions` | Update likes, dislikes, and emoji counters on the reacted post |
+| `followCounterFn` | `follows` | Update follower and following counters on user profiles |
 | `notificationFn` | `posts`, `reactions`, `follows` | Create `notification` documents and dispatch external channels |
 
 #### Blob-triggered
@@ -555,7 +557,7 @@ For each active repo, on each tick (default every 5 minutes, randomised with ±6
 
 The change feed handles everything else automatically:
 - `searchSyncFn` upserts the post into `posts-v1` with `kind=github`, `githubEventType`, and `githubRepo` populated.
-- `counterFn` keeps reaction and reply counts in sync as users interact.
+- `counterFn` and `reactionCounterFn` keep reply and reaction counts in sync as users interact.
 - `feedFanOutFn` is **not** invoked for synthetic GitHub users (they have no followers in the real sense). GitHub posts surface via the public explore feed and per-repo profile page rather than through follower fan-out.
 
 ### 14.4 Identity Reservation

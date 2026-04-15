@@ -14,6 +14,12 @@ import {
 import { DEFAULT_FOLLOWS_CONTAINER_NAME } from '../lib/follows.js'
 import { DEFAULT_POSTS_CONTAINER_NAME } from '../lib/posts.js'
 import {
+  syncReactionCountersBatch,
+  type ReactionCounterSourceDocument,
+  type ReactionCounterStore,
+} from '../lib/reaction-counter.js'
+import { DEFAULT_REACTIONS_CONTAINER_NAME } from '../lib/reactions.js'
+import {
   syncReplyCountersBatch,
   type ReplyCounterSourceDocument,
   type ReplyCounterStore,
@@ -25,7 +31,7 @@ import {
 
 const cosmosConnectionName = 'COSMOS_CONNECTION'
 
-let cachedReplyCounterStore: CosmosPostStore | undefined
+let cachedCounterStore: CosmosPostStore | undefined
 let cachedFollowCounterStore: CosmosUserFollowCounterStore | undefined
 let cachedFollowersMirrorStore: CosmosFollowersMirrorStore | undefined
 
@@ -35,8 +41,8 @@ function readOptionalValue(value?: string): string | undefined {
 }
 
 function getStore(): CosmosPostStore {
-  cachedReplyCounterStore ??= CosmosPostStore.fromEnvironment()
-  return cachedReplyCounterStore
+  cachedCounterStore ??= CosmosPostStore.fromEnvironment()
+  return cachedCounterStore
 }
 
 function getFollowStore(): CosmosUserFollowCounterStore {
@@ -52,6 +58,7 @@ function getFollowersMirrorStore(): CosmosFollowersMirrorStore {
 export interface CounterFunctionDependencies {
   storeFactory?: () => ReplyCounterStore
   replyStoreFactory?: () => ReplyCounterStore
+  reactionStoreFactory?: () => ReactionCounterStore
   followStoreFactory?: () => FollowCounterStore
   followersMirrorStoreFactory?: () => FollowersMirrorStore
 }
@@ -88,8 +95,22 @@ export function buildFollowCounterFn(
   }
 }
 
+export function buildReactionCounterFn(
+  dependencies: CounterFunctionDependencies = {},
+) {
+  const storeFactory = dependencies.reactionStoreFactory ?? getStore
+
+  return async function reactionCounterFn(
+    documents: ReactionCounterSourceDocument[],
+    context: InvocationContext,
+  ): Promise<void> {
+    await syncReactionCountersBatch(documents, storeFactory(), context)
+  }
+}
+
 export const counterFn = buildCounterFn()
 export const followCounterFn = buildFollowCounterFn()
+export const reactionCounterFn = buildReactionCounterFn()
 
 export function registerCounterFunction() {
   app.cosmosDB<ReplyCounterSourceDocument>('counterFn', {
@@ -106,6 +127,22 @@ export function registerCounterFunction() {
     leaseContainerPrefix: 'counter',
     createLeaseContainerIfNotExists: true,
     handler: counterFn,
+  })
+
+  app.cosmosDB<ReactionCounterSourceDocument>('reactionCounterFn', {
+    connection: cosmosConnectionName,
+    databaseName:
+      readOptionalValue(process.env.COSMOS_DATABASE_NAME) ??
+      DEFAULT_COSMOS_DATABASE_NAME,
+    containerName:
+      readOptionalValue(process.env.REACTIONS_CONTAINER_NAME) ??
+      DEFAULT_REACTIONS_CONTAINER_NAME,
+    leaseContainerName:
+      readOptionalValue(process.env.COSMOS_LEASE_CONTAINER_NAME) ??
+      DEFAULT_COSMOS_LEASE_CONTAINER_NAME,
+    leaseContainerPrefix: 'reactionCounter',
+    createLeaseContainerIfNotExists: true,
+    handler: reactionCounterFn,
   })
 
   app.cosmosDB<FollowCounterSourceDocument>('followCounterFn', {
