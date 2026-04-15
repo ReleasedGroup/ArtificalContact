@@ -3,8 +3,10 @@ import { DefaultAzureCredential } from '@azure/identity'
 import { getEnvironmentConfig } from './config.js'
 import {
   DEFAULT_POSTS_CONTAINER_NAME,
+  type PostRepository,
   type PostStore,
   type StoredPostDocument,
+  type UserPostDocument,
 } from './posts.js'
 import { DEFAULT_COSMOS_DATABASE_NAME } from './users-by-handle-mirror.js'
 
@@ -46,7 +48,7 @@ function createCosmosClientFromEnvironment(): CosmosClient {
   })
 }
 
-export class CosmosPostStore implements PostStore {
+export class CosmosPostStore implements PostStore, PostRepository {
   constructor(private readonly postsContainer: Container) {}
 
   static fromEnvironment(client?: CosmosClient): CosmosPostStore {
@@ -76,6 +78,11 @@ export class CosmosPostStore implements PostStore {
     }
 
     return this.queryById(postId)
+  }
+
+  async create(post: UserPostDocument): Promise<UserPostDocument> {
+    await this.postsContainer.items.create<UserPostDocument>(post)
+    return post
   }
 
   private async readItem(

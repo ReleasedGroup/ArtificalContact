@@ -1,6 +1,12 @@
-import type { ApiEnvelope } from './api-envelope.js'
+import { z, type ZodIssue } from 'zod'
+import type { ApiEnvelope, ApiError } from './api-envelope.js'
+import type { UserDocument } from './users.js'
 
 export const DEFAULT_POSTS_CONTAINER_NAME = 'posts'
+export const DEFAULT_POST_MAX_LENGTH = 280
+
+const hashtagPattern = /(?<![A-Za-z0-9_])#([A-Za-z0-9_]+)/g
+const mentionPattern = /(?<![A-Za-z0-9_])@([A-Za-z0-9_-]+)/g
 
 export interface StoredPostMediaDocument {
   id?: string | null
@@ -117,6 +123,35 @@ export interface PostStore {
   ): Promise<StoredPostDocument | null>
 }
 
+export interface UserPostDocument extends StoredPostDocument {
+  type: 'post' | 'reply'
+  kind: 'user'
+  threadId: string
+  parentId: string | null
+  authorId: string
+  authorHandle: string
+  authorDisplayName: string
+  authorAvatarUrl?: string
+  text: string
+  hashtags: string[]
+  mentions: string[]
+  counters: {
+    likes: number
+    dislikes: number
+    emoji: number
+    replies: number
+  }
+  visibility: 'public'
+  moderationState: 'ok'
+  createdAt: string
+  updatedAt: string
+  deletedAt: null
+}
+
+export interface PostRepository extends PostStore {
+  create(post: UserPostDocument): Promise<UserPostDocument>
+}
+
 export interface PostLookupResult {
   status: 200 | 400 | 404
   body: ApiEnvelope<PublicPost | null>
@@ -161,6 +196,14 @@ function toCount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
     ? value
     : 0
+}
+
+function normalizePostText(value: unknown): unknown {
+  if (typeof value !== 'string') {
+    return value
+  }
+
+  return value.trim()
 }
 
 function toStringArray(value: unknown): string[] {
@@ -227,7 +270,7 @@ function toPostKind(post: StoredPostDocument): 'user' | 'github' {
   return toNullableString(post.kind) === 'github' ? 'github' : 'user'
 }
 
-function isPubliclyVisiblePost(post: StoredPostDocument): boolean {
+export function isPubliclyVisiblePost(post: StoredPostDocument): boolean {
   if (toNullableString(post.deletedAt) !== null) {
     return false
   }
@@ -239,6 +282,112 @@ function isPubliclyVisiblePost(post: StoredPostDocument): boolean {
 
   const moderationState = toNullableString(post.moderationState) ?? 'ok'
   return moderationState !== 'hidden' && moderationState !== 'removed'
+}
+
+function readUniqueMatches(text: string, pattern: RegExp): string[] {
+  const values = new Set<string>()
+
+  for (const match of text.matchAll(pattern)) {
+    const value = match[1]?.trim().toLowerCase()
+    if (!value) {
+      continue
+    }
+
+    values.add(value)
+  }
+
+  return [...values]
+}
+
+export function resolvePostMaxLength(
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  const configuredValue = toNullableString(env.POST_MAX_LENGTH)
+  if (configuredValue === null) {
+    return DEFAULT_POST_MAX_LENGTH
+  }
+
+  if (!/^\d+$/.test(configuredValue)) {
+    throw new Error('POST_MAX_LENGTH must be a positive integer.')
+  }
+
+  const parsedValue = Number(configuredValue)
+  if (!Number.isInteger(parsedValue) || parsedValue <= 0) {
+    throw new Error('POST_MAX_LENGTH must be a positive integer.')
+  }
+
+  return parsedValue
+}
+
+export function buildCreatePostRequestSchema(maxTextLength: number) {
+  return z
+    .object({
+      text: z.preprocess(
+        normalizePostText,
+        z.string().min(1).max(maxTextLength),
+      ),
+    })
+    .strict()
+}
+
+export type CreatePostRequest = z.infer<
+  ReturnType<typeof buildCreatePostRequestSchema>
+>
+
+export function mapCreatePostValidationIssues(
+  issues: readonly ZodIssue[],
+): ApiError[] {
+  return issues.map((issue) => ({
+    code: 'invalid_post',
+    message: issue.message,
+    ...(issue.path.length > 0 ? { field: issue.path.join('.') } : {}),
+  }))
+}
+
+export function extractHashtags(text: string): string[] {
+  return readUniqueMatches(text, hashtagPattern)
+}
+
+export function extractMentions(text: string): string[] {
+  return readUniqueMatches(text, mentionPattern)
+}
+
+export function createUserReplyDocument(
+  user: UserDocument,
+  parent: StoredPostDocument,
+  request: CreatePostRequest,
+  createdAt: Date,
+  idFactory: () => string,
+): UserPostDocument {
+  const id = idFactory()
+  const timestamp = createdAt.toISOString()
+  const threadId = toNullableString(parent.threadId) ?? parent.id
+
+  return {
+    id,
+    type: 'reply',
+    kind: 'user',
+    threadId,
+    parentId: parent.id,
+    authorId: user.id,
+    authorHandle: user.handle ?? user.handleLower ?? '',
+    authorDisplayName: user.displayName,
+    ...(user.avatarUrl ? { authorAvatarUrl: user.avatarUrl } : {}),
+    text: request.text,
+    hashtags: extractHashtags(request.text),
+    mentions: extractMentions(request.text),
+    counters: {
+      likes: 0,
+      dislikes: 0,
+      emoji: 0,
+      replies: 0,
+    },
+    visibility: 'public',
+    moderationState: 'ok',
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    deletedAt: null,
+  }
 }
 
 export function buildPublicPost(post: StoredPostDocument): PublicPost {
