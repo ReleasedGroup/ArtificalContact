@@ -542,6 +542,36 @@ describe('mediaUploadUrlHandler', () => {
     })
   })
 
+  it('surfaces oversize upload validation as 413', async () => {
+    const handler = buildMediaUploadUrlHandler({
+      issuerFactory: () =>
+        (async () => {
+          throw new MediaFileTooLargeError('gif', 8 * 1024 * 1024)
+        }) satisfies MediaUploadUrlIssuer,
+    })
+
+    const response = await handler(
+      createRequest({
+        kind: 'gif',
+        contentType: 'image/gif',
+        sizeBytes: 8 * 1024 * 1024 + 1,
+      }),
+      createContext(),
+    )
+
+    expect(response.status).toBe(413)
+    expect(response.jsonBody).toEqual({
+      data: null,
+      errors: [
+        {
+          code: 'media.file_too_large',
+          field: 'sizeBytes',
+          message: 'The uploaded gif exceeds the 8388608-byte limit.',
+        },
+      ],
+    })
+  })
+
   it('returns 500 when the media upload service cannot be configured', async () => {
     const context = createContext()
     const handler = buildMediaUploadUrlHandler({
