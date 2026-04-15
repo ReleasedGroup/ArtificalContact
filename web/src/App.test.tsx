@@ -114,6 +114,36 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'evals ×' })).toBeInTheDocument()
   })
 
+  it('renders the /me error state when the profile request fails', async () => {
+    window.history.pushState({}, '', '/me')
+    mockFetch.mockResolvedValue(
+      createJsonResponse(
+        {
+          data: null,
+          errors: [
+            {
+              code: 'server.user_lookup_failed',
+              message: 'Unable to resolve the authenticated user profile.',
+            },
+          ],
+        },
+        false,
+        500,
+      ),
+    )
+
+    render(<App />)
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'The profile editor could not load.',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Unable to resolve the authenticated user profile.'),
+    ).toBeInTheDocument()
+  })
+
   it('saves profile edits from the /me editor', async () => {
     window.history.pushState({}, '', '/me')
     mockFetch

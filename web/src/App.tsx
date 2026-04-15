@@ -480,25 +480,6 @@ function ProfileEditorRoute() {
     }
   }
 
-  if (profileState.status === 'loading' || draft === null || currentUser === null) {
-    return (
-      <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center px-6 py-12 sm:px-8 lg:px-12">
-        <section className="w-full rounded-[2rem] border border-white/10 bg-slate-950/80 p-8 shadow-2xl shadow-indigo-950/20 backdrop-blur sm:p-12">
-          <p className="text-sm font-medium uppercase tracking-[0.24em] text-sky-200/80">
-            /me profile
-          </p>
-          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-white">
-            Loading your profile editor.
-          </h1>
-          <p className="mt-4 max-w-2xl text-base leading-8 text-slate-300">
-            Fetching the authenticated profile so the editor can populate your
-            display name, bio, and expertise tags.
-          </p>
-        </section>
-      </main>
-    )
-  }
-
   if (profileState.status === 'error') {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-4xl items-center px-6 py-12 sm:px-8 lg:px-12">
@@ -526,6 +507,25 @@ function ProfileEditorRoute() {
               Sign out
             </a>
           </div>
+        </section>
+      </main>
+    )
+  }
+
+  if (profileState.status === 'loading' || draft === null || currentUser === null) {
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center px-6 py-12 sm:px-8 lg:px-12">
+        <section className="w-full rounded-[2rem] border border-white/10 bg-slate-950/80 p-8 shadow-2xl shadow-indigo-950/20 backdrop-blur sm:p-12">
+          <p className="text-sm font-medium uppercase tracking-[0.24em] text-sky-200/80">
+            /me profile
+          </p>
+          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-white">
+            Loading your profile editor.
+          </h1>
+          <p className="mt-4 max-w-2xl text-base leading-8 text-slate-300">
+            Fetching the authenticated profile so the editor can populate your
+            display name, bio, and expertise tags.
+          </p>
         </section>
       </main>
     )

@@ -64,7 +64,7 @@ async function readEnvelope<TData>(
   }
 
   if (!response.ok) {
-    throw new Error(payload.errors[0]?.message ?? failureFallback)
+    throw new Error(payload?.errors?.[0]?.message ?? failureFallback)
   }
 
   return payload

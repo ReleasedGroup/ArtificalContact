@@ -280,13 +280,15 @@ describe('updateProfileHandler', () => {
         displayName: 'Nick Beaugeard',
         bio: '',
         expertise: ['agents'],
+        avatarUrl: null,
+        bannerUrl: null,
       }),
       createContext(),
     )
 
     expect(response.status).toBe(200)
     expect(repository.create).toHaveBeenCalledOnce()
-    expect(repository.replace).toHaveBeenCalledWith(
+    expect(repository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'github:abc123',
         displayName: 'Nick Beaugeard',
@@ -294,6 +296,7 @@ describe('updateProfileHandler', () => {
         updatedAt: '2026-04-15T03:30:00.000Z',
       }),
     )
+    expect(repository.replace).not.toHaveBeenCalled()
     expect(response.jsonBody).toMatchObject({
       data: {
         isNewUser: true,
@@ -362,6 +365,8 @@ describe('updateProfileHandler', () => {
           'twelve',
           'thirteen',
         ],
+        avatarUrl: null,
+        bannerUrl: null,
       }),
       createContext(),
     )
@@ -374,6 +379,36 @@ describe('updateProfileHandler', () => {
           code: 'profile.invalid_payload',
           field: 'expertise',
           message: 'Add at most 12 expertise tags.',
+        },
+      ],
+    })
+  })
+
+  it('requires explicit avatar and banner placeholder fields in the payload', async () => {
+    const repository = createRepository()
+
+    const handler = buildUpdateProfileHandler({
+      repositoryFactory: () => repository,
+    })
+
+    const response = await handler(
+      createPrincipalRequest(authenticatedPrincipal, {
+        displayName: 'Nick Beaugeard',
+        bio: '',
+        expertise: [],
+      }),
+      createContext(),
+    )
+
+    expect(response.status).toBe(400)
+    expect(response.jsonBody).toEqual({
+      data: null,
+      errors: [
+        {
+          code: 'profile.invalid_payload',
+          field: 'avatarUrl',
+          message:
+            'The avatarUrl field must be included in the profile update payload.',
         },
       ],
     })

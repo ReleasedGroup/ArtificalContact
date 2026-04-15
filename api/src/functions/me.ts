@@ -12,6 +12,7 @@ import {
 import { resolveAuthenticatedPrincipal } from '../lib/auth.js'
 import {
   applyProfileUpdate,
+  createPendingUserDocument,
   createUserRepository,
   ensureUserForPrincipal,
   toMeProfile,
@@ -73,11 +74,28 @@ function invalidProfileField(
   }
 }
 
+function isConflictError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) {
+    return false
+  }
+
+  const record = error as Record<string, unknown>
+  return record.statusCode === 409 || record.code === 409
+}
+
 function validateAssetUrl(
   field: 'avatarUrl' | 'bannerUrl',
   value: unknown,
 ): string | null | ApiError {
-  if (value === undefined || value === null) {
+  if (value === undefined) {
+    return {
+      code: 'profile.invalid_payload',
+      field,
+      message: `The ${field} field must be included in the profile update payload.`,
+    }
+  }
+
+  if (value === null) {
     return null
   }
 
@@ -392,28 +410,60 @@ export function buildUpdateProfileHandler(
     const repository = repositoryResult.value
 
     try {
-      const resolvedUser = await ensureUserForPrincipal(
-        principalResult.principal,
-        repository,
-        now,
+      const timestamp = now()
+      const existingUser = await repository.getById(
+        principalResult.principal.subject,
       )
-      const updatedUser = applyProfileUpdate(
-        resolvedUser.user,
-        validation.value,
-        now(),
-      )
-      const storedUser = await repository.replace(updatedUser)
+
+      let storedUser
+      let isNewUser = false
+
+      if (existingUser) {
+        storedUser = await repository.replace(
+          applyProfileUpdate(existingUser, validation.value, timestamp),
+        )
+      } else {
+        const newUser = applyProfileUpdate(
+          createPendingUserDocument(principalResult.principal, timestamp),
+          validation.value,
+          timestamp,
+        )
+
+        try {
+          storedUser = await repository.create(newUser)
+          isNewUser = true
+        } catch (error) {
+          if (!isConflictError(error)) {
+            throw error
+          }
+
+          const concurrentlyCreatedUser = await repository.getById(
+            principalResult.principal.subject,
+          )
+          if (!concurrentlyCreatedUser) {
+            throw error
+          }
+
+          storedUser = await repository.replace(
+            applyProfileUpdate(
+              concurrentlyCreatedUser,
+              validation.value,
+              timestamp,
+            ),
+          )
+        }
+      }
 
       context.log('Updated authenticated profile.', {
         identityProvider: storedUser.identityProvider,
-        isNewUser: resolvedUser.isNewUser,
+        isNewUser,
         status: storedUser.status,
         userId: storedUser.id,
       })
 
       const responsePayload: ResolvedMeProfile = {
         user: toMeProfile(storedUser),
-        isNewUser: resolvedUser.isNewUser,
+        isNewUser,
       }
 
       return createSuccessResponse(responsePayload)
