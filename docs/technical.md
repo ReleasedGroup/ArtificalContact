@@ -140,7 +140,7 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 | `getPost` | GET `/api/posts/{id}` | |
 | `getThread` | GET `/api/threads/{threadId}` | Cross-partition-free; `threadId` is the partition key |
 | `replyToPost` | POST `/api/posts/{id}/replies` | |
-| `deletePost` | DELETE `/api/posts/{id}` | Soft delete (sets `deletedAt`) |
+| `deletePost` | DELETE `/api/posts/{id}` | Soft delete for the author or a moderator; sets `deletedAt` and clears the stored body text |
 | `react` | POST `/api/posts/{id}/reactions` | `{ type: "like" \| "dislike" \| "emoji" \| "gif", value? }` |
 | `unreact` | DELETE `/api/posts/{id}/reactions` | |
 | `getFeed` | GET `/api/feed` | Personal feed (pull from `feeds` container) |
@@ -267,6 +267,8 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
   "deletedAt": null
 }
 ```
+
+When a post is soft-deleted, `deletedAt` is set, `text` is cleared, and GitHub-sourced posts also clear `github.bodyExcerpt`. The document remains in Cosmos DB for moderation and audit workflows, but public read paths and search synchronization treat it as deleted.
 
 A GitHub-sourced post uses the same container but sets `kind: "github"` and adds a `github` subdocument. Its `id` is deterministic so re-polling is idempotent:
 
