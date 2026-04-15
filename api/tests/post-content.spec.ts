@@ -24,6 +24,14 @@ describe('resolvePostMaxLength', () => {
       ).toThrowError('POST_MAX_LENGTH must be a positive integer.')
     },
   )
+
+  it('rejects values above Number.MAX_SAFE_INTEGER', () => {
+    expect(() =>
+      resolvePostMaxLength({
+        POST_MAX_LENGTH: String(Number.MAX_SAFE_INTEGER + 1),
+      }),
+    ).toThrowError('POST_MAX_LENGTH must be a positive integer.')
+  })
 })
 
 describe('extractHashtags', () => {
@@ -43,6 +51,14 @@ describe('extractMentions', () => {
         'Ping @Ada and @grace, then email ada@example.com or foo@bar.',
       ),
     ).toEqual(['ada', 'grace'])
+  })
+
+  it('supports route-safe handles that include dots and slashes', () => {
+    expect(
+      extractMentions(
+        'Thanks @ada.lovelace and @github/openai-cookbook for the examples.',
+      ),
+    ).toEqual(['ada.lovelace', 'github/openai-cookbook'])
   })
 })
 

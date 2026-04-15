@@ -1,11 +1,12 @@
 import { z } from 'zod'
 import type { ApiEnvelope } from './api-envelope.js'
+import { readOptionalValue } from './strings.js'
 
 export const DEFAULT_POSTS_CONTAINER_NAME = 'posts'
 export const DEFAULT_POST_MAX_LENGTH = 280
 
 const hashtagPattern = /(?<![A-Za-z0-9_])#([A-Za-z0-9_]+)/g
-const mentionPattern = /(?<![A-Za-z0-9_])@([A-Za-z0-9_-]+)/g
+const mentionPattern = /(?<![A-Za-z0-9_])@([A-Za-z0-9._/-]+)/g
 
 export interface StoredPostMediaDocument {
   id?: string | null
@@ -131,11 +132,6 @@ export interface PostStore {
 export interface PostLookupResult {
   status: 200 | 400 | 404
   body: ApiEnvelope<PublicPost | null>
-}
-
-function readOptionalValue(value?: string): string | undefined {
-  const trimmed = value?.trim()
-  return trimmed ? trimmed : undefined
 }
 
 function toNullableString(value: unknown): string | null {
@@ -293,7 +289,7 @@ export function resolvePostMaxLength(
   }
 
   const parsedValue = Number(configuredValue)
-  if (!Number.isInteger(parsedValue) || parsedValue <= 0) {
+  if (!Number.isSafeInteger(parsedValue) || parsedValue <= 0) {
     throw new Error('POST_MAX_LENGTH must be a positive integer.')
   }
 
