@@ -290,4 +290,42 @@ describe('withHttpAuth', () => {
       ],
     })
   })
+
+  it('rejects an invalid allowAnonymous plus requiredRoles configuration', () => {
+    expect(() =>
+      withHttpAuth(async () => createSuccessResponse({ ok: true }), {
+        allowAnonymous: true,
+        requiredRoles: ['admin'],
+      }),
+    ).toThrowError(
+      'withHttpAuth cannot combine allowAnonymous with requiredRoles.',
+    )
+  })
+
+  it('reuses the repository instance across requests for the same wrapper', async () => {
+    const repositoryFactory = vi.fn(
+      (): UserRepository => ({
+        getById: async () => createStoredUser(),
+      }),
+    )
+    const handler = withHttpAuth(
+      async () => createSuccessResponse({ ok: true }),
+      {
+        repositoryFactory,
+      },
+    )
+
+    const request = createPrincipalRequest({
+      identityProvider: 'github',
+      userId: 'abc123',
+      userDetails: 'nickbeau',
+      userRoles: ['authenticated', 'user'],
+      claims: [],
+    })
+
+    await handler(request, createContext())
+    await handler(request, createContext())
+
+    expect(repositoryFactory).toHaveBeenCalledOnce()
+  })
 })

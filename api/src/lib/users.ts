@@ -75,11 +75,6 @@ export interface EnsureUserResult {
   isNewUser: boolean
 }
 
-type CosmosLikeError = Error & {
-  code?: number | string
-  statusCode?: number
-}
-
 function getErrorStatusCode(error: unknown): number | undefined {
   if (typeof error !== 'object' || error === null) {
     return undefined

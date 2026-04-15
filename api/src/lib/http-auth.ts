@@ -84,8 +84,19 @@ export function withHttpAuth(
         .filter(Boolean),
     ),
   ]
-  const repositoryFactory =
-    options.repositoryFactory ?? (() => createUserRepository())
+  if (options.allowAnonymous && requiredRoles.length > 0) {
+    throw new Error(
+      'withHttpAuth cannot combine allowAnonymous with requiredRoles.',
+    )
+  }
+
+  const repositoryFactory = options.repositoryFactory ?? createUserRepository
+  let cachedRepository: UserRepository | undefined
+
+  function getRepository(): UserRepository {
+    cachedRepository ??= repositoryFactory()
+    return cachedRepository
+  }
 
   return async function authenticatedHandler(
     request: HttpRequest,
@@ -108,7 +119,7 @@ export function withHttpAuth(
     let repository: UserRepository
 
     try {
-      repository = repositoryFactory()
+      repository = getRepository()
     } catch (error) {
       if (options.allowAnonymous) {
         setAuthContext(
