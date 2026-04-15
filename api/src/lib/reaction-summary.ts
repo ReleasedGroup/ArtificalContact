@@ -257,24 +257,42 @@ export async function lookupReactionSummaryPage(
     }
   }
 
-  const continuationToken =
+  let nextContinuationToken =
     toNullableString(request.continuationToken) ?? undefined
-  const page = await reactionStore.listByPostId(postId, {
-    limit,
-    type,
-    ...(continuationToken === undefined ? {} : { continuationToken }),
-  })
-  const reactions = await loadReactionSummaryEntries(
-    page.reactions,
-    profileStore,
-  )
+  const reactions: PublicReactionSummaryEntry[] = []
+
+  while (reactions.length < limit) {
+    const remaining = limit - reactions.length
+    const page = await reactionStore.listByPostId(postId, {
+      limit: remaining,
+      type,
+      ...(nextContinuationToken === undefined
+        ? {}
+        : { continuationToken: nextContinuationToken }),
+    })
+    const pageReactions = await loadReactionSummaryEntries(
+      page.reactions,
+      profileStore,
+    )
+
+    reactions.push(...pageReactions)
+
+    const currentContinuationToken = nextContinuationToken
+    nextContinuationToken = page.continuationToken ?? undefined
+    if (
+      nextContinuationToken === undefined ||
+      nextContinuationToken === currentContinuationToken
+    ) {
+      break
+    }
+  }
 
   return {
     status: 200,
     body: {
       data: {
         reactions,
-        continuationToken: page.continuationToken ?? null,
+        continuationToken: nextContinuationToken ?? null,
       },
       errors: [],
     },

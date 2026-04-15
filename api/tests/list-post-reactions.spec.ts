@@ -120,12 +120,21 @@ function createReactionDocument(
   }
 }
 
-function createReactionStore(result: {
-  reactions: ReactionDocument[]
-  continuationToken?: string
-}) {
+function createReactionStore(
+  result:
+    | {
+        reactions: ReactionDocument[]
+        continuationToken?: string
+      }
+    | Array<{
+        reactions: ReactionDocument[]
+        continuationToken?: string
+      }>,
+) {
+  const results = Array.isArray(result) ? [...result] : [result]
+
   return {
-    listByPostId: vi.fn(async () => result),
+    listByPostId: vi.fn(async () => results.shift() ?? { reactions: [] }),
   } satisfies ReactionListRepository
 }
 
@@ -137,17 +146,21 @@ function createContext(): InvocationContext {
 
 describe('lookupReactionSummaryPage', () => {
   it('returns a filtered public page of reactions for the requested type', async () => {
-    const reactionStore = createReactionStore({
-      reactions: [
-        createReactionDocument('user-2', {
-          emojiValues: ['🎉', '🔥'],
-          reactedAt: undefined,
-        } as Partial<ReactionDocument>),
-        createReactionDocument('user-3'),
-        createReactionDocument('user-4'),
-      ],
-      continuationToken: 'next-token',
-    })
+    const reactionStore = createReactionStore([
+      {
+        reactions: [
+          createReactionDocument('user-2', {
+            emojiValues: ['🎉', '🔥'],
+          } as Partial<ReactionDocument>),
+          createReactionDocument('user-3'),
+          createReactionDocument('user-4'),
+        ],
+        continuationToken: 'next-token',
+      },
+      {
+        reactions: [],
+      },
+    ])
 
     const result = await lookupReactionSummaryPage(
       {
@@ -176,9 +189,14 @@ describe('lookupReactionSummaryPage', () => {
       ]),
     )
 
-    expect(reactionStore.listByPostId).toHaveBeenCalledWith('post-1', {
+    expect(reactionStore.listByPostId).toHaveBeenNthCalledWith(1, 'post-1', {
       limit: 2,
       continuationToken: 'opaque-token',
+      type: 'emoji',
+    })
+    expect(reactionStore.listByPostId).toHaveBeenNthCalledWith(2, 'post-1', {
+      limit: 1,
+      continuationToken: 'next-token',
       type: 'emoji',
     })
     expect(result).toEqual({
@@ -199,7 +217,76 @@ describe('lookupReactionSummaryPage', () => {
               reactedAt: '2026-04-15T03:00:00.000Z',
             },
           ],
+          continuationToken: null,
+        },
+        errors: [],
+      },
+    })
+  })
+
+  it('keeps paging until it fills the requested public reaction page', async () => {
+    const reactionStore = {
+      listByPostId: vi
+        .fn()
+        .mockResolvedValueOnce({
+          reactions: [createReactionDocument('user-3')],
           continuationToken: 'next-token',
+        })
+        .mockResolvedValueOnce({
+          reactions: [createReactionDocument('user-2')],
+        }),
+    } satisfies ReactionListRepository
+
+    const result = await lookupReactionSummaryPage(
+      {
+        postId: 'post-1',
+        limit: '1',
+        type: 'like',
+      },
+      createPostStore([createStoredPost()]),
+      reactionStore,
+      createProfileStore([
+        createStoredUser('user-2', {
+          handle: 'Grace',
+          handleLower: 'grace',
+          displayName: 'Grace Hopper',
+        }),
+        createStoredUser('user-3', {
+          handle: 'Hidden',
+          handleLower: 'hidden',
+          status: 'suspended',
+        }),
+      ]),
+    )
+
+    expect(reactionStore.listByPostId).toHaveBeenNthCalledWith(1, 'post-1', {
+      limit: 1,
+      type: 'like',
+    })
+    expect(reactionStore.listByPostId).toHaveBeenNthCalledWith(2, 'post-1', {
+      limit: 1,
+      continuationToken: 'next-token',
+      type: 'like',
+    })
+    expect(result).toEqual({
+      status: 200,
+      body: {
+        data: {
+          reactions: [
+            {
+              actor: {
+                id: 'user-2',
+                handle: 'Grace',
+                displayName: 'Grace Hopper',
+                avatarUrl: 'https://cdn.example.com/user-2.png',
+              },
+              sentiment: 'like',
+              emojiValues: [],
+              gifValue: null,
+              reactedAt: '2026-04-15T03:00:00.000Z',
+            },
+          ],
+          continuationToken: null,
         },
         errors: [],
       },
@@ -362,14 +449,19 @@ describe('lookupReactionSummaryPage', () => {
 describe('listPostReactionsHandler', () => {
   it('returns an HTTP response with the reaction summary envelope and headers', async () => {
     const postStore = createPostStore([createStoredPost()])
-    const reactionStore = createReactionStore({
-      reactions: [
-        createReactionDocument('user-2', {
-          sentiment: 'dislike',
-        }),
-      ],
-      continuationToken: 'next-token',
-    })
+    const reactionStore = createReactionStore([
+      {
+        reactions: [
+          createReactionDocument('user-2', {
+            sentiment: 'dislike',
+          }),
+        ],
+        continuationToken: 'next-token',
+      },
+      {
+        reactions: [],
+      },
+    ])
     const profileStore = createProfileStore([
       createStoredUser('user-2', {
         handle: 'Grace',
@@ -415,14 +507,14 @@ describe('listPostReactionsHandler', () => {
             reactedAt: '2026-04-15T03:00:00.000Z',
           },
         ],
-        continuationToken: 'next-token',
+        continuationToken: null,
       },
       errors: [],
     })
     expect(context.log).toHaveBeenCalledWith(
       'Post reactions lookup completed.',
       {
-        continuationTokenPresent: true,
+        continuationTokenPresent: false,
         postId: 'post-1',
         status: 200,
         type: 'dislike',

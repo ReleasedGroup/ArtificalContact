@@ -124,8 +124,20 @@ export function ReactionSummaryChip({
     errorMessage: null,
   })
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const dialogId = useId()
+  const titleId = useId()
+
+  const closePopover = (options?: { restoreFocus?: boolean }) => {
+    setIsPinned(false)
+    setIsOpen(false)
+
+    if (options?.restoreFocus) {
+      triggerRef.current?.focus()
+    }
+  }
 
   useEffect(() => {
     return () => {
@@ -211,8 +223,7 @@ export function ReactionSummaryChip({
         return
       }
 
-      setIsPinned(false)
-      setIsOpen(false)
+      closePopover({ restoreFocus: isPinned })
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -220,8 +231,7 @@ export function ReactionSummaryChip({
         return
       }
 
-      setIsPinned(false)
-      setIsOpen(false)
+      closePopover({ restoreFocus: isPinned })
     }
 
     document.addEventListener('pointerdown', handlePointerDown)
@@ -231,7 +241,15 @@ export function ReactionSummaryChip({
       document.removeEventListener('pointerdown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isOpen])
+  }, [isOpen, isPinned])
+
+  useEffect(() => {
+    if (!isOpen || !isPinned) {
+      return
+    }
+
+    panelRef.current?.focus()
+  }, [isOpen, isPinned])
 
   const handleLoadMore = async () => {
     if (loadState.status !== 'ready' || loadState.continuationToken === null) {
@@ -336,13 +354,14 @@ export function ReactionSummaryChip({
       }}
     >
       <button
+        ref={triggerRef}
         type="button"
         aria-controls={dialogId}
         aria-expanded={isOpen}
+        aria-haspopup="dialog"
         onClick={() => {
           if (isOpen && isPinned) {
-            setIsPinned(false)
-            setIsOpen(false)
+            closePopover({ restoreFocus: true })
             return
           }
 
@@ -357,13 +376,18 @@ export function ReactionSummaryChip({
       {isOpen && (
         <div
           id={dialogId}
+          ref={panelRef}
           role="dialog"
-          aria-label={popoverTitle}
+          aria-labelledby={titleId}
+          tabIndex={-1}
           className={`absolute left-0 top-full z-20 mt-3 w-[min(22rem,calc(100vw-3rem))] rounded-[1.35rem] border bg-slate-950/96 p-4 shadow-2xl shadow-slate-950/45 backdrop-blur ${toneClasses.panelBorder}`}
         >
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className={`text-sm font-semibold ${toneClasses.panelTitle}`}>
+              <p
+                id={titleId}
+                className={`text-sm font-semibold ${toneClasses.panelTitle}`}
+              >
                 {popoverTitle}
               </p>
               <p className="mt-1 text-xs text-slate-400">
@@ -398,6 +422,7 @@ export function ReactionSummaryChip({
               {loadState.reactions.map((entry) => {
                 const actorName =
                   entry.actor.displayName?.trim() || `@${entry.actor.handle}`
+                const showHandleLine = actorName !== `@${entry.actor.handle}`
                 const reactionTimestamp = formatReactionTimestamp(
                   entry.reactedAt,
                 )
@@ -426,9 +451,11 @@ export function ReactionSummaryChip({
                       >
                         {actorName}
                       </a>
-                      <p className="mt-1 text-xs text-slate-400">
-                        @{entry.actor.handle}
-                      </p>
+                      {showHandleLine && (
+                        <p className="mt-1 text-xs text-slate-400">
+                          @{entry.actor.handle}
+                        </p>
+                      )}
 
                       {reactionType === 'emoji' &&
                         entry.emojiValues.length > 0 && (
