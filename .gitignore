@@ -397,6 +397,7 @@ FodyWeavers.xsd
 
 # Azure Developer CLI
 .azd/
+infra/preflight-*.bicepparam
 infra/main.json
 
 # Azure Functions local settings

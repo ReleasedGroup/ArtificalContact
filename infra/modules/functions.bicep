@@ -105,16 +105,16 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
           value: tableServiceUri
         }
         {
-          name: 'BUILD_SHA'
-          value: 'managed-by-cicd'
-        }
-        {
           name: 'COSMOS_DATABASE_NAME'
           value: cosmosDatabaseName
         }
         {
           name: 'COSMOS_ENDPOINT'
           value: cosmosEndpoint
+        }
+        {
+          name: 'AZURE_REGION'
+          value: location
         }
         {
           name: 'FUNCTIONS_EXTENSION_VERSION'
