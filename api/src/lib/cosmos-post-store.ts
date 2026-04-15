@@ -93,6 +93,29 @@ export class CosmosPostStore implements MutablePostStore, PostRepository {
     return resource ?? post
   }
 
+  async countActiveReplies(
+    threadId: string,
+    parentId: string,
+  ): Promise<number> {
+    const querySpec: SqlQuerySpec = {
+      query:
+        'SELECT VALUE COUNT(1) FROM c WHERE c.threadId = @threadId AND c.parentId = @parentId AND c.type = @type AND (NOT IS_DEFINED(c.deletedAt) OR IS_NULL(c.deletedAt))',
+      parameters: [
+        { name: '@threadId', value: threadId },
+        { name: '@parentId', value: parentId },
+        { name: '@type', value: 'reply' },
+      ],
+    }
+    const { resources } = await this.postsContainer.items
+      .query<number>(querySpec, {
+        maxItemCount: 1,
+        partitionKey: threadId,
+      })
+      .fetchAll()
+
+    return resources[0] ?? 0
+  }
+
   private async readItem(
     id: string,
     partitionKey: string,
