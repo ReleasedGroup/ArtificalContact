@@ -23,6 +23,7 @@ import { registerUpdateProfileFunction } from './functions/update-profile.js'
 import { registerUserPostAuthorSyncFunction } from './functions/user-post-author-sync.js'
 import { registerUsersByHandleMirrorFunction } from './functions/users-by-handle-mirror.js'
 import { registerAuthMeFunction } from './functions/me.js'
+import { registerSearchSyncFunctions } from './functions/search-sync.js'
 
 registerCreateReplyFunction()
 registerCreateReactionFunction()
@@ -49,3 +50,4 @@ registerUpdateProfileFunction()
 registerUserPostAuthorSyncFunction()
 registerUsersByHandleMirrorFunction()
 registerAuthMeFunction()
+registerSearchSyncFunctions()

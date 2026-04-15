@@ -31,7 +31,7 @@ import {
   type ThreadPost,
   type ThreadPostMedia,
 } from '../lib/thread'
-import { ReactionSummaryChip } from './ReactionSummaryChip'
+import { ReactionBar } from './ReactionBar'
 
 type PostDetailState =
   | { status: 'loading' }
@@ -472,12 +472,16 @@ function PostCard({
   actionSlot,
   contextLabel,
   emphasis = 'context',
+  onReactionCommitted,
+  canReact,
   post,
   showOpenLink = true,
 }: {
   actionSlot?: ReactNode
   contextLabel?: string | null
   emphasis?: 'selected' | 'context'
+  canReact: boolean
+  onReactionCommitted: () => void
   post: RenderablePost
   showOpenLink?: boolean
 }) {
@@ -587,39 +591,13 @@ function PostCard({
             <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
               {formatCount(post.counters.replies)} replies
             </span>
-            <ReactionSummaryChip
-              buttonLabel={`${formatCount(post.counters.likes)} ${
-                post.counters.likes === 1 ? 'like' : 'likes'
-              }`}
-              count={post.counters.likes}
-              emptyMessage="No public likes are available yet."
-              loadMoreLabel="Load more likes"
-              popoverTitle="Like reactions"
+            <ReactionBar
+              canReact={canReact}
+              dislikesCount={post.counters.dislikes}
+              emojiCount={post.counters.emoji}
+              likeCount={post.counters.likes}
+              onCommitted={onReactionCommitted}
               postId={post.id}
-              reactionType="like"
-              tone="like"
-            />
-            <ReactionSummaryChip
-              buttonLabel={`${formatCount(post.counters.dislikes)} ${
-                post.counters.dislikes === 1 ? 'dislike' : 'dislikes'
-              }`}
-              count={post.counters.dislikes}
-              emptyMessage="No public dislikes are available yet."
-              loadMoreLabel="Load more dislikes"
-              popoverTitle="Dislike reactions"
-              postId={post.id}
-              reactionType="dislike"
-              tone="dislike"
-            />
-            <ReactionSummaryChip
-              buttonLabel={`${formatCount(post.counters.emoji)} emoji`}
-              count={post.counters.emoji}
-              emptyMessage="No public emoji reactions are available yet."
-              loadMoreLabel="Load more emoji reactions"
-              popoverTitle="Emoji reactions"
-              postId={post.id}
-              reactionType="emoji"
-              tone="emoji"
             />
             {timestamp && <span className="ml-auto">{timestamp}</span>}
           </div>
@@ -662,11 +640,15 @@ function PostCard({
 function ThreadConversationSection({
   entries,
   getActionSlot,
+  onReactionCommitted,
+  canReact,
   postsById,
   selectedPostId,
 }: {
   entries: ThreadConversationEntry[]
   getActionSlot?: (post: RenderablePost) => ReactNode
+  canReact: boolean
+  onReactionCommitted: () => void
   postsById: Map<string, ThreadPost>
   selectedPostId: string
 }) {
@@ -721,6 +703,8 @@ function ThreadConversationSection({
                   ...entry.post,
                   github: toRenderableGitHubMetadata(entry.post.github),
                 })}
+                canReact={canReact}
+                onReactionCommitted={onReactionCommitted}
                 contextLabel={entry.isFlattened ? null : contextLabel}
                 emphasis={
                   entry.post.id === selectedPostId ? 'selected' : 'context'
@@ -743,6 +727,7 @@ function ReadyPostDetail({
   data,
   deleteState,
   getActionSlot,
+  onReactionCommitted,
   replyDraft,
   replyMediaFiles,
   replyState,
@@ -755,6 +740,7 @@ function ReadyPostDetail({
   data: PostDetailData
   deleteState: DeleteState
   getActionSlot: (post: RenderablePost) => ReactNode
+  onReactionCommitted: () => void
   replyDraft: string
   replyMediaFiles: PostComposerMediaFile[]
   replyState: ReplyState
@@ -792,6 +778,7 @@ function ReadyPostDetail({
     data.post.parentId === null
   const canReply = viewer?.status === 'active' && Boolean(viewer.handle)
   const replyTargetLabel = authorHandle ? `@${authorHandle}` : 'this thread'
+  const canReact = viewer?.status === 'active' && Boolean(viewer.handle)
 
   return (
     <div className="py-6 sm:py-8">
@@ -942,6 +929,8 @@ function ReadyPostDetail({
                       : selectedContextLabel
                   }
                   emphasis="selected"
+                  canReact={canReact}
+                  onReactionCommitted={onReactionCommitted}
                   post={{
                     ...data.post,
                     github: toRenderableGitHubMetadata(data.post.github),
@@ -954,6 +943,8 @@ function ReadyPostDetail({
 
           <ThreadConversationSection
             entries={threadEntries}
+            canReact={canReact}
+            onReactionCommitted={onReactionCommitted}
             getActionSlot={getActionSlot}
             postsById={postsById}
             selectedPostId={data.post.id}
@@ -1372,6 +1363,9 @@ export function PostDetailScreen({ postId }: { postId: string }) {
               data={postState.data}
               deleteState={deleteState}
               getActionSlot={getActionSlot}
+              onReactionCommitted={() => {
+                setRefreshToken((current) => current + 1)
+              }}
               replyDraft={replyDraft}
               replyMediaFiles={replyMediaFiles}
               replyState={replyState}
