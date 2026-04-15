@@ -9,15 +9,20 @@ import {
   createJsonEnvelopeResponse,
   createSuccessResponse,
 } from '../lib/api-envelope.js'
+import { resolveAuthenticatedPrincipal } from '../lib/auth.js'
+import { CosmosUsersByHandleMirrorStore } from '../lib/cosmos-users-by-handle-mirror-store.js'
+import {
+  normalizeHandleLower,
+  type UsersByHandleMirrorStore,
+} from '../lib/users-by-handle-mirror.js'
 import {
   applyProfileUpdate,
   mapValidationIssues,
   updateProfileRequestSchema,
 } from '../lib/profile-update.js'
-import { resolveAuthenticatedPrincipal } from '../lib/auth.js'
 import {
-  createUserRepository,
   createPendingUserDocument,
+  createUserRepository,
   toMeProfile,
   type UserRepository,
 } from '../lib/users.js'
@@ -25,6 +30,14 @@ import {
 export interface UpdateProfileHandlerDependencies {
   now?: () => Date
   repositoryFactory?: () => UserRepository
+  handleStoreFactory?: () => UsersByHandleMirrorStore
+}
+
+let cachedHandleStore: CosmosUsersByHandleMirrorStore | undefined
+
+function getHandleStore(): CosmosUsersByHandleMirrorStore {
+  cachedHandleStore ??= CosmosUsersByHandleMirrorStore.fromEnvironment()
+  return cachedHandleStore
 }
 
 export function buildUpdateProfileHandler(
@@ -33,6 +46,8 @@ export function buildUpdateProfileHandler(
   const now = dependencies.now ?? (() => new Date())
   const repositoryFactory =
     dependencies.repositoryFactory ?? (() => createUserRepository())
+  const handleStoreFactory =
+    dependencies.handleStoreFactory ?? (() => getHandleStore())
 
   return async function updateProfileHandler(
     request: HttpRequest,
@@ -82,6 +97,64 @@ export function buildUpdateProfileHandler(
         data: null,
         errors: mapValidationIssues(parsedBody.error.issues),
       })
+    }
+
+    if (parsedBody.data.handle !== undefined) {
+      let handleStore: UsersByHandleMirrorStore
+
+      try {
+        handleStore = handleStoreFactory()
+      } catch (error) {
+        context.log('Failed to configure the usersByHandle store.', {
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Unknown handle store configuration error.',
+        })
+
+        return createErrorResponse(500, {
+          code: 'server.configuration_error',
+          message: 'The user profile store is not configured.',
+        })
+      }
+
+      const requestedHandle = normalizeHandleLower({
+        handle: parsedBody.data.handle,
+      })
+      if (requestedHandle !== null) {
+        try {
+          const existingHandle = await handleStore.getByHandle(requestedHandle)
+          if (
+            existingHandle !== null &&
+            existingHandle.userId !== principalResult.principal.subject
+          ) {
+            return createJsonEnvelopeResponse(409, {
+              data: null,
+              errors: [
+                {
+                  code: 'handle_taken',
+                  message: 'The requested handle is already in use.',
+                  field: 'handle',
+                },
+              ],
+            })
+          }
+        } catch (error) {
+          context.log('Failed to verify handle uniqueness.', {
+            error:
+              error instanceof Error
+                ? error.message
+                : 'Unknown handle lookup error.',
+            handle: requestedHandle,
+            userId: principalResult.principal.subject,
+          })
+
+          return createErrorResponse(500, {
+            code: 'server.user_update_failed',
+            message: 'Unable to update the authenticated user profile.',
+          })
+        }
+      }
     }
 
     try {

@@ -2,11 +2,34 @@ import type { HttpRequest, InvocationContext } from '@azure/functions'
 import { describe, expect, it, vi } from 'vitest'
 import { buildUpdateProfileHandler } from '../src/functions/update-profile.js'
 import { CLIENT_PRINCIPAL_HEADER } from '../src/lib/auth.js'
+import type { ExistingMirrorRecord } from '../src/lib/users-by-handle-mirror.js'
 import type {
   MeProfile,
   UserDocument,
   UserRepository,
 } from '../src/lib/users.js'
+
+class InMemoryHandleStore {
+  constructor(
+    private readonly mirrors = new Map<string, ExistingMirrorRecord>(),
+  ) {}
+
+  async getByHandle(handle: string): Promise<ExistingMirrorRecord | null> {
+    return this.mirrors.get(handle) ?? null
+  }
+
+  async getStateByUserId(): Promise<null> {
+    return null
+  }
+
+  async upsertMirror(): Promise<void> {}
+
+  async upsertState(): Promise<void> {}
+
+  async deleteByHandle(): Promise<void> {}
+
+  async deleteStateByUserId(): Promise<void> {}
+}
 
 function createPrincipalRequest(
   principal: Record<string, unknown>,
@@ -159,6 +182,123 @@ describe('updateProfileHandler', () => {
     })
   })
 
+  it('rejects a handle that is already owned by another user', async () => {
+    const existingUser = createStoredUser()
+    const repository: UserRepository = {
+      getById: vi.fn(async () => existingUser),
+      create: vi.fn(async (user) => user),
+      upsert: vi.fn(async (user) => user),
+    }
+
+    const handler = buildUpdateProfileHandler({
+      repositoryFactory: () => repository,
+      handleStoreFactory: () =>
+        new InMemoryHandleStore(
+          new Map([
+            ['ada', { id: 'ada', handle: 'ada', userId: 'github:someone-else' }],
+          ]),
+        ),
+    })
+
+    const response = await handler(
+      createPrincipalRequest(
+        {
+          identityProvider: 'github',
+          userId: 'abc123',
+          userDetails: 'nickbeau',
+          userRoles: ['anonymous', 'authenticated'],
+          claims: [{ typ: 'emails', val: 'nick@example.com' }],
+        },
+        {
+          handle: ' Ada ',
+          displayName: 'Nick',
+        },
+      ),
+      createContext(),
+    )
+
+    expect(response.status).toBe(409)
+    expect(response.jsonBody).toEqual({
+      data: null,
+      errors: [
+        {
+          code: 'handle_taken',
+          message: 'The requested handle is already in use.',
+          field: 'handle',
+        },
+      ],
+    })
+    expect(repository.upsert).not.toHaveBeenCalled()
+  })
+
+  it('updates the handle and promotes a pending user when the handle is free', async () => {
+    const existingUser = createStoredUser({
+      handle: 'nick',
+      handleLower: 'nick',
+      status: 'pending',
+    })
+    const repository: UserRepository = {
+      getById: vi.fn(async () => existingUser),
+      create: vi.fn(async (user) => user),
+      upsert: vi.fn(async (user) => user),
+    }
+
+    const handler = buildUpdateProfileHandler({
+      repositoryFactory: () => repository,
+      handleStoreFactory: () => new InMemoryHandleStore(),
+      now: () => new Date('2026-04-15T02:00:00.000Z'),
+    })
+
+    const response = await handler(
+      createPrincipalRequest(
+        {
+          identityProvider: 'github',
+          userId: 'abc123',
+          userDetails: 'nickbeau',
+          userRoles: ['anonymous', 'authenticated'],
+          claims: [{ typ: 'emails', val: 'nick@example.com' }],
+        },
+        {
+          handle: 'Ada',
+          displayName: 'Ada Lovelace',
+          bio: 'Symbolic AI nerd.',
+          expertise: ['LLM', 'evals', 'llm'],
+          links: {
+            website: 'https://ada.dev',
+          },
+        },
+      ),
+      createContext(),
+    )
+
+    expect(response.status).toBe(200)
+    expect(repository.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'github:abc123',
+        handle: 'Ada',
+        handleLower: 'ada',
+        displayName: 'Ada Lovelace',
+        bio: 'Symbolic AI nerd.',
+        expertise: ['llm', 'evals'],
+        links: {
+          website: 'https://ada.dev',
+        },
+        status: 'active',
+        updatedAt: '2026-04-15T02:00:00.000Z',
+      }),
+    )
+    expect(response.jsonBody).toMatchObject({
+      data: {
+        user: {
+          handle: 'Ada',
+          status: 'active',
+          expertise: ['llm', 'evals'],
+        },
+      },
+      errors: [],
+    })
+  })
+
   it('jit provisions a profile before applying the update when the user is new', async () => {
     const repository: UserRepository = {
       getById: vi.fn(async () => null),
@@ -195,6 +335,48 @@ describe('updateProfileHandler', () => {
         id: 'github:abc123',
         displayName: 'Nick Beaugeard',
         status: 'pending',
+      }),
+    )
+  })
+
+  it('allows github-prefixed handles because reservation is deferred to sprint 9', async () => {
+    const repository: UserRepository = {
+      getById: vi.fn(async () => null),
+      create: vi.fn(async (user) => user),
+      upsert: vi.fn(async (user) => user),
+    }
+
+    const handler = buildUpdateProfileHandler({
+      repositoryFactory: () => repository,
+      handleStoreFactory: () => new InMemoryHandleStore(),
+      now: () => new Date('2026-04-15T02:30:00.000Z'),
+    })
+
+    const response = await handler(
+      createPrincipalRequest(
+        {
+          identityProvider: 'github',
+          userId: 'abc123',
+          userDetails: 'nickbeau',
+          userRoles: ['anonymous', 'authenticated'],
+          claims: [{ typ: 'emails', val: 'nick@example.com' }],
+        },
+        {
+          handle: 'github/openai-cookbook',
+          displayName: 'Nick',
+        },
+      ),
+      createContext(),
+    )
+
+    expect(response.status).toBe(200)
+    expect(repository.create).toHaveBeenCalledOnce()
+    expect(repository.upsert).not.toHaveBeenCalled()
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        handle: 'github/openai-cookbook',
+        handleLower: 'github/openai-cookbook',
+        status: 'active',
       }),
     )
   })
