@@ -29,6 +29,7 @@ npm run test
 - Vitest covers authenticated profile reads and updates at `GET /api/me` and `PUT /api/me`, including JIT provisioning, validation, and normalization
 - Vitest covers authenticated reply creation at `POST /api/posts/{id}/replies`, including parent lookup, nested thread inheritance, validation, and repository failure handling
 - Vitest covers authenticated post creation at `POST /api/posts`, including max-length validation, hashtag and mention parsing, denormalised author fields, and repository failure handling
+- Vitest covers the user-profile change-feed worker that refreshes denormalised post author fields after profile updates, including avatar removal and duplicate change-feed image collapse
 - Vitest covers the public profile lookup at `GET /api/users/{handle}`, including case-insensitive mirror resolution and safe not-found behavior
 - Vitest covers Static Web Apps principal decoding and HTTP auth role attachment for anonymous, user, moderator, admin, and malformed-principal request paths
 - Vitest covers `PUT /api/me`, including duplicate-handle rejection via `usersByHandle`
