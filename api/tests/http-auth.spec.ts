@@ -90,6 +90,7 @@ describe('withHttpAuth', () => {
       async () => createSuccessResponse({ ok: true }),
       {
         repositoryFactory: () => ({
+          create: async (user) => user,
           getById: async () => null,
         }),
       },
@@ -111,6 +112,7 @@ describe('withHttpAuth', () => {
 
   it('returns 403 when the authenticated user has no provisioned profile', async () => {
     const repository: UserRepository = {
+      create: async (user) => user,
       getById: vi.fn(async () => null),
     }
     const handler = withHttpAuth(
@@ -146,6 +148,7 @@ describe('withHttpAuth', () => {
 
   it('attaches the resolved user and roles for an authorized request', async () => {
     const repository: UserRepository = {
+      create: async (user) => user,
       getById: vi.fn(async () =>
         createStoredUser({
           roles: ['moderator', 'user'],
@@ -188,6 +191,7 @@ describe('withHttpAuth', () => {
 
   it('returns 403 when the resolved user lacks a required role', async () => {
     const repository: UserRepository = {
+      create: async (user) => user,
       getById: vi.fn(async () => createStoredUser()),
     }
     const handler = withHttpAuth(
@@ -305,6 +309,7 @@ describe('withHttpAuth', () => {
   it('reuses the repository instance across requests for the same wrapper', async () => {
     const repositoryFactory = vi.fn(
       (): UserRepository => ({
+        create: async (user) => user,
         getById: async () => createStoredUser(),
       }),
     )
