@@ -57,6 +57,9 @@ resource origin 'Microsoft.Cdn/profiles/originGroups/origins@2024-02-01' = {
 resource route 'Microsoft.Cdn/profiles/afdEndpoints/routes@2024-02-01' = {
   parent: frontDoorEndpoint
   name: 'storage-route'
+  dependsOn: [
+    origin
+  ]
   properties: {
     enabledState: 'Enabled'
     forwardingProtocol: 'HttpsOnly'

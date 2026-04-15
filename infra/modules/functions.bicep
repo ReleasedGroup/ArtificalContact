@@ -77,6 +77,10 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
         name: 'node'
         version: '20'
       }
+      scaleAndConcurrency: {
+        instanceMemoryMB: 2048
+        maximumInstanceCount: 40
+      }
     }
     siteConfig: {
       appSettings: [
