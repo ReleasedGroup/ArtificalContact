@@ -6,11 +6,15 @@ Sprint 0 provisions the Azure and GitHub scaffolding required to start feature d
 
 - Azure Static Web Apps (Standard)
 - Azure Functions (Flex Consumption)
-- Azure Cosmos DB for NoSQL + `acn` database with `users`, `usersByHandle`, `posts`, `follows`, `followers`, `feeds`, and `media` containers
+- Azure Cosmos DB for NoSQL + `acn` database with `users`, `usersByHandle`, `posts`, `follows`, `followers`, `reactions`, `feeds`, and `media` containers
 - Azure Storage account + placeholder blob containers
 - Azure AI Search (Basic)
 - Azure Front Door (Standard) with cache rules for blob delivery
 - Key Vault, Log Analytics, and Application Insights
+
+The Cosmos `reactions` container is partitioned on `/postId`. Reaction documents use
+the deterministic id pattern `${postId}:${userId}` so per-user reactions to a post
+can be upserted idempotently.
 
 ## Local prerequisites
 

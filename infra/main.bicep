@@ -128,6 +128,7 @@ output cosmosFollowersContainerName string = cosmos.outputs.followersContainerNa
 output cosmosFollowsContainerName string = cosmos.outputs.followsContainerName
 output cosmosMediaContainerName string = cosmos.outputs.mediaContainerName
 output cosmosPostsContainerName string = cosmos.outputs.postsContainerName
+output cosmosReactionsContainerName string = cosmos.outputs.reactionsContainerName
 output cosmosUsersContainerName string = cosmos.outputs.usersContainerName
 output frontDoorCustomDomainHostName string = frontDoor.outputs.customDomainHostName
 output frontDoorCustomDomainValidationDnsTxtRecordName string = frontDoor.outputs.customDomainValidationDnsTxtRecordName
