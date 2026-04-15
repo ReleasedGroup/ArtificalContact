@@ -121,12 +121,6 @@ export function ensureCosmosTelemetryPatched(): void {
   )
   patchAsyncMethod(
     Items.prototype as unknown as Record<string, unknown>,
-    'readAll',
-    'query',
-    readContainerName,
-  )
-  patchAsyncMethod(
-    Item.prototype as unknown as Record<string, unknown>,
     'read',
     'read',
     readContainerName,
@@ -158,6 +152,17 @@ export function ensureCosmosTelemetryPatched(): void {
       ...args: unknown[]
     ) {
       const iterator = originalQuery.apply(this, args)
+      return wrapQueryIterator(iterator, readContainerName(this), 'query')
+    }
+  }
+
+  const originalReadAll = itemsPrototype.readAll
+  if (typeof originalReadAll === 'function') {
+    itemsPrototype.readAll = function patchedReadAll(
+      this: Record<string, unknown>,
+      ...args: unknown[]
+    ) {
+      const iterator = originalReadAll.apply(this, args)
       return wrapQueryIterator(iterator, readContainerName(this), 'query')
     }
   }

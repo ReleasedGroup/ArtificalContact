@@ -21,17 +21,27 @@ function readGzipSize(filePath) {
 }
 
 function collectEntryAssets(manifest, entryKey) {
-  const visited = new Set()
+  const visitState = new Map()
   const javascriptFiles = new Set()
   const cssFiles = new Set()
   const asyncJavascriptFiles = new Set()
 
   function visit(key, isDynamicImport = false) {
-    if (visited.has(key)) {
+    const currentState = visitState.get(key) ?? {
+      async: false,
+      sync: false,
+    }
+    const nextMode = isDynamicImport ? 'async' : 'sync'
+
+    if (currentState[nextMode]) {
       return
     }
 
-    visited.add(key)
+    const nextState = {
+      ...currentState,
+      [nextMode]: true,
+    }
+    visitState.set(key, nextState)
 
     const entry = manifest[key]
     if (!entry) {
@@ -39,10 +49,11 @@ function collectEntryAssets(manifest, entryKey) {
     }
 
     if (typeof entry.file === 'string' && entry.file.endsWith('.js')) {
-      if (isDynamicImport) {
-        asyncJavascriptFiles.add(entry.file)
-      } else {
+      if (nextState.sync) {
         javascriptFiles.add(entry.file)
+        asyncJavascriptFiles.delete(entry.file)
+      } else if (nextState.async) {
+        asyncJavascriptFiles.add(entry.file)
       }
     }
 
@@ -51,7 +62,7 @@ function collectEntryAssets(manifest, entryKey) {
     }
 
     for (const importKey of entry.imports ?? []) {
-      visit(importKey, false)
+      visit(importKey, isDynamicImport)
     }
 
     for (const importKey of entry.dynamicImports ?? []) {
