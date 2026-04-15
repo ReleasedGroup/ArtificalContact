@@ -70,6 +70,8 @@ export type SearchResponse =
   | SearchUsersResponse
   | SearchHashtagsResponse
 
+export const MIN_SEARCH_QUERY_LENGTH = 2
+
 function readErrorMessage(
   payload: ApiEnvelope<SearchApiResponse> | null,
 ): string | null {
@@ -179,6 +181,26 @@ function mapHashtagResults(results: unknown[]): SearchHashtagResult[] {
   })
 }
 
+export function searchSite(
+  query: string,
+  type: 'posts',
+  signal?: AbortSignal,
+): Promise<SearchPostsResponse>
+export function searchSite(
+  query: string,
+  type: 'users',
+  signal?: AbortSignal,
+): Promise<SearchUsersResponse>
+export function searchSite(
+  query: string,
+  type: 'hashtags',
+  signal?: AbortSignal,
+): Promise<SearchHashtagsResponse>
+export function searchSite(
+  query: string,
+  type: SearchType,
+  signal?: AbortSignal,
+): Promise<SearchResponse>
 export async function searchSite(
   query: string,
   type: SearchType,

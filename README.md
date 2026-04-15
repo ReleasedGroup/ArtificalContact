@@ -24,6 +24,7 @@ npm run test
 - `/api/health` returns build metadata, region information, and a Cosmos ping result
 - SPA public profile route `/u/{handle}` renders the public identity shell from `GET /api/users/{handle}`
 - `GET /api/posts/{id}` returns a single public post from the Cosmos `posts` container
+- `GET /api/search` returns Azure AI Search-backed quick results for people and posts, and the authenticated home feed header surfaces the debounced lookup UI
 - Application Insights wiring for the SPA and Functions
 - GitHub Actions for validation and deployment
 - Repo governance files: PR template and CODEOWNERS
