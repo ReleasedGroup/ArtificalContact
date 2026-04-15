@@ -761,12 +761,15 @@ export async function syncReactionNotificationsBatch(
   const latestDocuments = collapseDocumentsToLatest(documents)
   const actorCache = new Map<string, NotificationActor>()
   const windowNotificationCache = new Map<string, NotificationDocument[]>()
+  const rawHourlyActorThrottleThreshold = options.hourlyActorThrottleThreshold
+  const normalizedHourlyActorThrottleThreshold =
+    typeof rawHourlyActorThrottleThreshold === 'number' &&
+    Number.isFinite(rawHourlyActorThrottleThreshold)
+      ? rawHourlyActorThrottleThreshold
+    : DEFAULT_REACTION_NOTIFICATION_HOURLY_THRESHOLD
   const hourlyActorThrottleThreshold = Math.max(
     1,
-    Math.trunc(
-      options.hourlyActorThrottleThreshold ??
-        DEFAULT_REACTION_NOTIFICATION_HOURLY_THRESHOLD,
-    ),
+    Math.trunc(normalizedHourlyActorThrottleThreshold),
   )
   let upsertCount = 0
 
@@ -919,7 +922,7 @@ export async function syncReactionNotificationsBatch(
           eventCount: representedReactionIds.size,
           coalesced: true,
           coalescedWindowStart: reactionHourWindow.start,
-          coalescedRelatedEntityIds: [...representedReactionIds],
+          coalescedRelatedEntityIds: [...representedReactionIds].sort(),
         },
       )
 

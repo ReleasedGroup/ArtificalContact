@@ -576,6 +576,106 @@ describe('syncReactionNotificationsBatch', () => {
     ])
   })
 
+  it('falls back to the default threshold when the injected threshold is non-finite', async () => {
+    const posts = new Map<string, StoredPostDocument>([
+      [
+        'p_root:p_root',
+        createStoredPost({
+          id: 'p_root',
+          threadId: 'p_root',
+          authorId: 'u_target',
+          text: 'Root post',
+        }),
+      ],
+      [
+        'p_second:p_second',
+        createStoredPost({
+          id: 'p_second',
+          threadId: 'p_second',
+          authorId: 'u_target',
+          text: 'Second post',
+        }),
+      ],
+      [
+        'p_third:p_third',
+        createStoredPost({
+          id: 'p_third',
+          threadId: 'p_third',
+          authorId: 'u_target',
+          text: 'Third post',
+        }),
+      ],
+      [
+        'p_fourth:p_fourth',
+        createStoredPost({
+          id: 'p_fourth',
+          threadId: 'p_fourth',
+          authorId: 'u_target',
+          text: 'Fourth post',
+        }),
+      ],
+    ])
+    const store = new InMemoryNotificationDependencyStore(
+      posts,
+      new Map([
+        [
+          'u_reactor',
+          createStoredUser({
+            id: 'u_reactor',
+            handle: 'mira',
+            displayName: 'Mira Patel',
+          }),
+        ],
+      ]),
+    )
+
+    await syncReactionNotificationsBatch(
+      [
+        createReactionChange(),
+        createReactionChange({
+          id: 'p_second:u_reactor',
+          postId: 'p_second',
+          createdAt: '2026-04-15T11:10:00.000Z',
+          updatedAt: '2026-04-15T11:10:00.000Z',
+        }),
+        createReactionChange({
+          id: 'p_third:u_reactor',
+          postId: 'p_third',
+          createdAt: '2026-04-15T11:20:00.000Z',
+          updatedAt: '2026-04-15T11:20:00.000Z',
+        }),
+        createReactionChange({
+          id: 'p_fourth:u_reactor',
+          postId: 'p_fourth',
+          createdAt: '2026-04-15T11:25:00.000Z',
+          updatedAt: '2026-04-15T11:26:00.000Z',
+        }),
+      ],
+      store,
+      store,
+      store,
+      undefined,
+      {
+        hourlyActorThrottleThreshold: Number.NaN,
+      },
+    )
+
+    expect(store.snapshotNotifications()).toEqual([
+      expect.objectContaining({
+        id: 'u_target:reaction:coalesced:u_reactor:2026-04-15T11:00:00.000Z',
+        relatedEntityId: 'p_fourth:u_reactor',
+        eventCount: 4,
+        coalesced: true,
+        coalescedRelatedEntityIds: [
+          'p_fourth:u_reactor',
+          'p_root:u_reactor',
+          'p_second:u_reactor',
+          'p_third:u_reactor',
+        ],
+      }),
+    ])
+  })
+
   it('keeps the coalesced count stable when an already-represented reaction changes shape', async () => {
     const posts = new Map<string, StoredPostDocument>([
       [
