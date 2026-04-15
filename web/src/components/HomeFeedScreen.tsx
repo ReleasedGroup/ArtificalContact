@@ -413,6 +413,12 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
 
               <div className="flex flex-wrap items-center gap-3">
                 <a
+                  href="/notifications"
+                  className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
+                >
+                  Notifications
+                </a>
+                <a
                   href="/me"
                   className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
                 >
