@@ -72,6 +72,9 @@ module search './modules/search.bicep' = {
     location: location
     names: naming.outputs.names
     tags: tags
+    cosmosAccountName: cosmos.outputs.accountName
+    cosmosDatabaseName: cosmos.outputs.databaseName
+    cosmosPostsContainerName: cosmos.outputs.postsContainerName
   }
 }
 
