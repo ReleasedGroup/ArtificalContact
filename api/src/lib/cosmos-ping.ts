@@ -1,6 +1,5 @@
-import { CosmosClient } from '@azure/cosmos'
-import { DefaultAzureCredential } from '@azure/identity'
 import type { EnvironmentConfig } from './config.js'
+import { createCosmosClient } from './cosmos-client.js'
 
 export interface CosmosPingResult {
   status: 'ok' | 'skipped' | 'error'
@@ -19,21 +18,6 @@ interface CosmosClientLike {
 export type CosmosClientFactory = (
   config: EnvironmentConfig,
 ) => CosmosClientLike
-
-function createCosmosClient(config: EnvironmentConfig): CosmosClientLike {
-  if (config.cosmosConnectionString) {
-    return new CosmosClient(config.cosmosConnectionString)
-  }
-
-  if (!config.cosmosEndpoint) {
-    throw new Error('COSMOS_ENDPOINT is required when no connection string is set.')
-  }
-
-  return new CosmosClient({
-    endpoint: config.cosmosEndpoint,
-    aadCredentials: new DefaultAzureCredential(),
-  })
-}
 
 export async function pingCosmos(
   config: EnvironmentConfig,

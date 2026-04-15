@@ -1,6 +1,6 @@
-import type { ApiEnvelope } from './api-envelope.js'
 import { getEnvironmentConfig, type EnvironmentConfig } from './config.js'
 import { pingCosmos, type CosmosPingResult } from './cosmos-ping.js'
+import type { ApiEnvelope } from './api-envelope.js'
 
 export interface HealthPayload {
   service: string

@@ -4,6 +4,7 @@ import {
   type HttpResponseInit,
   type InvocationContext,
 } from '@azure/functions'
+import { createErrorResponse } from '../lib/api-envelope.js'
 import { createHealthReport } from '../lib/health.js'
 
 export function buildHealthHandler(
@@ -14,11 +15,19 @@ export function buildHealthHandler(
     context: InvocationContext,
   ): Promise<HttpResponseInit> {
     const report = await reportFactory()
+    const healthPayload = report.data
+
+    if (!healthPayload) {
+      return createErrorResponse(500, {
+        code: 'server.invalid_health_report',
+        message: 'The health report payload was not available.',
+      })
+    }
 
     context.log('Health probe completed.', {
-      buildSha: report.data.buildSha,
-      cosmosStatus: report.data.cosmos.status,
-      region: report.data.region,
+      buildSha: healthPayload.buildSha,
+      cosmosStatus: healthPayload.cosmos.status,
+      region: healthPayload.region,
     })
 
     return {
