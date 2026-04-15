@@ -92,7 +92,7 @@ describe('withHttpAuth', () => {
         repositoryFactory: () => ({
           create: async (user) => user,
           getById: async () => null,
-          replace: async (user) => user,
+          upsert: async (user) => user,
         }),
       },
     )
@@ -115,7 +115,7 @@ describe('withHttpAuth', () => {
     const repository: UserRepository = {
       create: async (user) => user,
       getById: vi.fn(async () => null),
-      replace: async (user) => user,
+      upsert: async (user) => user,
     }
     const handler = withHttpAuth(
       async () => createSuccessResponse({ ok: true }),
@@ -156,7 +156,7 @@ describe('withHttpAuth', () => {
           roles: ['moderator', 'user'],
         }),
       ),
-      replace: async (user) => user,
+      upsert: async (user) => user,
     }
     const innerHandler = vi.fn(
       async (_request: HttpRequest, context: InvocationContext) =>
@@ -196,7 +196,7 @@ describe('withHttpAuth', () => {
     const repository: UserRepository = {
       create: async (user) => user,
       getById: vi.fn(async () => createStoredUser()),
-      replace: async (user) => user,
+      upsert: async (user) => user,
     }
     const handler = withHttpAuth(
       async () => createSuccessResponse({ ok: true }),
@@ -315,7 +315,7 @@ describe('withHttpAuth', () => {
       (): UserRepository => ({
         create: async (user) => user,
         getById: async () => createStoredUser(),
-        replace: async (user) => user,
+        upsert: async (user) => user,
       }),
     )
     const handler = withHttpAuth(

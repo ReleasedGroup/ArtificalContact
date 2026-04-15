@@ -39,6 +39,10 @@ export interface ResolvedMeProfile {
   isNewUser: boolean
 }
 
+export interface UpdateMeResponse {
+  user: MeProfile
+}
+
 export interface UpdateMeInput {
   displayName: string
   bio: string | null
@@ -93,7 +97,7 @@ export async function getMe(signal?: AbortSignal): Promise<ResolvedMeProfile> {
 export async function updateMe(
   input: UpdateMeInput,
   signal?: AbortSignal,
-): Promise<ResolvedMeProfile> {
+): Promise<UpdateMeResponse> {
   const response = await fetch('/api/me', {
     method: 'PUT',
     headers: {
@@ -104,7 +108,7 @@ export async function updateMe(
     signal,
   })
 
-  const payload = await readEnvelope<ResolvedMeProfile>(
+  const payload = await readEnvelope<UpdateMeResponse>(
     response,
     `Profile update failed with status ${response.status}.`,
   )

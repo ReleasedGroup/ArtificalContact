@@ -442,10 +442,11 @@ function ProfileEditorRoute() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
-    if (draft === null) {
+    if (draft === null || profileState.status !== 'ready') {
       return
     }
 
+    const wasNewUser = profileState.data.isNewUser
     const payload: UpdateMeInput = {
       displayName: draft.displayName,
       bio: normalizeOptionalText(draft.bio),
@@ -460,11 +461,17 @@ function ProfileEditorRoute() {
     try {
       const data = await updateMe(payload)
       startTransition(() => {
-        setProfileState({ status: 'ready', data })
+        setProfileState({
+          status: 'ready',
+          data: {
+            user: data.user,
+            isNewUser: false,
+          },
+        })
         setDraft(createDraft(data.user))
         setSaveState({
           status: 'saved',
-          message: data.isNewUser
+          message: wasNewUser
             ? 'Profile created. You can keep refining it here.'
             : 'Profile saved.',
         })

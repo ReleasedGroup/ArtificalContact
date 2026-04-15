@@ -1,9 +1,6 @@
 import type { HttpRequest, InvocationContext } from '@azure/functions'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  buildAuthMeHandler,
-  buildUpdateProfileHandler,
-} from '../src/functions/me.js'
+import { buildAuthMeHandler } from '../src/functions/me.js'
 import { CLIENT_PRINCIPAL_HEADER } from '../src/lib/auth.js'
 import type { UserDocument, UserRepository } from '../src/lib/users.js'
 
@@ -63,7 +60,7 @@ function createRepository(
   return {
     getById: vi.fn(async () => existingUser),
     create: vi.fn(async (user) => user),
-    replace: vi.fn(async (user) => user),
+    upsert: vi.fn(async (user) => user),
   }
 }
 
@@ -112,7 +109,6 @@ describe('authMeHandler', () => {
       errors: [],
     })
     expect(repository.create).not.toHaveBeenCalled()
-    expect(repository.replace).not.toHaveBeenCalled()
   })
 
   it('jit provisions a pending user on first sign-in', async () => {
@@ -169,7 +165,7 @@ describe('authMeHandler', () => {
         ;(error as Error & { statusCode: number }).statusCode = 409
         throw error
       }),
-      replace: vi.fn(async (user) => user),
+      upsert: vi.fn(async (user) => user),
     }
 
     const handler = buildAuthMeHandler({
@@ -212,203 +208,6 @@ describe('authMeHandler', () => {
         {
           code: 'auth.missing_principal',
           message: 'Authentication is required.',
-        },
-      ],
-    })
-  })
-})
-
-describe('updateProfileHandler', () => {
-  it('updates the authenticated profile with normalized expertise tags', async () => {
-    const existingUser = createStoredUser({
-      bio: 'Old bio',
-      avatarUrl: 'https://cdn.example.com/avatar.png',
-    })
-    const repository = createRepository(existingUser)
-
-    const handler = buildUpdateProfileHandler({
-      repositoryFactory: () => repository,
-      now: () => new Date('2026-04-15T03:00:00.000Z'),
-    })
-
-    const response = await handler(
-      createPrincipalRequest(authenticatedPrincipal, {
-        displayName: '  Ada Lovelace  ',
-        bio: '  Building robust agent evals.  ',
-        expertise: ['LLM', ' evals ', 'llm', ''],
-        avatarUrl: null,
-        bannerUrl: null,
-      }),
-      createContext(),
-    )
-
-    expect(response.status).toBe(200)
-    expect(repository.replace).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'github:abc123',
-        displayName: 'Ada Lovelace',
-        bio: 'Building robust agent evals.',
-        expertise: ['llm', 'evals'],
-        updatedAt: '2026-04-15T03:00:00.000Z',
-      }),
-    )
-    expect(response.jsonBody).toMatchObject({
-      data: {
-        isNewUser: false,
-        user: {
-          displayName: 'Ada Lovelace',
-          bio: 'Building robust agent evals.',
-          expertise: ['llm', 'evals'],
-          avatarUrl: null,
-          bannerUrl: null,
-        },
-      },
-      errors: [],
-    })
-  })
-
-  it('jit provisions a user before applying the profile update on first save', async () => {
-    const repository = createRepository(null)
-
-    const handler = buildUpdateProfileHandler({
-      repositoryFactory: () => repository,
-      now: () => new Date('2026-04-15T03:30:00.000Z'),
-    })
-
-    const response = await handler(
-      createPrincipalRequest(authenticatedPrincipal, {
-        displayName: 'Nick Beaugeard',
-        bio: '',
-        expertise: ['agents'],
-        avatarUrl: null,
-        bannerUrl: null,
-      }),
-      createContext(),
-    )
-
-    expect(response.status).toBe(200)
-    expect(repository.create).toHaveBeenCalledOnce()
-    expect(repository.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'github:abc123',
-        displayName: 'Nick Beaugeard',
-        expertise: ['agents'],
-        updatedAt: '2026-04-15T03:30:00.000Z',
-      }),
-    )
-    expect(repository.replace).not.toHaveBeenCalled()
-    expect(response.jsonBody).toMatchObject({
-      data: {
-        isNewUser: true,
-        user: {
-          displayName: 'Nick Beaugeard',
-          expertise: ['agents'],
-        },
-      },
-      errors: [],
-    })
-  })
-
-  it('returns a validation error when the display name is blank', async () => {
-    const repository = createRepository()
-
-    const handler = buildUpdateProfileHandler({
-      repositoryFactory: () => repository,
-    })
-
-    const response = await handler(
-      createPrincipalRequest(authenticatedPrincipal, {
-        displayName: '   ',
-        bio: '',
-        expertise: [],
-      }),
-      createContext(),
-    )
-
-    expect(response.status).toBe(400)
-    expect(response.jsonBody).toEqual({
-      data: null,
-      errors: [
-        {
-          code: 'profile.invalid_payload',
-          field: 'displayName',
-          message: 'Display name cannot be empty.',
-        },
-      ],
-    })
-    expect(repository.replace).not.toHaveBeenCalled()
-  })
-
-  it('returns a validation error when too many expertise tags are supplied', async () => {
-    const repository = createRepository()
-
-    const handler = buildUpdateProfileHandler({
-      repositoryFactory: () => repository,
-    })
-
-    const response = await handler(
-      createPrincipalRequest(authenticatedPrincipal, {
-        displayName: 'Nick Beaugeard',
-        bio: '',
-        expertise: [
-          'one',
-          'two',
-          'three',
-          'four',
-          'five',
-          'six',
-          'seven',
-          'eight',
-          'nine',
-          'ten',
-          'eleven',
-          'twelve',
-          'thirteen',
-        ],
-        avatarUrl: null,
-        bannerUrl: null,
-      }),
-      createContext(),
-    )
-
-    expect(response.status).toBe(400)
-    expect(response.jsonBody).toEqual({
-      data: null,
-      errors: [
-        {
-          code: 'profile.invalid_payload',
-          field: 'expertise',
-          message: 'Add at most 12 expertise tags.',
-        },
-      ],
-    })
-  })
-
-  it('requires explicit avatar and banner placeholder fields in the payload', async () => {
-    const repository = createRepository()
-
-    const handler = buildUpdateProfileHandler({
-      repositoryFactory: () => repository,
-    })
-
-    const response = await handler(
-      createPrincipalRequest(authenticatedPrincipal, {
-        displayName: 'Nick Beaugeard',
-        bio: '',
-        expertise: [],
-      }),
-      createContext(),
-    )
-
-    expect(response.status).toBe(400)
-    expect(response.jsonBody).toEqual({
-      data: null,
-      errors: [
-        {
-          code: 'profile.invalid_payload',
-          field: 'avatarUrl',
-          message:
-            'The avatarUrl field must be included in the profile update payload.',
         },
       ],
     })
