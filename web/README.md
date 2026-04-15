@@ -23,5 +23,5 @@ npm run test:e2e --workspace @artificialcontact/web
 ## Current Preview Surfaces
 
 - The authenticated `/me` route includes the Sprint 2 composer preview panel for the reusable post and reply composer variants.
-- The anonymous `/p/{id}` route resolves a standalone post detail page by combining `GET /api/posts/{id}` with `GET /api/threads/{threadId}` for thread context.
+- The anonymous `/p/{id}` route resolves a standalone post detail page by combining `GET /api/posts/{id}` with `GET /api/threads/{threadId}` for a root-plus-replies thread view. Reply indentation caps after depth 3, and deeper replies show a `Replying to …` context line instead of nesting further.
 - Hashtag and mention highlighting for the composer lives in `src/lib/composer.ts` so the feed, post detail, and thread pages can reuse the same parsing rules.

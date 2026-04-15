@@ -535,7 +535,7 @@ describe('App', () => {
     ).toBeInTheDocument()
   })
 
-  it('renders the /p/{id} post detail route with later thread context', async () => {
+  it('renders the /p/{id} post detail route as a threaded conversation', async () => {
     window.history.replaceState({}, '', '/p/post-1')
 
     mockFetch.mockImplementation(async (input) => {
@@ -575,11 +575,16 @@ describe('App', () => {
     expect(
       await screen.findByRole('heading', { name: 'Standalone post detail' }),
     ).toBeInTheDocument()
+    expect(screen.getByText('Thread conversation')).toBeInTheDocument()
     expect(screen.getByText('Root thread post')).toBeInTheDocument()
-    expect(screen.getByText('Later in thread')).toBeInTheDocument()
     expect(
       screen.getByText('Follow-up reply with more context.'),
     ).toBeInTheDocument()
+    expect(
+      screen.getByText('Follow-up reply with more context.').closest(
+        '[data-thread-entry]',
+      ),
+    ).toHaveAttribute('data-thread-depth', '1')
     expect(mockFetch).toHaveBeenNthCalledWith(
       1,
       '/api/posts/post-1',
@@ -596,7 +601,7 @@ describe('App', () => {
     )
   })
 
-  it('renders the selected reply with earlier and later thread context', async () => {
+  it('renders the selected reply inside the threaded conversation', async () => {
     window.history.replaceState({}, '', '/p/reply-2')
 
     mockFetch.mockImplementation(async (input) => {
@@ -663,8 +668,7 @@ describe('App', () => {
     expect(
       await screen.findByText('Selected reply in the middle of the thread.'),
     ).toBeInTheDocument()
-    expect(screen.getByText('Earlier in thread')).toBeInTheDocument()
-    expect(screen.getByText('Later in thread')).toBeInTheDocument()
+    expect(screen.getByText('Thread conversation')).toBeInTheDocument()
     expect(
       screen.getByText('Earlier reply that started the side discussion.'),
     ).toBeInTheDocument()
@@ -674,6 +678,109 @@ describe('App', () => {
     expect(
       screen.getByRole('link', { name: 'Open thread root' }),
     ).toHaveAttribute('href', '/p/post-1')
+  })
+
+  it('flattens replies beyond depth 3 while preserving replying-to context', async () => {
+    window.history.replaceState({}, '', '/p/reply-4')
+
+    mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/posts/reply-4') {
+        return createJsonResponse(200, {
+          data: createPublicPost({
+            id: 'reply-4',
+            type: 'reply',
+            threadId: 'post-1',
+            parentId: 'reply-3',
+            authorHandle: 'radia',
+            authorDisplayName: 'Radia Perlman',
+            text: 'Depth 4 reply that should flatten.',
+            createdAt: '2026-04-15T00:08:00.000Z',
+            updatedAt: '2026-04-15T00:08:00.000Z',
+          }),
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/threads/post-1') {
+        return createJsonResponse(200, {
+          data: {
+            threadId: 'post-1',
+            posts: [
+              createThreadPost(),
+              createThreadPost({
+                id: 'reply-1',
+                type: 'reply',
+                threadId: 'post-1',
+                parentId: 'post-1',
+                authorHandle: 'grace',
+                authorDisplayName: 'Grace Hopper',
+                text: 'Depth 1 reply.',
+                createdAt: '2026-04-15T00:05:00.000Z',
+                updatedAt: '2026-04-15T00:05:00.000Z',
+              }),
+              createThreadPost({
+                id: 'reply-2',
+                type: 'reply',
+                threadId: 'post-1',
+                parentId: 'reply-1',
+                authorHandle: 'linus',
+                authorDisplayName: 'Linus Torvalds',
+                text: 'Depth 2 reply.',
+                createdAt: '2026-04-15T00:06:00.000Z',
+                updatedAt: '2026-04-15T00:06:00.000Z',
+              }),
+              createThreadPost({
+                id: 'reply-3',
+                type: 'reply',
+                threadId: 'post-1',
+                parentId: 'reply-2',
+                authorHandle: 'yann',
+                authorDisplayName: 'Yann Sutskever',
+                text: 'Depth 3 reply.',
+                createdAt: '2026-04-15T00:07:00.000Z',
+                updatedAt: '2026-04-15T00:07:00.000Z',
+              }),
+              createThreadPost({
+                id: 'reply-4',
+                type: 'reply',
+                threadId: 'post-1',
+                parentId: 'reply-3',
+                authorHandle: 'radia',
+                authorDisplayName: 'Radia Perlman',
+                text: 'Depth 4 reply that should flatten.',
+                createdAt: '2026-04-15T00:08:00.000Z',
+                updatedAt: '2026-04-15T00:08:00.000Z',
+              }),
+            ],
+            continuationToken: null,
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    renderApp()
+
+    expect(
+      await screen.findByText('Depth 4 reply that should flatten.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Replying to @yann')).toBeInTheDocument()
+
+    const depthThreeEntry = screen
+      .getByText('Depth 3 reply.')
+      .closest('[data-thread-entry]')
+    const depthFourEntry = screen
+      .getByText('Depth 4 reply that should flatten.')
+      .closest('[data-thread-entry]')
+
+    expect(depthThreeEntry).toHaveAttribute('data-thread-depth', '3')
+    expect(depthThreeEntry).toHaveAttribute('data-thread-visual-depth', '3')
+    expect(depthThreeEntry).toHaveStyle({ marginLeft: '3.75rem' })
+    expect(depthFourEntry).toHaveAttribute('data-thread-depth', '4')
+    expect(depthFourEntry).toHaveAttribute('data-thread-visual-depth', '3')
+    expect(depthFourEntry).toHaveStyle({ marginLeft: '3.75rem' })
   })
 
   it('renders a not-found state when the post does not exist', async () => {
