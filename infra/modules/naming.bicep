@@ -14,6 +14,7 @@ output names object = {
   feedsContainer: 'feeds'
   followersContainer: 'followers'
   followsContainer: 'follows'
+  githubReposContainer: 'githubRepos'
   mediaContainer: 'media'
   modActionsContainer: 'modActions'
   notificationPrefsContainer: 'notificationPrefs'

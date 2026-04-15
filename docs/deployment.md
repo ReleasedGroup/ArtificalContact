@@ -6,7 +6,7 @@ Sprint 0 provisions the Azure and GitHub scaffolding required to start feature d
 
 - Azure Static Web Apps (Standard)
 - Azure Functions (Flex Consumption)
-- Azure Cosmos DB for NoSQL + `acn` database with `users`, `usersByHandle`, `posts`, `follows`, `followers`, `reactions`, `feeds`, `notifications`, `notificationPrefs`, `media`, `reports`, `modActions`, and `rateLimits` containers
+- Azure Cosmos DB for NoSQL + `acn` database with `users`, `usersByHandle`, `posts`, `follows`, `followers`, `reactions`, `feeds`, `notifications`, `notificationPrefs`, `media`, `reports`, `modActions`, `rateLimits`, and `githubRepos` containers
 - Azure Storage account + placeholder blob containers
 - Azure AI Search (Basic)
 - Azure Front Door (Standard) with cache rules for blob delivery
@@ -24,9 +24,11 @@ workers can safely upsert follow, reply, reaction, and mention notifications
 without duplication.
 
 The Cosmos `acn` SQL database provisions 400 RU/s of shared throughput. The
-`rateLimits` container participates in that shared pool, is partitioned on
-`/userId`, and enables per-document TTL so token bucket records can expire
-automatically when their refill window closes.
+`rateLimits` and `githubRepos` containers participate in that shared pool. The
+`rateLimits` container is partitioned on `/userId` and enables per-document TTL
+so token bucket records can expire automatically when their refill window
+closes. The `githubRepos` container is partitioned on `/id` and stores the
+curated GitHub repository sync configuration plus polling cursors and status.
 
 ## Local prerequisites
 

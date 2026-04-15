@@ -336,12 +336,30 @@ resource rateLimitsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases
   }
 }
 
+resource githubReposContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
+  parent: sqlDatabase
+  name: names.githubReposContainer
+  properties: {
+    resource: {
+      id: names.githubReposContainer
+      partitionKey: {
+        kind: 'Hash'
+        paths: [
+          '/id'
+        ]
+        version: 2
+      }
+    }
+  }
+}
+
 output accountName string = cosmosAccount.name
 output databaseName string = sqlDatabase.name
 output endpoint string = cosmosAccount.properties.documentEndpoint
 output feedsContainerName string = feedsContainer.name
 output followersContainerName string = followersContainer.name
 output followsContainerName string = followsContainer.name
+output githubReposContainerName string = githubReposContainer.name
 output mediaContainerName string = mediaContainer.name
 output modActionsContainerName string = modActionsContainer.name
 output notificationPrefsContainerName string = notificationPrefsContainer.name
