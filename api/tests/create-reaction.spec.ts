@@ -128,6 +128,7 @@ function createReactionRepository(
     getByPostAndUser: vi.fn(async () => null),
     create: vi.fn(async (reaction) => reaction),
     upsert: vi.fn(async (reaction) => reaction),
+    deleteByPostAndUser: vi.fn(async () => undefined),
     ...overrides,
   }
 }

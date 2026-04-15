@@ -143,7 +143,7 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 | `replyToPost` | POST `/api/posts/{id}/replies` | |
 | `deletePost` | DELETE `/api/posts/{id}` | Soft delete for the author or a moderator; sets `deletedAt` and clears the stored body text |
 | `react` | POST `/api/posts/{id}/reactions` | `{ type: "like" \| "dislike" \| "emoji" \| "gif", value? }` |
-| `unreact` | DELETE `/api/posts/{id}/reactions` | |
+| `unreact` | DELETE `/api/posts/{id}/reactions` | Optional query `?emoji={value}` removes one additive emoji; otherwise deletes the caller's full reaction document |
 | `getFeed` | GET `/api/feed` | Personal feed (pull from `feeds` container) |
 | `getPublicFeed` | GET `/api/explore` | Latest public posts (AI Search query, recency-sorted) |
 | `search` | GET `/api/search` | `?q=&type=posts\|users\|hashtags&filter=` — proxies to AI Search |

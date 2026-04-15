@@ -44,6 +44,13 @@ export interface ReactionMutationResult {
   reaction: ReactionDocument
 }
 
+export interface ReactionDeletionResult {
+  changed: boolean
+  deleted: boolean
+  reaction: ReactionDocument | null
+  emojiValueRemoved: boolean
+}
+
 export interface ReactionRepository {
   getByPostAndUser(
     postId: string,
@@ -51,6 +58,7 @@ export interface ReactionRepository {
   ): Promise<ReactionDocument | null>
   create(reaction: ReactionDocument): Promise<ReactionDocument>
   upsert(reaction: ReactionDocument): Promise<ReactionDocument>
+  deleteByPostAndUser(postId: string, userId: string): Promise<void>
 }
 
 export const DEFAULT_REACTION_POLICY: ReactionPolicy = {
@@ -187,6 +195,19 @@ function createReactionRepositoryForContainer(
       const response = await container.items.upsert<ReactionDocument>(reaction)
       return response.resource ?? reaction
     },
+    async deleteByPostAndUser(postId, userId) {
+      const id = buildReactionDocumentId(postId, userId)
+
+      try {
+        await container.item(id, postId).delete()
+      } catch (error) {
+        if (isExpectedCosmosStatusCode(error, 404)) {
+          return
+        }
+
+        throw error
+      }
+    },
   }
 }
 
@@ -234,6 +255,14 @@ function createBaseReactionDocument(
     createdAt: timestamp,
     updatedAt: timestamp,
   }
+}
+
+export function isReactionDocumentEmpty(reaction: ReactionDocument): boolean {
+  return (
+    reaction.sentiment === null &&
+    reaction.emojiValues.length === 0 &&
+    reaction.gifValue === null
+  )
 }
 
 export function applyReactionMutation(
@@ -318,6 +347,65 @@ export function applyReactionMutation(
     created: existingReaction === null,
     changed,
     reaction: nextReaction,
+  }
+}
+
+export function applyReactionDeletion(
+  existingReaction: ReactionDocument | null,
+  options: {
+    now: Date
+    emojiValue?: string
+  },
+): ReactionDeletionResult {
+  if (existingReaction === null) {
+    return {
+      changed: false,
+      deleted: false,
+      reaction: null,
+      emojiValueRemoved: false,
+    }
+  }
+
+  if (options.emojiValue === undefined) {
+    return {
+      changed: true,
+      deleted: true,
+      reaction: null,
+      emojiValueRemoved: false,
+    }
+  }
+
+  if (!existingReaction.emojiValues.includes(options.emojiValue)) {
+    return {
+      changed: false,
+      deleted: false,
+      reaction: existingReaction,
+      emojiValueRemoved: false,
+    }
+  }
+
+  const nextReaction: ReactionDocument = {
+    ...existingReaction,
+    emojiValues: existingReaction.emojiValues.filter(
+      (value) => value !== options.emojiValue,
+    ),
+    updatedAt: options.now.toISOString(),
+  }
+
+  if (isReactionDocumentEmpty(nextReaction)) {
+    return {
+      changed: true,
+      deleted: true,
+      reaction: null,
+      emojiValueRemoved: true,
+    }
+  }
+
+  return {
+    changed: true,
+    deleted: false,
+    reaction: nextReaction,
+    emojiValueRemoved: true,
   }
 }
 
