@@ -11,6 +11,7 @@ import { normalizeHandleLower } from './users-by-handle-mirror.js'
 
 export const DEFAULT_FOLLOWERS_PAGE_SIZE = 50
 export const MAX_FOLLOWERS_PAGE_SIZE = 100
+const FOLLOWER_PROFILE_READ_BATCH_SIZE = 10
 
 export interface FollowersPage {
   users: PublicUserProfile[]
@@ -26,6 +27,38 @@ export interface FollowersPageRequest {
 export interface FollowersLookupResult {
   status: 200 | 400 | 404
   body: ApiEnvelope<FollowersPage | null>
+}
+
+function buildInvalidHandleResult(): FollowersLookupResult {
+  return {
+    status: 400,
+    body: {
+      data: null,
+      errors: [
+        {
+          code: 'invalid_handle',
+          message: 'The handle path parameter is required.',
+          field: 'handle',
+        },
+      ],
+    },
+  }
+}
+
+function buildInvalidLimitResult(): FollowersLookupResult {
+  return {
+    status: 400,
+    body: {
+      data: null,
+      errors: [
+        {
+          code: 'invalid_limit',
+          message: `The limit query parameter must be an integer between 1 and ${MAX_FOLLOWERS_PAGE_SIZE}.`,
+          field: 'limit',
+        },
+      ],
+    },
+  }
 }
 
 function toNullableString(value: unknown): string | null {
@@ -83,12 +116,56 @@ function buildFollowerProfile(
   })
 }
 
+async function loadFollowerProfiles(
+  followerIds: readonly string[],
+  profileStore: UserProfileStore,
+): Promise<PublicUserProfile[]> {
+  const users: PublicUserProfile[] = []
+
+  for (
+    let index = 0;
+    index < followerIds.length;
+    index += FOLLOWER_PROFILE_READ_BATCH_SIZE
+  ) {
+    const batch = followerIds.slice(
+      index,
+      index + FOLLOWER_PROFILE_READ_BATCH_SIZE,
+    )
+    const batchUsers = await Promise.all(
+      batch.map(async (followerId) =>
+        buildFollowerProfile(await profileStore.getUserById(followerId)),
+      ),
+    )
+
+    users.push(
+      ...batchUsers.filter((user): user is PublicUserProfile => user !== null),
+    )
+  }
+
+  return users
+}
+
 export async function lookupFollowersPage(
   request: FollowersPageRequest,
   profileStore: UserProfileStore,
   followersStore: FollowersMirrorRepository,
 ): Promise<FollowersLookupResult> {
-  const targetProfile = await lookupPublicUserProfile(request.handle, profileStore)
+  const normalizedHandle = normalizeHandleLower(
+    request.handle === undefined ? {} : { handle: request.handle },
+  )
+  if (normalizedHandle === null) {
+    return buildInvalidHandleResult()
+  }
+
+  const limit = normalizeFollowersPageLimit(request.limit)
+  if (limit === null) {
+    return buildInvalidLimitResult()
+  }
+
+  const targetProfile = await lookupPublicUserProfile(
+    normalizedHandle,
+    profileStore,
+  )
   if (targetProfile.status !== 200 || targetProfile.body.data === null) {
     return {
       status: targetProfile.status,
@@ -99,39 +176,21 @@ export async function lookupFollowersPage(
     }
   }
 
-  const limit = normalizeFollowersPageLimit(request.limit)
-  if (limit === null) {
-    return {
-      status: 400,
-      body: {
-        data: null,
-        errors: [
-          {
-            code: 'invalid_limit',
-            message: `The limit query parameter must be an integer between 1 and ${MAX_FOLLOWERS_PAGE_SIZE}.`,
-            field: 'limit',
-          },
-        ],
-      },
-    }
-  }
-
   const continuationToken = toNullableString(request.continuationToken) ?? undefined
   const page = await followersStore.listFollowers(targetProfile.body.data.id, {
     limit,
     ...(continuationToken === undefined ? {} : { continuationToken }),
   })
-  const users = await Promise.all(
-    page.follows.map(async (follow) => profileStore.getUserById(follow.followerId)),
+  const users = await loadFollowerProfiles(
+    page.follows.map((follow) => follow.followerId),
+    profileStore,
   )
 
   return {
     status: 200,
     body: {
       data: {
-        users: users
-          .map((user) => buildFollowerProfile(user))
-          .filter((user): user is PublicUserProfile => user !== null),
+        users,
         continuationToken: page.continuationToken ?? null,
       },
       errors: [],

@@ -4,7 +4,7 @@ import { createCosmosClient } from './cosmos-client.js'
 import { readOptionalValue } from './strings.js'
 
 export const DEFAULT_FOLLOWS_CONTAINER_NAME = 'follows'
-const defaultFollowersContainerName = 'followers'
+export const DEFAULT_FOLLOWERS_CONTAINER_NAME = 'followers'
 let cachedFollowRepository: MutableFollowRepository | undefined
 let cachedFollowersMirrorRepository: FollowersMirrorRepository | undefined
 
@@ -255,7 +255,8 @@ export function createFollowersMirrorRepositoryFromConfig(
   }
 
   const followersContainerName =
-    readOptionalValue(env.FOLLOWERS_CONTAINER_NAME) ?? defaultFollowersContainerName
+    readOptionalValue(env.FOLLOWERS_CONTAINER_NAME) ??
+    DEFAULT_FOLLOWERS_CONTAINER_NAME
   const client = createCosmosClient(config)
   const container = client
     .database(config.cosmosDatabaseName)

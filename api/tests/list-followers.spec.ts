@@ -239,18 +239,21 @@ describe('lookupFollowersPage', () => {
   })
 
   it('returns a validation error when the limit is invalid', async () => {
+    const profileStore: UserProfileStore = {
+      getByHandle: vi.fn(async () => null),
+      getUserById: vi.fn(async () => null),
+    }
+    const followersStore = createFollowersStore({
+      follows: [],
+    })
+
     const result = await lookupFollowersPage(
       {
         handle: 'ada',
         limit: '500',
       },
-      createProfileStore({
-        mirrors: [{ id: 'ada', handle: 'ada', userId: 'u1' }],
-        users: [createStoredUser('u1', { handle: 'Ada', handleLower: 'ada' })],
-      }),
-      createFollowersStore({
-        follows: [],
-      }),
+      profileStore,
+      followersStore,
     )
 
     expect(result).toEqual({
@@ -266,6 +269,8 @@ describe('lookupFollowersPage', () => {
         ],
       },
     })
+    expect(profileStore.getByHandle).not.toHaveBeenCalled()
+    expect(followersStore.listFollowers).not.toHaveBeenCalled()
   })
 
   it('returns not found when the target profile does not exist', async () => {

@@ -1,6 +1,6 @@
 import { buildFollowDocumentId, type FollowDocument } from './follows.js'
 
-export const DEFAULT_FOLLOWERS_CONTAINER_NAME = 'followers'
+export { DEFAULT_FOLLOWERS_CONTAINER_NAME } from './follows.js'
 
 export interface FollowersMirrorSourceDocument {
   id?: string | null
