@@ -164,6 +164,8 @@ The SPA calls relative `/api/*` URLs. The reverse proxy eliminates CORS. All API
 | `removeSyncedRepo` | DELETE `/api/admin/github/repos/{id}` | Administrator only — stops polling; existing posts retained unless explicitly purged |
 | `getSyncedRepoProfile` | GET `/api/users/github/{owner}/{name}` | Public — returns the synthetic repo profile and its synced posts |
 
+`POST /api/reports` accepts `targetType` values of `post`, `reply`, `media`, or `user`. The current reason taxonomy is `spam`, `harassment`, `misinformation`, `impersonation`, `nsfw`, and `other`, with an optional free-form `details` note for moderator context.
+
 #### Cosmos DB change-feed-triggered
 | Function | Source container | Purpose |
 |---|---|---|

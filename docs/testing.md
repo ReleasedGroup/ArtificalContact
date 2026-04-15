@@ -17,6 +17,7 @@ npm run test
 
 - Vitest + Testing Library validate that the sign-in screen renders both Static Web Apps auth provider links, clears the TanStack Query cache on sign-out, and displays a successful `/api/health` response
 - Vitest + Testing Library validate that the authenticated `/` home route renders the personalised feed, loads additional pages through infinite scroll, and supports touch pull-to-refresh
+- Vitest + Testing Library validate the in-product report dialog on feed cards, standalone posts/replies, media attachments, and public profiles
 - Vitest + Testing Library validate that `/u/{handle}` renders the public profile shell, surfaces the API-backed not-found state, and returns to loading immediately when the handle changes
 - Vitest + Testing Library validate that `/p/{id}` loads the standalone post detail view, fetches thread context, and handles missing-post states safely
 - Vitest + Testing Library validate that `/p/{id}` renders mixed-media posts with inline image, GIF, video, and audio attachments
@@ -39,6 +40,7 @@ npm run test
 - Vitest covers authenticated reply creation at `POST /api/posts/{id}/replies`, including parent lookup, nested thread inheritance, validation, and repository failure handling
 - Vitest covers authenticated Tenor GIF search at `GET /api/gifs/search`, including auth enforcement, configuration failures, and upstream error handling
 - Vitest covers authenticated post creation at `POST /api/posts`, including max-length validation, hashtag and mention parsing, denormalised author fields, and repository failure handling
+- Vitest covers authenticated report creation at `POST /api/reports`, including post, reply, media, and profile targets plus validation and not-found handling
 - Vitest covers the Tenor search client and upstream response mapping used by the GIF reply picker
 - Vitest covers authenticated follow creation and removal at `POST/DELETE /api/users/{handle}/follow`, including idempotent writes, self-target rejection, validation, and follow-store failure handling
 - Vitest covers authenticated feed reads at `GET /api/feed`, including cursor pagination, normalized denormalised entries, and feed-store failure handling

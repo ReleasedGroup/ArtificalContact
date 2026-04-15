@@ -13,6 +13,7 @@ import { HomeFeedScreen } from './components/HomeFeedScreen'
 import { ModerationQueueScreen } from './components/ModerationQueueScreen'
 import { NotificationsScreen } from './components/NotificationsScreen'
 import { PostDetailScreen } from './components/PostDetailScreen'
+import { ReportDialog } from './components/ReportDialog'
 import { SearchResultsScreen } from './components/SearchResultsScreen'
 import { ThreadWorkspacePanel } from './components/ThreadWorkspacePanel'
 import { WEB_BUILD_SHA } from './build-meta.generated'
@@ -1352,6 +1353,7 @@ function PublicProfileScreen({ handle }: { handle: string }) {
   const [profileState, setProfileState] = useState<PublicProfileState>({
     status: 'loading',
   })
+  const [viewer, setViewer] = useState<MeProfile | null>(null)
 
   useEffect(() => {
     startTransition(() => {
@@ -1398,6 +1400,40 @@ function PublicProfileScreen({ handle }: { handle: string }) {
     }
   }, [handle])
 
+  useEffect(() => {
+    const controller = new AbortController()
+
+    const loadViewer = async () => {
+      try {
+        const data = await getOptionalMe(controller.signal)
+        if (controller.signal.aborted) {
+          return
+        }
+
+        startTransition(() => {
+          setViewer(data?.user ?? null)
+        })
+      } catch (error) {
+        if (
+          controller.signal.aborted ||
+          (error instanceof DOMException && error.name === 'AbortError')
+        ) {
+          return
+        }
+
+        startTransition(() => {
+          setViewer(null)
+        })
+      }
+    }
+
+    void loadViewer()
+
+    return () => {
+      controller.abort()
+    }
+  }, [handle])
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-10">
       <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/90 shadow-2xl shadow-slate-950/35 backdrop-blur">
@@ -1436,7 +1472,7 @@ function PublicProfileScreen({ handle }: { handle: string }) {
 
         <div className="relative px-5 pb-6 sm:px-6 sm:pb-8 lg:px-10">
           {profileState.status === 'ready' ? (
-            <ReadyPublicProfile profile={profileState.data} />
+            <ReadyPublicProfile profile={profileState.data} viewer={viewer} />
           ) : (
             <PublicProfileStatusCard handle={handle} state={profileState} />
           )}
@@ -1446,8 +1482,19 @@ function PublicProfileScreen({ handle }: { handle: string }) {
   )
 }
 
-function ReadyPublicProfile({ profile }: { profile: PublicUserProfile }) {
+function ReadyPublicProfile({
+  profile,
+  viewer,
+}: {
+  profile: PublicUserProfile
+  viewer: MeProfile | null
+}) {
   const joinedDate = formatJoinedDate(profile.createdAt)
+  const canReportProfile =
+    viewer !== null &&
+    viewer.status === 'active' &&
+    Boolean(viewer.handle) &&
+    viewer.id !== profile.id
 
   return (
     <>
@@ -1496,6 +1543,19 @@ function ReadyPublicProfile({ profile }: { profile: PublicUserProfile }) {
           >
             Back to sign-in
           </a>
+          {canReportProfile && (
+            <ReportDialog
+              actionLabel="Report profile"
+              dialogDescription={`Flag @${profile.handle} for moderator review.`}
+              dialogTitle="Report this profile"
+              successMessage="Profile report submitted."
+              target={{
+                targetType: 'user',
+                targetId: profile.id,
+                targetProfileHandle: profile.handle,
+              }}
+            />
+          )}
           <span className="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-2.5 text-sm font-medium text-cyan-100">
             Routed from {'/u/{handle}'}
           </span>

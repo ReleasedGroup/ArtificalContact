@@ -3,37 +3,56 @@ import { z, type ZodIssue } from 'zod'
 import type { ApiError } from './api-envelope.js'
 import { getEnvironmentConfig, type EnvironmentConfig } from './config.js'
 import { createCosmosClient } from './cosmos-client.js'
+import type { PostStore, StoredPostMediaDocument } from './posts.js'
 import { readOptionalValue } from './strings.js'
-import type { UserDocument } from './users.js'
+import type { UserDocument, UserRepository } from './users.js'
 
 export const DEFAULT_REPORTS_CONTAINER_NAME = 'reports'
-export const DEFAULT_REPORT_REASON_MAX_LENGTH = 100
-export const DEFAULT_REPORT_DETAILS_MAX_LENGTH = 2000
+export const DEFAULT_REPORT_DETAILS_MAX_LENGTH = 500
 
-let cachedReportRepository: ReportRepository | undefined
+export const reportTargetTypes = ['post', 'reply', 'media', 'user'] as const
+export const reportReasonCodes = [
+  'spam',
+  'harassment',
+  'misinformation',
+  'impersonation',
+  'nsfw',
+  'other',
+] as const
 
-export type ReportTargetType = 'post' | 'reply' | 'media' | 'user'
+export type ReportTargetType = (typeof reportTargetTypes)[number]
+export type ReportReasonCode = (typeof reportReasonCodes)[number]
 export type ReportStatus = 'open' | 'triaged' | 'resolved'
+
+let cachedReportRepository: MutableReportRepository | undefined
 
 export interface ReportDocument {
   id: string
   type: 'report'
   status: ReportStatus
-  targetType: ReportTargetType
-  targetId: string
   reporterId: string
   reporterHandle: string
-  reason: string
+  reporterDisplayName: string
+  targetType: ReportTargetType
+  targetId: string
+  targetPostId: string | null
+  targetAuthorId: string | null
+  targetAuthorHandle: string | null
+  targetProfileHandle: string | null
+  reasonCode: ReportReasonCode
   details: string | null
+  mediaUrl: string | null
   createdAt: string
   updatedAt: string
 }
 
-export interface CreateReportRequest {
+export interface CreatedReport {
+  id: string
+  status: ReportStatus
   targetType: ReportTargetType
   targetId: string
-  reason: string
-  details: string | null
+  reasonCode: ReportReasonCode
+  createdAt: string
 }
 
 export interface ReportRepository {
@@ -42,7 +61,27 @@ export interface ReportRepository {
   upsert(report: ReportDocument): Promise<ReportDocument>
 }
 
-function normalizeRequiredString(value: unknown): unknown {
+export type MutableReportRepository = ReportRepository
+
+export interface CreateReportRequest {
+  targetType: ReportTargetType
+  targetId: string
+  targetPostId: string | null
+  reasonCode: ReportReasonCode
+  details: string | null
+  mediaUrl: string | null
+  targetProfileHandle: string | null
+}
+
+interface ResolvedReportTarget {
+  targetPostId: string | null
+  targetAuthorId: string | null
+  targetAuthorHandle: string | null
+  targetProfileHandle: string | null
+  mediaUrl: string | null
+}
+
+function normalizeTrimmedText(value: unknown): unknown {
   if (typeof value !== 'string') {
     return value
   }
@@ -50,18 +89,20 @@ function normalizeRequiredString(value: unknown): unknown {
   return value.trim()
 }
 
-function normalizeOptionalString(value: unknown): unknown {
+function toNullableString(value: unknown): string | null {
   if (typeof value !== 'string') {
-    return value
+    return null
   }
 
   const trimmed = value.trim()
-  return trimmed.length > 0 ? trimmed : undefined
+  return trimmed.length > 0 ? trimmed : null
 }
 
-function createReportRepositoryForContainer(container: Container): ReportRepository {
+function createReportRepositoryForContainer(
+  container: Container,
+): MutableReportRepository {
   return {
-    async create(report) {
+    async create(report: ReportDocument) {
       const response = await container.items.create<ReportDocument>(report)
       return response.resource ?? report
     },
@@ -82,32 +123,146 @@ function createReportRepositoryForContainer(container: Container): ReportReposit
   }
 }
 
-export function buildCreateReportRequestSchema() {
+function buildReportSchema(maxDetailsLength: number) {
   return z
     .object({
-      targetType: z.enum(['post', 'reply', 'media', 'user']),
-      targetId: z.preprocess(normalizeRequiredString, z.string().min(1)),
-      reason: z.preprocess(
-        normalizeRequiredString,
-        z.string().min(1).max(DEFAULT_REPORT_REASON_MAX_LENGTH),
-      ),
-      details: z.preprocess(
-        normalizeOptionalString,
-        z.string().max(DEFAULT_REPORT_DETAILS_MAX_LENGTH).optional(),
-      ),
+      targetType: z.enum(reportTargetTypes),
+      targetId: z.preprocess(normalizeTrimmedText, z.string().min(1).max(2048)),
+      targetPostId: z
+        .preprocess(normalizeTrimmedText, z.string().min(1).max(255))
+        .nullable()
+        .optional(),
+      reasonCode: z.enum(reportReasonCodes),
+      details: z
+        .preprocess(
+          normalizeTrimmedText,
+          z.string().max(maxDetailsLength).optional(),
+        )
+        .nullable()
+        .optional(),
+      mediaUrl: z
+        .preprocess(normalizeTrimmedText, z.string().url().max(2048).optional())
+        .nullable()
+        .optional(),
+      targetProfileHandle: z
+        .preprocess(normalizeTrimmedText, z.string().min(1).max(64).optional())
+        .nullable()
+        .optional(),
     })
     .strict()
+    .superRefine((value, context) => {
+      if (value.targetType === 'media' && !value.targetPostId) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Media reports must include the parent post id.',
+          path: ['targetPostId'],
+        })
+      }
+    })
     .transform(
       (value): CreateReportRequest => ({
         targetType: value.targetType,
         targetId: value.targetId,
-        reason: value.reason,
+        targetPostId: value.targetPostId ?? null,
+        reasonCode: value.reasonCode,
         details: value.details ?? null,
+        mediaUrl: value.mediaUrl ?? null,
+        targetProfileHandle: value.targetProfileHandle ?? null,
       }),
     )
 }
 
-export function mapReportValidationIssues(
+function mediaMatchesTarget(
+  media: StoredPostMediaDocument,
+  targetId: string,
+  mediaUrl: string | null,
+): boolean {
+  const mediaId = toNullableString(media.id)
+  if (mediaId === targetId) {
+    return true
+  }
+
+  if (mediaUrl === null) {
+    return false
+  }
+
+  return (
+    toNullableString(media.url) === mediaUrl ||
+    toNullableString(media.thumbUrl) === mediaUrl
+  )
+}
+
+async function resolveReportTarget(
+  request: CreateReportRequest,
+  dependencies: {
+    postStore: PostStore
+    userRepository: UserRepository
+  },
+): Promise<ResolvedReportTarget | null> {
+  if (request.targetType === 'user') {
+    const user = await dependencies.userRepository.getById(request.targetId)
+    if (user === null) {
+      return null
+    }
+
+    return {
+      targetPostId: null,
+      targetAuthorId: user.id,
+      targetAuthorHandle: user.handle ?? user.handleLower ?? null,
+      targetProfileHandle:
+        request.targetProfileHandle ?? user.handle ?? user.handleLower ?? null,
+      mediaUrl: null,
+    }
+  }
+
+  const targetPostId =
+    request.targetType === 'media' ? request.targetPostId : request.targetId
+  const post = await dependencies.postStore.getPostById(targetPostId ?? '')
+  if (post === null) {
+    return null
+  }
+
+  if (request.targetType === 'post' || request.targetType === 'reply') {
+    const targetType = toNullableString(post.type) === 'reply' ? 'reply' : 'post'
+    if (targetType !== request.targetType) {
+      return null
+    }
+
+    return {
+      targetPostId: post.id,
+      targetAuthorId: toNullableString(post.authorId),
+      targetAuthorHandle: toNullableString(post.authorHandle),
+      targetProfileHandle: toNullableString(post.authorHandle),
+      mediaUrl: null,
+    }
+  }
+
+  const matchedMedia = (post.media ?? []).find((media) =>
+    mediaMatchesTarget(media, request.targetId, request.mediaUrl),
+  )
+  if (!matchedMedia) {
+    return null
+  }
+
+  return {
+    targetPostId: post.id,
+    targetAuthorId: toNullableString(post.authorId),
+    targetAuthorHandle: toNullableString(post.authorHandle),
+    targetProfileHandle: toNullableString(post.authorHandle),
+    mediaUrl:
+      request.mediaUrl ??
+      toNullableString(matchedMedia.url) ??
+      toNullableString(matchedMedia.thumbUrl),
+  }
+}
+
+export function buildCreateReportRequestSchema(
+  maxDetailsLength = DEFAULT_REPORT_DETAILS_MAX_LENGTH,
+) {
+  return buildReportSchema(maxDetailsLength)
+}
+
+export function mapCreateReportValidationIssues(
   issues: readonly ZodIssue[],
 ): ApiError[] {
   return issues.map((issue) => ({
@@ -118,39 +273,67 @@ export function mapReportValidationIssues(
 }
 
 export function createReportDocument(
-  user: UserDocument,
+  reporter: UserDocument,
   request: CreateReportRequest,
+  resolvedTarget: ResolvedReportTarget,
   createdAt: Date,
   idFactory: () => string,
 ): ReportDocument {
-  const reporterHandle = user.handle ?? user.handleLower ?? ''
   const timestamp = createdAt.toISOString()
 
   return {
     id: idFactory(),
     type: 'report',
     status: 'open',
+    reporterId: reporter.id,
+    reporterHandle: reporter.handle ?? reporter.handleLower ?? '',
+    reporterDisplayName: reporter.displayName,
     targetType: request.targetType,
     targetId: request.targetId,
-    reporterId: user.id,
-    reporterHandle,
-    reason: request.reason,
+    targetPostId: resolvedTarget.targetPostId,
+    targetAuthorId: resolvedTarget.targetAuthorId,
+    targetAuthorHandle: resolvedTarget.targetAuthorHandle,
+    targetProfileHandle: resolvedTarget.targetProfileHandle,
+    reasonCode: request.reasonCode,
     details: request.details,
+    mediaUrl: resolvedTarget.mediaUrl,
     createdAt: timestamp,
     updatedAt: timestamp,
   }
 }
 
+export function toCreatedReport(report: ReportDocument): CreatedReport {
+  return {
+    id: report.id,
+    status: report.status,
+    targetType: report.targetType,
+    targetId: report.targetId,
+    reasonCode: report.reasonCode,
+    createdAt: report.createdAt,
+  }
+}
+
+export async function validateReportTarget(
+  request: CreateReportRequest,
+  dependencies: {
+    postStore: PostStore
+    userRepository: UserRepository
+  },
+): Promise<ResolvedReportTarget | null> {
+  return resolveReportTarget(request, dependencies)
+}
+
 export function createReportRepositoryFromConfig(
   config: EnvironmentConfig,
   env: NodeJS.ProcessEnv = process.env,
-): ReportRepository {
+): MutableReportRepository {
   if (!config.cosmosDatabaseName) {
     throw new Error('COSMOS_DATABASE_NAME is required to resolve reports.')
   }
 
   const reportsContainerName =
-    readOptionalValue(env.REPORTS_CONTAINER_NAME) ?? DEFAULT_REPORTS_CONTAINER_NAME
+    readOptionalValue(env.REPORTS_CONTAINER_NAME) ??
+    DEFAULT_REPORTS_CONTAINER_NAME
   const client = createCosmosClient(config)
   const container = client
     .database(config.cosmosDatabaseName)
@@ -159,7 +342,7 @@ export function createReportRepositoryFromConfig(
   return createReportRepositoryForContainer(container)
 }
 
-export function createReportRepository(): ReportRepository {
+export function createReportRepository(): MutableReportRepository {
   cachedReportRepository ??= createReportRepositoryFromConfig(
     getEnvironmentConfig(),
   )
