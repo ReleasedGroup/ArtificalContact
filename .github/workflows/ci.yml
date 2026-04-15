@@ -35,3 +35,6 @@ jobs:
 
       - name: Test workspaces
         run: npm run test
+
+      - name: Validate Bicep
+        run: az bicep build --only-show-errors --file infra/main.bicep --outfile infra/main.json

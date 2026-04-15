@@ -12,6 +12,9 @@
     },
     "location": {
       "value": "${AZURE_LOCATION}"
+    },
+    "pagerDutyIntegrationUrl": {
+      "value": "${PAGERDUTY_AZURE_INTEGRATION_URL}"
     }
   }
 }
