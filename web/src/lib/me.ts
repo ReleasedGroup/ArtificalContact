@@ -45,11 +45,11 @@ export interface UpdateMeResponse {
 
 export interface UpdateMeInput {
   handle?: string
-  displayName: string
-  bio: string | null
-  avatarUrl: string | null
-  bannerUrl: string | null
-  expertise: string[]
+  displayName?: string
+  bio?: string | null
+  avatarUrl?: string | null
+  bannerUrl?: string | null
+  expertise?: string[]
 }
 
 async function readEnvelope<TData>(
