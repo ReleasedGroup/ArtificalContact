@@ -55,12 +55,12 @@ resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' existi
   name: cosmosAccountName
 }
 
-resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
-  name: last(split(keyVaultResourceId, '/'))
-}
-
 resource searchService 'Microsoft.Search/searchServices@2023-11-01' existing = {
   name: last(split(searchResourceId, '/'))
+}
+
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+  name: last(split(keyVaultResourceId, '/'))
 }
 
 resource functionPlan 'Microsoft.Web/serverfarms@2024-04-01' = {
