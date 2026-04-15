@@ -111,6 +111,9 @@ module functions './modules/functions.bicep' = {
     searchUsersIndexName: search.outputs.usersIndexName
     searchResourceId: search.outputs.resourceId
   }
+  dependsOn: [
+    search
+  ]
 }
 
 module staticWebApp './modules/static-web-app.bicep' = {
