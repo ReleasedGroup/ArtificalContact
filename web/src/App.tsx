@@ -1,12 +1,9 @@
-import { startTransition, useEffect, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { WEB_BUILD_SHA } from './build-meta.generated'
+import { signOut } from './lib/auth'
 import { getHealth, type HealthPayload } from './lib/health'
 import { initializeTelemetry } from './lib/telemetry'
-
-type HealthState =
-  | { status: 'loading' }
-  | { status: 'ready'; data: HealthPayload }
-  | { status: 'error'; message: string }
 
 const postLoginRedirectUri = encodeURIComponent('/')
 
@@ -42,41 +39,25 @@ const profileMilestones = [
 ]
 
 function App() {
-  const [healthState, setHealthState] = useState<HealthState>({
-    status: 'loading',
+  const queryClient = useQueryClient()
+  const healthQuery = useQuery<HealthPayload>({
+    queryKey: ['health'],
+    queryFn: ({ signal }) => getHealth(signal),
+    retry: false,
   })
 
   useEffect(() => {
     initializeTelemetry()
-
-    const controller = new AbortController()
-
-    const loadHealth = async () => {
-      try {
-        const data = await getHealth(controller.signal)
-        startTransition(() => {
-          setHealthState({ status: 'ready', data })
-        })
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          return
-        }
-
-        const message =
-          error instanceof Error ? error.message : 'Unable to reach /api/health.'
-
-        startTransition(() => {
-          setHealthState({ status: 'error', message })
-        })
-      }
-    }
-
-    void loadHealth()
-
-    return () => {
-      controller.abort()
-    }
   }, [])
+
+  const healthErrorMessage =
+    healthQuery.error instanceof Error
+      ? healthQuery.error.message
+      : 'Unable to reach /api/health.'
+
+  function handleSignOut() {
+    signOut({ queryClient })
+  }
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center px-6 py-8 sm:px-8 lg:px-12">
@@ -93,6 +74,13 @@ function App() {
               <span className="rounded-full border border-white/10 px-4 py-2">
                 Web build {WEB_BUILD_SHA}
               </span>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="ml-auto rounded-full border border-white/12 px-4 py-2 font-medium text-slate-100 transition hover:border-white/25 hover:bg-white/6 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/80"
+              >
+                Sign out
+              </button>
             </div>
 
             <div className="max-w-3xl space-y-4">
@@ -126,7 +114,7 @@ function App() {
                       <p className="text-xl font-semibold text-white">
                         {provider.label}
                       </p>
-                    <p className="mt-3 text-sm leading-7 text-slate-200">
+                      <p className="mt-3 text-sm leading-7 text-slate-200">
                         {provider.description}
                       </p>
                     </div>
@@ -188,48 +176,48 @@ function App() {
                   </h2>
                 </div>
                 <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-200">
-                  {healthState.status === 'loading' && 'Checking'}
-                  {healthState.status === 'ready' && 'Healthy'}
-                  {healthState.status === 'error' && 'Needs attention'}
+                  {healthQuery.isPending && 'Checking'}
+                  {healthQuery.isSuccess && 'Healthy'}
+                  {healthQuery.isError && 'Needs attention'}
                 </span>
               </div>
 
               <div className="mt-6 space-y-3 text-sm leading-7 text-slate-300">
-                {healthState.status === 'loading' && (
+                {healthQuery.isPending && (
                   <p>Requesting the linked Functions health check.</p>
                 )}
 
-                {healthState.status === 'error' && <p>{healthState.message}</p>}
+                {healthQuery.isError && <p>{healthErrorMessage}</p>}
 
-                {healthState.status === 'ready' && (
+                {healthQuery.data && (
                   <>
                     <p>
                       Build{' '}
                       <span className="font-medium text-white">
-                        {healthState.data.buildSha}
+                        {healthQuery.data.buildSha}
                       </span>{' '}
                       in{' '}
                       <span className="font-medium text-white">
-                        {healthState.data.region}
+                        {healthQuery.data.region}
                       </span>
                     </p>
                     <p>
                       Cosmos ping:{' '}
                       <span className="font-medium text-white">
-                        {healthState.data.cosmos.status}
+                        {healthQuery.data.cosmos.status}
                       </span>
-                      {healthState.data.cosmos.databaseName
-                        ? ` (${healthState.data.cosmos.databaseName})`
+                      {healthQuery.data.cosmos.databaseName
+                        ? ` (${healthQuery.data.cosmos.databaseName})`
                         : ''}
                     </p>
-                    {healthState.data.cosmos.details && (
+                    {healthQuery.data.cosmos.details && (
                       <p className="text-slate-400">
-                        {healthState.data.cosmos.details}
+                        {healthQuery.data.cosmos.details}
                       </p>
                     )}
                     <p className="text-slate-400">
                       Timestamp{' '}
-                      {new Date(healthState.data.timestamp).toLocaleString()}
+                      {new Date(healthQuery.data.timestamp).toLocaleString()}
                     </p>
                   </>
                 )}
