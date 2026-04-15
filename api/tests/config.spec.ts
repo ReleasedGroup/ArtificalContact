@@ -15,6 +15,11 @@ describe('getEnvironmentConfig', () => {
     const config = getEnvironmentConfig({
       AZURE_REGION: 'australiaeast',
       BUILD_SHA: 'sha-1234',
+      COMMUNICATION_SERVICES_CONNECTION_STRING:
+        'endpoint=https://example.communication.azure.com/;accesskey=secret',
+      COMMUNICATION_SERVICES_ENDPOINT:
+        'https://example.communication.azure.com',
+      COMMUNICATION_SERVICES_EMAIL_SENDER_ADDRESS: 'noreply@example.com',
       COSMOS_DATABASE_NAME: 'acn',
       COSMOS_CONNECTION__accountEndpoint: 'https://cosmos.example',
       MEDIA_BASE_URL: 'https://cdn.example.com',
@@ -32,6 +37,15 @@ describe('getEnvironmentConfig', () => {
 
     expect(config.buildSha).toBe('sha-1234')
     expect(config.region).toBe('australiaeast')
+    expect(config.communicationServicesConnectionString).toBe(
+      'endpoint=https://example.communication.azure.com/;accesskey=secret',
+    )
+    expect(config.communicationServicesEndpoint).toBe(
+      'https://example.communication.azure.com',
+    )
+    expect(config.communicationServicesEmailSenderAddress).toBe(
+      'noreply@example.com',
+    )
     expect(config.cosmosDatabaseName).toBe('acn')
     expect(config.cosmosEndpoint).toBe('https://cosmos.example')
     expect(config.mediaBaseUrl).toBe('https://cdn.example.com')

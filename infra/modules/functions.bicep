@@ -2,6 +2,8 @@ param location string
 param names object
 param tags object = {}
 param applicationInsightsConnectionString string
+param communicationServicesEmailSenderAddress string = ''
+param communicationServicesEndpoint string = ''
 param cosmosAccountName string
 param cosmosDatabaseName string
 param cosmosEndpoint string
@@ -46,6 +48,22 @@ var blobServiceUri = 'https://${storageAccountName}.blob.${environment().suffixe
 var deploymentContainerUri = '${blobServiceUri}/${deploymentContainerName}'
 var queueServiceUri = 'https://${storageAccountName}.queue.${environment().suffixes.storage}'
 var tableServiceUri = 'https://${storageAccountName}.table.${environment().suffixes.storage}'
+var communicationServicesSenderAppSettings = !empty(communicationServicesEmailSenderAddress) ? [
+  {
+    name: 'COMMUNICATION_SERVICES_EMAIL_SENDER_ADDRESS'
+    value: communicationServicesEmailSenderAddress
+  }
+] : []
+var communicationServicesEndpointAppSettings = !empty(communicationServicesEndpoint) ? [
+  {
+    name: 'COMMUNICATION_SERVICES_ENDPOINT'
+    value: communicationServicesEndpoint
+  }
+] : []
+var communicationServicesAppSettings = concat(
+  communicationServicesSenderAppSettings,
+  communicationServicesEndpointAppSettings
+)
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
   name: storageAccountName
@@ -108,7 +126,7 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
       }
     }
     siteConfig: {
-      appSettings: [
+      appSettings: concat([
         {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
           value: applicationInsightsConnectionString
@@ -189,7 +207,7 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
           name: 'WEBSITE_CLOUD_ROLENAME'
           value: names.functionApp
         }
-      ]
+      ], communicationServicesAppSettings)
     }
   }
 }

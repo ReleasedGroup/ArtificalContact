@@ -41,6 +41,18 @@ class InMemoryNotificationDependencyStore
     this.upsertedNotifications.push(document)
   }
 
+  async getNotification(
+    targetUserId: string,
+    notificationId: string,
+  ): Promise<NotificationDocument | null> {
+    const notification = this.notifications.get(notificationId)
+    if (notification?.targetUserId !== targetUserId) {
+      return null
+    }
+
+    return { ...notification }
+  }
+
   async listNotificationsByActorAndWindow(
     targetUserId: string,
     eventType: NotificationDocument['eventType'],

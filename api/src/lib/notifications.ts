@@ -3,6 +3,7 @@ import { z, type ZodIssue } from 'zod'
 import type { ApiEnvelope, ApiError } from './api-envelope.js'
 import { getEnvironmentConfig, type EnvironmentConfig } from './config.js'
 import { createCosmosClient } from './cosmos-client.js'
+import type { NotificationEmailDeliveryState } from './notification-email.js'
 import type { FollowDocument } from './follows.js'
 import {
   isPubliclyVisiblePost,
@@ -55,12 +56,17 @@ export interface NotificationDocument {
   coalesced?: boolean
   coalescedWindowStart?: string | null
   coalescedRelatedEntityIds?: string[]
+  emailDelivery?: NotificationEmailDeliveryState | null
   ttl: number
 }
 
 export type StoredNotificationDocument = NotificationDocument
 
 export interface NotificationStore {
+  getNotification(
+    targetUserId: string,
+    notificationId: string,
+  ): Promise<NotificationDocument | null>
   upsertNotification(document: NotificationDocument): Promise<void>
   listNotificationsByActorAndWindow(
     targetUserId: string,
@@ -422,6 +428,23 @@ function buildNotificationDocument(
     coalescedWindowStart: options.coalescedWindowStart ?? null,
     coalescedRelatedEntityIds: options.coalescedRelatedEntityIds ?? [],
     ttl: NOTIFICATION_TTL_SECONDS,
+  }
+}
+
+function withPreservedEmailDelivery(
+  notification: NotificationDocument,
+  existingNotification: NotificationDocument | null,
+): NotificationDocument {
+  if (existingNotification?.emailDelivery === undefined) {
+    return notification
+  }
+
+  return {
+    ...notification,
+    emailDelivery:
+      existingNotification.emailDelivery === null
+        ? null
+        : { ...existingNotification.emailDelivery },
   }
 }
 
@@ -841,9 +864,10 @@ export async function syncFollowNotificationsBatch(
   profileStore: NotificationProfileStore,
   notificationStore: NotificationStore,
   logger: LoggerLike = nullLogger,
-): Promise<void> {
+): Promise<NotificationDocument[]> {
   const latestDocuments = collapseDocumentsToLatest(documents)
   const actorCache = new Map<string, NotificationActor>()
+  const upsertedNotifications: NotificationDocument[] = []
   let upsertCount = 0
 
   for (const document of latestDocuments) {
@@ -878,7 +902,7 @@ export async function syncFollowNotificationsBatch(
       actorCache,
     )
 
-    await notificationStore.upsertNotification(
+    const notification = withPreservedEmailDelivery(
       buildNotificationDocument(
         'follow',
         actor,
@@ -887,13 +911,21 @@ export async function syncFollowNotificationsBatch(
         createdAt,
         createdAt,
       ),
+      await notificationStore.getNotification(
+        followedId,
+        buildNotificationId(followedId, 'follow', followId),
+      ),
     )
+    await notificationStore.upsertNotification(notification)
+    upsertedNotifications.push(notification)
     upsertCount += 1
   }
 
   if (upsertCount > 0) {
     logger.info('Upserted %d follow notifications.', upsertCount)
   }
+
+  return upsertedNotifications
 }
 
 export async function syncPostNotificationsBatch(
@@ -902,9 +934,10 @@ export async function syncPostNotificationsBatch(
   profileStore: NotificationProfileStore,
   notificationStore: NotificationStore,
   logger: LoggerLike = nullLogger,
-): Promise<void> {
+): Promise<NotificationDocument[]> {
   const latestDocuments = collapseDocumentsToLatest(documents)
   const mentionCache = new Map<string, string | null>()
+  const upsertedNotifications: NotificationDocument[] = []
   let upsertCount = 0
 
   for (const document of latestDocuments) {
@@ -947,7 +980,7 @@ export async function syncPostNotificationsBatch(
         parentAuthorId !== actor.userId
       ) {
         replyTargetUserId = parentAuthorId
-        await notificationStore.upsertNotification(
+        const replyNotification = withPreservedEmailDelivery(
           buildNotificationDocument(
             'reply',
             actor,
@@ -962,7 +995,13 @@ export async function syncPostNotificationsBatch(
               excerpt: buildExcerpt(document.text),
             },
           ),
+          await notificationStore.getNotification(
+            parentAuthorId,
+            buildNotificationId(parentAuthorId, 'reply', postId),
+          ),
         )
+        await notificationStore.upsertNotification(replyNotification)
+        upsertedNotifications.push(replyNotification)
         upsertCount += 1
       }
     }
@@ -981,7 +1020,7 @@ export async function syncPostNotificationsBatch(
         continue
       }
 
-      await notificationStore.upsertNotification(
+      const mentionNotification = withPreservedEmailDelivery(
         buildNotificationDocument(
           'mention',
           actor,
@@ -996,7 +1035,13 @@ export async function syncPostNotificationsBatch(
             excerpt: buildExcerpt(document.text),
           },
         ),
+        await notificationStore.getNotification(
+          targetUserId,
+          buildNotificationId(targetUserId, 'mention', postId),
+        ),
       )
+      await notificationStore.upsertNotification(mentionNotification)
+      upsertedNotifications.push(mentionNotification)
       upsertCount += 1
     }
   }
@@ -1004,6 +1049,8 @@ export async function syncPostNotificationsBatch(
   if (upsertCount > 0) {
     logger.info('Upserted %d post-derived notifications.', upsertCount)
   }
+
+  return upsertedNotifications
 }
 
 export async function syncReactionNotificationsBatch(
@@ -1015,10 +1062,11 @@ export async function syncReactionNotificationsBatch(
   options: {
     hourlyActorThrottleThreshold?: number
   } = {},
-): Promise<void> {
+): Promise<NotificationDocument[]> {
   const latestDocuments = collapseDocumentsToLatest(documents)
   const actorCache = new Map<string, NotificationActor>()
   const windowNotificationCache = new Map<string, NotificationDocument[]>()
+  const upsertedNotifications: NotificationDocument[] = []
   const rawHourlyActorThrottleThreshold = options.hourlyActorThrottleThreshold
   const normalizedHourlyActorThrottleThreshold =
     typeof rawHourlyActorThrottleThreshold === 'number' &&
@@ -1088,9 +1136,10 @@ export async function syncReactionNotificationsBatch(
     )
 
     const reactionHourWindow = buildUtcHourWindow(createdAt)
+    const notificationId = buildNotificationId(targetUserId, 'reaction', reactionId)
 
     if (reactionHourWindow === null) {
-      await notificationStore.upsertNotification(
+      const individualNotification = withPreservedEmailDelivery(
         buildNotificationDocument(
           'reaction',
           actor,
@@ -1107,7 +1156,10 @@ export async function syncReactionNotificationsBatch(
             excerpt: buildExcerpt(post.text),
           },
         ),
+        await notificationStore.getNotification(targetUserId, notificationId),
       )
+      await notificationStore.upsertNotification(individualNotification)
+      upsertedNotifications.push(individualNotification)
       upsertCount += 1
       continue
     }
@@ -1162,49 +1214,59 @@ export async function syncReactionNotificationsBatch(
         await notificationStore.deleteNotification(targetUserId, notification.id)
       }
 
-      const aggregateNotification = buildNotificationDocument(
+      const aggregateNotification = withPreservedEmailDelivery(
+        buildNotificationDocument(
+          'reaction',
+          actor,
+          targetUserId,
+          reactionId,
+          getEarliestCreatedAt(windowNotifications, createdAt),
+          updatedAt,
+          {
+            notificationId: aggregateNotificationId,
+            postId,
+            threadId: toNonEmptyString(post.threadId) ?? postId,
+            parentId: toNonEmptyString(post.parentId),
+            reactionType: buildReactionType(document),
+            reactionValues: buildReactionValues(document),
+            excerpt: buildExcerpt(post.text),
+            eventCount: representedReactionIds.size,
+            coalesced: true,
+            coalescedWindowStart: reactionHourWindow.start,
+            coalescedRelatedEntityIds: [...representedReactionIds].sort(),
+          },
+        ),
+        await notificationStore.getNotification(
+          targetUserId,
+          aggregateNotificationId,
+        ),
+      )
+
+      await notificationStore.upsertNotification(aggregateNotification)
+      windowNotificationCache.set(cacheKey, [aggregateNotification])
+      upsertedNotifications.push(aggregateNotification)
+      upsertCount += 1
+      continue
+    }
+
+    const individualNotification = withPreservedEmailDelivery(
+      buildNotificationDocument(
         'reaction',
         actor,
         targetUserId,
         reactionId,
-        getEarliestCreatedAt(windowNotifications, createdAt),
+        createdAt,
         updatedAt,
         {
-          notificationId: aggregateNotificationId,
           postId,
           threadId: toNonEmptyString(post.threadId) ?? postId,
           parentId: toNonEmptyString(post.parentId),
           reactionType: buildReactionType(document),
           reactionValues: buildReactionValues(document),
           excerpt: buildExcerpt(post.text),
-          eventCount: representedReactionIds.size,
-          coalesced: true,
-          coalescedWindowStart: reactionHourWindow.start,
-          coalescedRelatedEntityIds: [...representedReactionIds].sort(),
         },
-      )
-
-      await notificationStore.upsertNotification(aggregateNotification)
-      windowNotificationCache.set(cacheKey, [aggregateNotification])
-      upsertCount += 1
-      continue
-    }
-
-    const individualNotification = buildNotificationDocument(
-      'reaction',
-      actor,
-      targetUserId,
-      reactionId,
-      createdAt,
-      updatedAt,
-      {
-        postId,
-        threadId: toNonEmptyString(post.threadId) ?? postId,
-        parentId: toNonEmptyString(post.parentId),
-        reactionType: buildReactionType(document),
-        reactionValues: buildReactionValues(document),
-        excerpt: buildExcerpt(post.text),
-      },
+      ),
+      await notificationStore.getNotification(targetUserId, notificationId),
     )
 
     await notificationStore.upsertNotification(individualNotification)
@@ -1218,10 +1280,13 @@ export async function syncReactionNotificationsBatch(
           )
         : [...windowNotifications, individualNotification],
     )
+    upsertedNotifications.push(individualNotification)
     upsertCount += 1
   }
 
   if (upsertCount > 0) {
     logger.info('Upserted %d reaction notifications.', upsertCount)
   }
+
+  return upsertedNotifications
 }

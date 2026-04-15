@@ -13,16 +13,17 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@azure/communication-email": "^1.1.0",
     "@azure/cosmos": "^4.5.0",
     "@azure/functions": "^4.9.0",
     "@azure/functions-extensions-blob": "^0.3.0",
-    "@azure/search-documents": "^12.1.0",
     "@azure/identity": "^4.13.0",
+    "@azure/search-documents": "^12.1.0",
     "@azure/storage-blob": "^12.31.0",
-    "applicationinsights": "^3.14.0",
-    "ulid": "^3.0.2",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "applicationinsights": "^3.14.0",
     "sharp": "^0.34.5",
+    "ulid": "^3.0.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {

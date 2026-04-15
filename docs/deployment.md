@@ -94,6 +94,9 @@ For the Sprint 3 media upload pipeline, the Functions app also needs:
 - `TENOR_API_KEY` set to a Tenor API key so authenticated users can search GIFs from the `/p/{id}` reply picker
 - Optional `TENOR_CLIENT_KEY` override for the Tenor integration identifier; defaults to `artificialcontact-web`
 - Optional `REACTION_NOTIFICATION_HOURLY_THRESHOLD` to control when same-actor reaction notifications coalesce within a UTC hour; the default is `3`
+- Optional `COMMUNICATION_SERVICES_CONNECTION_STRING` for local ACS Email authentication when managed identity is not available
+- Optional `COMMUNICATION_SERVICES_ENDPOINT` for managed-identity ACS Email authentication in deployed environments
+- Optional `COMMUNICATION_SERVICES_EMAIL_SENDER_ADDRESS` for the verified ACS MailFrom address used by follow, reply, and reaction-digest notification emails
 
 ## Media pipeline settings
 

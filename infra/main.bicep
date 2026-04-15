@@ -9,6 +9,8 @@ param frontDoorCustomDomainHostName string = 'cdn-placeholder.example.com'
 @minValue(0)
 @maxValue(7)
 param contentSafetyThreshold int = 4
+param communicationServicesEmailSenderAddress string = ''
+param communicationServicesEndpoint string = ''
 
 var supportedStaticWebAppLocations = [
   'centralus'
@@ -97,6 +99,8 @@ module functions './modules/functions.bicep' = {
       'azd-service-name': 'api'
     })
     applicationInsightsConnectionString: observability.outputs.applicationInsightsConnectionString
+    communicationServicesEmailSenderAddress: communicationServicesEmailSenderAddress
+    communicationServicesEndpoint: communicationServicesEndpoint
     cosmosAccountName: cosmos.outputs.accountName
     cosmosDatabaseName: cosmos.outputs.databaseName
     cosmosEndpoint: cosmos.outputs.endpoint
