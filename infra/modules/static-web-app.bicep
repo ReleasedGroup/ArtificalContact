@@ -15,7 +15,7 @@ resource staticWebApp 'Microsoft.Web/staticSites@2024-04-01' = {
   }
   tags: tags
   properties: {
-    allowConfigFileUpdates: false
+    allowConfigFileUpdates: true
     enterpriseGradeCdnStatus: 'Disabled'
     stagingEnvironmentPolicy: 'Enabled'
   }

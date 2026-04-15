@@ -39,6 +39,7 @@ azd down
 `azd` reads `azure.yaml` and the Bicep files under `infra/`.
 
 If your primary Azure region doesn't support `Microsoft.Web/staticSites` (for example `australiaeast`), the infrastructure now keeps the rest of the stack in `AZURE_LOCATION` and automatically places the Static Web App in `eastasia`. The linked backend still points at the Function App's actual region.
+Provisioned service resources are also tagged with `azd-service-name`, which `azd deploy` uses to map the `api` and `web` entries from `azure.yaml` onto the deployed Function App and Static Web App.
 
 ## GitHub Actions configuration
 
