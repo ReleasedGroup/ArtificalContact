@@ -3,6 +3,7 @@ param names object
 param tags object = {}
 
 var postsV1IndexName = 'posts-v1'
+var usersV1IndexName = 'users-v1'
 
 resource searchService 'Microsoft.Search/searchServices@2023-11-01' = {
   name: names.search
@@ -160,5 +161,92 @@ resource postsV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = {
   }
 }
 
+resource usersV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = {
+  name: usersV1IndexName
+  parent: searchService
+  properties: {
+    fields: [
+      {
+        name: 'id'
+        type: 'Edm.String'
+        key: true
+        filterable: true
+        searchable: false
+        sortable: true
+        facetable: false
+        retrievable: true
+      }
+      {
+        name: 'handle'
+        type: 'Edm.String'
+        searchable: true
+        filterable: true
+        sortable: false
+        facetable: true
+        retrievable: true
+        analyzerName: 'keyword'
+      }
+      {
+        name: 'handleLower'
+        type: 'Edm.String'
+        searchable: false
+        filterable: true
+        sortable: false
+        facetable: true
+        retrievable: true
+      }
+      {
+        name: 'displayName'
+        type: 'Edm.String'
+        searchable: true
+        filterable: false
+        sortable: false
+        facetable: false
+        retrievable: true
+        analyzerName: 'en.lucene'
+      }
+      {
+        name: 'bio'
+        type: 'Edm.String'
+        searchable: true
+        filterable: false
+        sortable: false
+        facetable: false
+        retrievable: true
+        analyzerName: 'en.lucene'
+      }
+      {
+        name: 'expertise'
+        type: 'Collection(Edm.String)'
+        searchable: true
+        filterable: true
+        sortable: false
+        facetable: true
+        retrievable: true
+      }
+      {
+        name: 'followerCount'
+        type: 'Edm.Int32'
+        searchable: false
+        filterable: true
+        sortable: true
+        facetable: false
+        retrievable: true
+      }
+      {
+        name: 'status'
+        type: 'Edm.String'
+        searchable: false
+        filterable: true
+        sortable: false
+        facetable: true
+        retrievable: true
+      }
+    ]
+  }
+}
+
 output endpoint string = 'https://${searchService.name}.search.windows.net'
 output resourceId string = searchService.id
+output postsIndexName string = postsV1IndexName
+output usersIndexName string = usersV1IndexName

@@ -14,6 +14,9 @@ export interface EnvironmentConfig {
   contentSafetyKey: string | undefined
   contentSafetyThreshold: number
   ffmpegPath: string | undefined
+  searchEndpoint: string | undefined
+  searchPostsIndexName: string
+  searchUsersIndexName: string
 }
 
 function readCosmosEndpoint(env: NodeJS.ProcessEnv) {
@@ -57,6 +60,13 @@ export function getEnvironmentConfig(
     contentSafetyEndpoint: readOptionalValue(env.CONTENT_SAFETY_ENDPOINT),
     contentSafetyKey: readOptionalValue(env.CONTENT_SAFETY_KEY),
     contentSafetyThreshold: readInteger(env.CONTENT_SAFETY_THRESHOLD, 4, 0, 7),
+    searchEndpoint:
+      readOptionalValue(env.SEARCH_ENDPOINT) ??
+      readOptionalValue(env.SEARCH_SERVICE_ENDPOINT),
+    searchPostsIndexName:
+      readOptionalValue(env.SEARCH_INDEX_POSTS_NAME) ?? 'posts-v1',
+    searchUsersIndexName:
+      readOptionalValue(env.SEARCH_INDEX_USERS_NAME) ?? 'users-v1',
     ffmpegPath:
       readOptionalValue(env.FFMPEG_PATH) ??
       readOptionalValue(env.MEDIA_FFMPEG_PATH),

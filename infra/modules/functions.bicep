@@ -13,6 +13,10 @@ param contentSafetyThreshold int = 4
 param storageAccountName string
 param storageAccountResourceId string
 param deploymentContainerName string
+param searchEndpoint string
+param searchPostsIndexName string
+param searchUsersIndexName string
+param searchResourceId string
 
 var storageBlobDataOwnerRoleDefinitionId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
@@ -30,6 +34,10 @@ var keyVaultSecretsUserRoleDefinitionId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
   '4633458b-17de-408a-b874-0445c86b69e6'
 )
+var searchIndexDataContributorRoleDefinitionId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  '7ca7617b-dad8-4a2f-bb0a-67fef9d4f7f0'
+)
 var blobServiceUri = 'https://${storageAccountName}.blob.${environment().suffixes.storage}'
 var deploymentContainerUri = '${blobServiceUri}/${deploymentContainerName}'
 var queueServiceUri = 'https://${storageAccountName}.queue.${environment().suffixes.storage}'
@@ -45,6 +53,10 @@ resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' existi
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: last(split(keyVaultResourceId, '/'))
+}
+
+resource searchService 'Microsoft.Search/searchServices@2023-11-01' existing = {
+  id: searchResourceId
 }
 
 resource functionPlan 'Microsoft.Web/serverfarms@2024-04-01' = {
@@ -142,6 +154,18 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
           value: string(contentSafetyThreshold)
         }
         {
+          name: 'SEARCH_ENDPOINT'
+          value: searchEndpoint
+        }
+        {
+          name: 'SEARCH_INDEX_POSTS_NAME'
+          value: searchPostsIndexName
+        }
+        {
+          name: 'SEARCH_INDEX_USERS_NAME'
+          value: searchUsersIndexName
+        }
+        {
           name: 'AZURE_REGION'
           value: location
         }
@@ -205,6 +229,16 @@ resource keyVaultRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04
     principalId: functionApp.identity.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: keyVaultSecretsUserRoleDefinitionId
+  }
+}
+
+resource searchIndexDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(searchResourceId, functionApp.name, 'search-index-data-contributor')
+  scope: searchService
+  properties: {
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: searchIndexDataContributorRoleDefinitionId
   }
 }
 
