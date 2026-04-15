@@ -8,6 +8,9 @@ import {
   type StoredPostDocument,
   type UserPostDocument,
 } from './posts.js'
+import { DEFAULT_REACTIONS_CONTAINER_NAME } from './reactions.js'
+import type { ReactionCounterStore } from './reaction-counter.js'
+import type { ReplyCounterStore } from './reply-counter.js'
 import { DEFAULT_COSMOS_DATABASE_NAME } from './users-by-handle-mirror.js'
 
 type CosmosLikeError = Error & {
@@ -48,8 +51,13 @@ function createCosmosClientFromEnvironment(): CosmosClient {
   })
 }
 
-export class CosmosPostStore implements MutablePostStore, PostRepository {
-  constructor(private readonly postsContainer: Container) {}
+export class CosmosPostStore
+  implements MutablePostStore, PostRepository, ReplyCounterStore, ReactionCounterStore
+{
+  constructor(
+    private readonly postsContainer: Container,
+    private readonly reactionsContainer?: Container,
+  ) {}
 
   static fromEnvironment(client?: CosmosClient): CosmosPostStore {
     const config = getEnvironmentConfig()
@@ -59,9 +67,14 @@ export class CosmosPostStore implements MutablePostStore, PostRepository {
     const postsContainerName =
       readOptionalValue(process.env.POSTS_CONTAINER_NAME) ??
       DEFAULT_POSTS_CONTAINER_NAME
+    const reactionsContainerName =
+      readOptionalValue(process.env.REACTIONS_CONTAINER_NAME) ??
+      DEFAULT_REACTIONS_CONTAINER_NAME
+    const database = resolvedClient.database(databaseName)
 
     return new CosmosPostStore(
-      resolvedClient.database(databaseName).container(postsContainerName),
+      database.container(postsContainerName),
+      database.container(reactionsContainerName),
     )
   }
 
@@ -206,6 +219,103 @@ export class CosmosPostStore implements MutablePostStore, PostRepository {
     }
   }
 
+  async getReactionSummary(postId: string): Promise<{
+    likes: number
+    dislikes: number
+    emoji: number
+  }> {
+    const querySpec: SqlQuerySpec = {
+      query:
+        'SELECT c.sentiment, c.emojiValues FROM c WHERE c.postId = @postId AND c.type = @type',
+      parameters: [
+        { name: '@postId', value: postId },
+        { name: '@type', value: 'reaction' },
+      ],
+    }
+    const queryIterator = this.getReactionsContainer().items.query<{
+      sentiment?: string | null
+      emojiValues?: string[] | null
+    }>(querySpec, {
+      partitionKey: postId,
+    })
+
+    let likes = 0
+    let dislikes = 0
+    let emoji = 0
+
+    while (queryIterator.hasMoreResults()) {
+      const { resources } = await queryIterator.fetchNext()
+
+      for (const reaction of resources) {
+        if (reaction.sentiment === 'like') {
+          likes += 1
+        } else if (reaction.sentiment === 'dislike') {
+          dislikes += 1
+        }
+
+        if (Array.isArray(reaction.emojiValues)) {
+          emoji += reaction.emojiValues.filter(
+            (value) => typeof value === 'string' && value.trim().length > 0,
+          ).length
+        }
+      }
+    }
+
+    return {
+      likes,
+      dislikes,
+      emoji,
+    }
+  }
+
+  async setReactionCounts(
+    postId: string,
+    threadId: string,
+    counts: {
+      likes: number
+      dislikes: number
+      emoji: number
+      replies: number
+    },
+  ): Promise<void> {
+    try {
+      await this.postsContainer.item(postId, threadId).patch([
+        {
+          op: 'set',
+          path: '/counters/likes',
+          value: counts.likes,
+        },
+        {
+          op: 'set',
+          path: '/counters/dislikes',
+          value: counts.dislikes,
+        },
+        {
+          op: 'set',
+          path: '/counters/emoji',
+          value: counts.emoji,
+        },
+      ])
+    } catch (error) {
+      if (!isBadRequest(error)) {
+        throw error
+      }
+
+      await this.postsContainer.item(postId, threadId).patch([
+        {
+          op: 'set',
+          path: '/counters',
+          value: {
+            likes: counts.likes,
+            dislikes: counts.dislikes,
+            emoji: counts.emoji,
+            replies: counts.replies,
+          },
+        },
+      ])
+    }
+  }
+
   async countActiveReplies(
     threadId: string,
     parentId: string,
@@ -257,6 +367,14 @@ export class CosmosPostStore implements MutablePostStore, PostRepository {
       .fetchAll()
 
     return resources[0] ?? null
+  }
+
+  private getReactionsContainer(): Container {
+    if (this.reactionsContainer === undefined) {
+      throw new Error('The reactions container is not configured.')
+    }
+
+    return this.reactionsContainer
   }
 }
 
