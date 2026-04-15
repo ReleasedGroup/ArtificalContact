@@ -22,6 +22,7 @@ npm run test
 
 - Monorepo scaffold for `web/`, `api/`, and `infra/`
 - `/api/health` returns build metadata, region information, and a Cosmos ping result
+- SPA public profile route `/u/{handle}` renders the public identity shell from `GET /api/users/{handle}`
 - Application Insights wiring for the SPA and Functions
 - GitHub Actions for validation and deployment
 - Repo governance files: PR template and CODEOWNERS

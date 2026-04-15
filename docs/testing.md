@@ -15,7 +15,9 @@ npm run test
 
 ### `web`
 
-- Vitest + Testing Library validate the sign-in screen auth links, sign-out cache clearing, successful `/api/health` rendering, and the authenticated `/me` profile editor flow including `PUT /api/me` saves
+- Vitest + Testing Library validate that the sign-in screen renders both Static Web Apps auth provider links, clears the TanStack Query cache on sign-out, and displays a successful `/api/health` response
+- Vitest + Testing Library validate that `/u/{handle}` renders the public profile shell, surfaces the API-backed not-found state, and returns to loading immediately when the handle changes
+- Vitest + Testing Library validate the authenticated `/me` profile editor flow, including initial profile loading, error rendering, and `PUT /api/me` saves
 - ESLint enforces the TypeScript/React code style
 - Vite production build verifies the SPA compiles cleanly
 
@@ -24,7 +26,7 @@ npm run test
 - Vitest covers the health envelope generation and HTTP handler behavior
 - Vitest covers authenticated profile reads and updates at `GET /api/me` and `PUT /api/me`, including JIT provisioning, validation, and normalization
 - Vitest covers the public profile lookup at `GET /api/users/{handle}`, including case-insensitive mirror resolution and safe not-found behavior
-- Vitest covers Static Web Apps principal decoding for authenticated API routes
+- Vitest covers Static Web Apps principal decoding and HTTP auth role attachment for anonymous, user, moderator, admin, and malformed-principal request paths
 - Vitest covers `PUT /api/me`, including duplicate-handle rejection via `usersByHandle`
 - Vitest covers the `usersByHandle` change-feed mirror logic, including stale-handle cleanup and non-fatal collision handling
 - TypeScript compilation validates the Azure Functions source and module graph
