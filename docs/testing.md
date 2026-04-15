@@ -27,6 +27,7 @@ npm run test
 - Playwright covers the mixed-media `/p/{id}` route on desktop and mobile viewports, including image, GIF, video, and audio attachments
 - Playwright covers the Sprint 2 thread path: user A publishes a root post, user B replies on the standalone thread page, both users see the shared thread, and a soft-deleted reply disappears from view while the backing document remains in the mocked store
 - Playwright covers the Sprint 6 search flow with simulated latency: publishing from `/me` and polling the mocked `/api/search` until the new post becomes discoverable within five seconds
+- Playwright covers the Sprint 7 notification path: user B replies to user A, the mocked notifications read model materialises asynchronously, and user A sees the unread in-app notification within five seconds
 - ESLint enforces the TypeScript/React code style
 - Vite production build verifies the SPA compiles cleanly
 
