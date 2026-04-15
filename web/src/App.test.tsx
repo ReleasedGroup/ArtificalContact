@@ -23,6 +23,59 @@ function createDeferredResponse<T>() {
   return { promise, resolve }
 }
 
+function createPublicPost(overrides?: Record<string, unknown>) {
+  return {
+    id: 'post-1',
+    type: 'post',
+    kind: 'user',
+    threadId: 'post-1',
+    parentId: null,
+    authorId: 'u1',
+    authorHandle: 'ada',
+    authorDisplayName: 'Ada Lovelace',
+    authorAvatarUrl: null,
+    text: 'Root thread post',
+    hashtags: ['evals'],
+    mentions: [],
+    media: [],
+    counters: {
+      likes: 12,
+      dislikes: 0,
+      emoji: 3,
+      replies: 2,
+    },
+    visibility: 'public',
+    createdAt: '2026-04-15T00:00:00.000Z',
+    updatedAt: '2026-04-15T00:00:00.000Z',
+    github: null,
+    ...overrides,
+  }
+}
+
+function createThreadPost(overrides?: Record<string, unknown>) {
+  const post = createPublicPost(overrides)
+
+  return {
+    id: post.id,
+    type: post.type,
+    kind: post.kind,
+    threadId: post.threadId,
+    parentId: post.parentId,
+    authorId: post.authorId,
+    authorHandle: post.authorHandle,
+    authorDisplayName: post.authorDisplayName,
+    authorAvatarUrl: post.authorAvatarUrl,
+    text: post.text,
+    hashtags: post.hashtags,
+    mentions: post.mentions,
+    media: post.media,
+    counters: post.counters,
+    createdAt: post.createdAt,
+    updatedAt: post.updatedAt,
+    ...(post.github ? { github: post.github } : {}),
+  }
+}
+
 function renderApp() {
   const queryClient = createQueryClient()
 
@@ -479,6 +532,177 @@ describe('App', () => {
 
     expect(
       await screen.findByRole('heading', { name: 'Grace Hopper' }),
+    ).toBeInTheDocument()
+  })
+
+  it('renders the /p/{id} post detail route with later thread context', async () => {
+    window.history.replaceState({}, '', '/p/post-1')
+
+    mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/posts/post-1') {
+        return createJsonResponse(200, {
+          data: createPublicPost(),
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/threads/post-1') {
+        return createJsonResponse(200, {
+          data: {
+            threadId: 'post-1',
+            posts: [
+              createThreadPost(),
+              createThreadPost({
+                id: 'reply-1',
+                type: 'reply',
+                parentId: 'post-1',
+                text: 'Follow-up reply with more context.',
+                createdAt: '2026-04-15T00:05:00.000Z',
+                updatedAt: '2026-04-15T00:05:00.000Z',
+              }),
+            ],
+            continuationToken: null,
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    renderApp()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Standalone post detail' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Root thread post')).toBeInTheDocument()
+    expect(screen.getByText('Later in thread')).toBeInTheDocument()
+    expect(
+      screen.getByText('Follow-up reply with more context.'),
+    ).toBeInTheDocument()
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/posts/post-1',
+      expect.objectContaining({
+        headers: { Accept: 'application/json' },
+      }),
+    )
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/threads/post-1',
+      expect.objectContaining({
+        headers: { Accept: 'application/json' },
+      }),
+    )
+  })
+
+  it('renders the selected reply with earlier and later thread context', async () => {
+    window.history.replaceState({}, '', '/p/reply-2')
+
+    mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/posts/reply-2') {
+        return createJsonResponse(200, {
+          data: createPublicPost({
+            id: 'reply-2',
+            type: 'reply',
+            threadId: 'post-1',
+            parentId: 'reply-1',
+            text: 'Selected reply in the middle of the thread.',
+            createdAt: '2026-04-15T00:06:00.000Z',
+            updatedAt: '2026-04-15T00:06:00.000Z',
+          }),
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/threads/post-1') {
+        return createJsonResponse(200, {
+          data: {
+            threadId: 'post-1',
+            posts: [
+              createThreadPost(),
+              createThreadPost({
+                id: 'reply-1',
+                type: 'reply',
+                threadId: 'post-1',
+                parentId: 'post-1',
+                text: 'Earlier reply that started the side discussion.',
+                createdAt: '2026-04-15T00:05:00.000Z',
+                updatedAt: '2026-04-15T00:05:00.000Z',
+              }),
+              createThreadPost({
+                id: 'reply-2',
+                type: 'reply',
+                threadId: 'post-1',
+                parentId: 'reply-1',
+                text: 'Selected reply in the middle of the thread.',
+                createdAt: '2026-04-15T00:06:00.000Z',
+                updatedAt: '2026-04-15T00:06:00.000Z',
+              }),
+              createThreadPost({
+                id: 'reply-3',
+                type: 'reply',
+                threadId: 'post-1',
+                parentId: 'reply-2',
+                text: 'Later reply that extends the thread.',
+                createdAt: '2026-04-15T00:07:00.000Z',
+                updatedAt: '2026-04-15T00:07:00.000Z',
+              }),
+            ],
+            continuationToken: null,
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    renderApp()
+
+    expect(
+      await screen.findByText('Selected reply in the middle of the thread.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Earlier in thread')).toBeInTheDocument()
+    expect(screen.getByText('Later in thread')).toBeInTheDocument()
+    expect(
+      screen.getByText('Earlier reply that started the side discussion.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Later reply that extends the thread.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Open thread root' }),
+    ).toHaveAttribute('href', '/p/post-1')
+  })
+
+  it('renders a not-found state when the post does not exist', async () => {
+    window.history.replaceState({}, '', '/p/missing')
+
+    mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/posts/missing') {
+        return createJsonResponse(404, {
+          data: null,
+          errors: [
+            {
+              code: 'post_not_found',
+              message: 'No public post exists for the requested id.',
+              field: 'id',
+            },
+          ],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    renderApp()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Post not found' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('No public post exists for the requested id.'),
     ).toBeInTheDocument()
   })
 })
