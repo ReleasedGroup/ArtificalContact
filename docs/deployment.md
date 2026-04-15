@@ -6,7 +6,7 @@ Sprint 0 provisions the Azure and GitHub scaffolding required to start feature d
 
 - Azure Static Web Apps (Standard)
 - Azure Functions (Flex Consumption)
-- Azure Cosmos DB for NoSQL + `acn` database with `users`, `usersByHandle`, `posts`, `follows`, `followers`, `reactions`, `feeds`, `notifications`, `notificationPrefs`, `media`, `reports`, and `modActions` containers
+- Azure Cosmos DB for NoSQL + `acn` database with `users`, `usersByHandle`, `posts`, `follows`, `followers`, `reactions`, `feeds`, `notifications`, `notificationPrefs`, `media`, `reports`, `modActions`, and `rateLimits` containers
 - Azure Storage account + placeholder blob containers
 - Azure AI Search (Basic)
 - Azure Front Door (Standard) with cache rules for blob delivery
@@ -22,6 +22,11 @@ Notification documents use deterministic ids of the form
 `${targetUserId}:${eventType}:${relatedEntityId}` so the change-feed notification
 workers can safely upsert follow, reply, reaction, and mention notifications
 without duplication.
+
+The Cosmos `acn` SQL database provisions 400 RU/s of shared throughput. The
+`rateLimits` container participates in that shared pool, is partitioned on
+`/userId`, and enables per-document TTL so token bucket records can expire
+automatically when their refill window closes.
 
 ## Local prerequisites
 

@@ -298,6 +298,7 @@ resource usersV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = {
   }
 }
 
+#disable-next-line BCP081
 resource hashtagsV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = {
   name: hashtagsV1IndexName
   parent: searchService
@@ -335,6 +336,7 @@ resource hashtagsV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = 
   }
 }
 
+#disable-next-line BCP081
 resource postsV1DataSource 'Microsoft.Search/searchServices/dataSources@2024-07-01' = {
   name: postsV1DataSourceName
   parent: searchService
@@ -353,6 +355,7 @@ resource postsV1DataSource 'Microsoft.Search/searchServices/dataSources@2024-07-
   }
 }
 
+#disable-next-line BCP081
 resource postsV1Indexer 'Microsoft.Search/searchServices/indexers@2024-07-01' = {
   name: postsV1IndexerName
   parent: searchService
