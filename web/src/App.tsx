@@ -8,24 +8,30 @@ type HealthState =
   | { status: 'ready'; data: HealthPayload }
   | { status: 'error'; message: string }
 
+const postLoginRedirectUri = encodeURIComponent('/')
+
+function getAuthLoginHref(provider: 'aad' | 'github') {
+  return `/.auth/login/${provider}?post_login_redirect_uri=${postLoginRedirectUri}`
+}
+
 const authProviders = [
   {
     label: 'Continue with Microsoft',
-    href: '/.auth/login/aad?post_login_redirect_uri=%2F',
+    href: getAuthLoginHref('aad'),
     description:
       'Use Microsoft Entra ID through Static Web Apps built-in authentication.',
-    accent:
-      'from-cyan-300/30 via-sky-300/15 to-transparent text-cyan-50 ring-cyan-200/30',
+    gradientClass: 'from-cyan-300/30 via-sky-300/15 to-transparent',
     badge: 'MS',
+    helperText: 'Returns to the root route after Microsoft authentication.',
   },
   {
     label: 'Continue with GitHub',
-    href: '/.auth/login/github?post_login_redirect_uri=%2F',
+    href: getAuthLoginHref('github'),
     description:
       'Use GitHub sign-in for the practitioner identity and repository-connected workflows.',
-    accent:
-      'from-amber-300/30 via-orange-300/15 to-transparent text-amber-50 ring-amber-200/30',
+    gradientClass: 'from-amber-300/30 via-orange-300/15 to-transparent',
     badge: 'GH',
+    helperText: 'Returns to the root route after GitHub authentication.',
   },
 ]
 
@@ -106,10 +112,11 @@ function App() {
                 <a
                   key={provider.label}
                   href={provider.href}
+                  aria-label={provider.label}
                   className="group relative overflow-hidden rounded-[1.75rem] border border-white/12 bg-white/5 p-6 text-left shadow-lg shadow-slate-950/20 transition hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/80"
                 >
                   <div
-                    className={`absolute inset-0 bg-gradient-to-br ${provider.accent}`}
+                    className={`absolute inset-0 bg-gradient-to-br ${provider.gradientClass}`}
                   />
                   <div className="relative space-y-4">
                     <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/15 bg-slate-950/60 text-sm font-semibold tracking-[0.24em] text-white">
@@ -119,12 +126,15 @@ function App() {
                       <p className="text-xl font-semibold text-white">
                         {provider.label}
                       </p>
-                      <p className="mt-3 text-sm leading-7 text-slate-200">
+                    <p className="mt-3 text-sm leading-7 text-slate-200">
                         {provider.description}
                       </p>
                     </div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-slate-300/80">
-                      {provider.href}
+                    <p
+                      aria-hidden="true"
+                      className="text-xs uppercase tracking-[0.22em] text-slate-300/80"
+                    >
+                      {provider.helperText}
                     </p>
                   </div>
                 </a>
