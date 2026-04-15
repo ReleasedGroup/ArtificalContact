@@ -10,7 +10,10 @@ param frontDoorCustomDomainHostName string = 'cdn-placeholder.example.com'
 @maxValue(7)
 param contentSafetyThreshold int = 4
 param communicationServicesEmailSenderAddress string = ''
+param communicationServicesConnectionStringSecretUri string = ''
 param communicationServicesEndpoint string = ''
+param contentSafetyKeySecretUri string = ''
+param tenorApiKeySecretUri string = ''
 
 var supportedStaticWebAppLocations = [
   'centralus'
@@ -100,7 +103,9 @@ module functions './modules/functions.bicep' = {
     })
     applicationInsightsConnectionString: observability.outputs.applicationInsightsConnectionString
     communicationServicesEmailSenderAddress: communicationServicesEmailSenderAddress
+    communicationServicesConnectionStringSecretUri: communicationServicesConnectionStringSecretUri
     communicationServicesEndpoint: communicationServicesEndpoint
+    contentSafetyKeySecretUri: contentSafetyKeySecretUri
     cosmosAccountName: cosmos.outputs.accountName
     cosmosDatabaseName: cosmos.outputs.databaseName
     cosmosEndpoint: cosmos.outputs.endpoint
@@ -114,6 +119,7 @@ module functions './modules/functions.bicep' = {
     searchPostsIndexName: search.outputs.postsIndexName
     searchUsersIndexName: search.outputs.usersIndexName
     searchResourceId: search.outputs.resourceId
+    tenorApiKeySecretUri: tenorApiKeySecretUri
   }
 }
 

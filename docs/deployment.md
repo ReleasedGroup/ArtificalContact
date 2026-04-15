@@ -74,6 +74,9 @@ The following repository variables are required:
 - `AZURE_RESOURCE_GROUP`
 - `AZURE_FUNCTION_APP_NAME`
 - `FRONTDOOR_CUSTOM_DOMAIN` (set to a real delegated host name such as `cdn.yourdomain.com` to enable the managed-cert custom domain; `.example.com` placeholders keep Front Door on the default hostname only)
+- `COMMUNICATION_SERVICES_CONNECTION_STRING_SECRET_URI` (optional Key Vault secret URI for ACS SMTP-style auth when managed identity is unavailable)
+- `CONTENT_SAFETY_KEY_SECRET_URI` (optional Key Vault secret URI for local or fallback Content Safety key usage)
+- `TENOR_API_KEY_SECRET_URI` (optional Key Vault secret URI for the Tenor API key used by the reply GIF picker)
 
 ## Deployment workflows
 
@@ -89,6 +92,11 @@ To support AI Search read and write operations without shared keys, the same
 managed identity is now granted `Search Index Data Contributor` and
 `Search Index Data Reader` on the AI Search service via Bicep role assignments.
 No AI Search admin keys are configured in Function App settings.
+When any of the `*_SECRET_URI` deployment variables are set, the infrastructure
+deployment now writes `@Microsoft.KeyVault(SecretUri=...)` references into the
+Function App settings instead of raw secret values. The existing system-assigned
+managed identity already receives the `Key Vault Secrets User` role required to
+resolve those references at runtime.
 For the Sprint 3 media upload pipeline, the Functions app also needs:
 
 - Storage Blob Data Contributor on the media storage account so `POST /api/media/upload-url` can request user delegation keys with managed identity
@@ -113,6 +121,11 @@ For the Sprint 3 media upload pipeline, the Functions app also needs:
 - `FFMPEG_PATH` or `MEDIA_FFMPEG_PATH` can be set to the `ffmpeg` executable path when no bundled `ffmpeg` binary is available. This is required for extracting video poster frames in environments that do not include the packaged binary.
 - `TENOR_API_KEY` enables the authenticated GIF reply picker on `/p/{id}` by letting the Functions app proxy Tenor search requests without exposing the provider key to the browser.
 - `TENOR_CLIENT_KEY` defaults to `artificialcontact-web` and can be overridden if Tenor usage needs to be segmented by environment or application.
+
+## Security automation
+
+- `.github/dependabot.yml` keeps npm dependencies and GitHub Actions up to date on a weekly cadence.
+- `.github/workflows/security.yml` runs `npm audit` against production dependencies and performs a full-history `gitleaks` secret scan on pull requests, `main`, and a weekly schedule.
 
 ## Front Door media delivery
 

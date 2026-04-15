@@ -4,6 +4,8 @@ param tags object = {}
 param applicationInsightsConnectionString string
 param communicationServicesEmailSenderAddress string = ''
 param communicationServicesEndpoint string = ''
+param communicationServicesConnectionStringSecretUri string = ''
+param contentSafetyKeySecretUri string = ''
 param cosmosAccountName string
 param cosmosDatabaseName string
 param cosmosEndpoint string
@@ -19,6 +21,7 @@ param searchEndpoint string
 param searchPostsIndexName string
 param searchUsersIndexName string
 param searchResourceId string
+param tenorApiKeySecretUri string = ''
 
 var storageBlobDataOwnerRoleDefinitionId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
@@ -48,21 +51,51 @@ var blobServiceUri = 'https://${storageAccountName}.blob.${environment().suffixe
 var deploymentContainerUri = '${blobServiceUri}/${deploymentContainerName}'
 var queueServiceUri = 'https://${storageAccountName}.queue.${environment().suffixes.storage}'
 var tableServiceUri = 'https://${storageAccountName}.table.${environment().suffixes.storage}'
-var communicationServicesSenderAppSettings = !empty(communicationServicesEmailSenderAddress) ? [
-  {
-    name: 'COMMUNICATION_SERVICES_EMAIL_SENDER_ADDRESS'
-    value: communicationServicesEmailSenderAddress
-  }
-] : []
-var communicationServicesEndpointAppSettings = !empty(communicationServicesEndpoint) ? [
-  {
-    name: 'COMMUNICATION_SERVICES_ENDPOINT'
-    value: communicationServicesEndpoint
-  }
-] : []
+var communicationServicesSenderAppSettings = !empty(communicationServicesEmailSenderAddress)
+  ? [
+      {
+        name: 'COMMUNICATION_SERVICES_EMAIL_SENDER_ADDRESS'
+        value: communicationServicesEmailSenderAddress
+      }
+    ]
+  : []
+var communicationServicesEndpointAppSettings = !empty(communicationServicesEndpoint)
+  ? [
+      {
+        name: 'COMMUNICATION_SERVICES_ENDPOINT'
+        value: communicationServicesEndpoint
+      }
+    ]
+  : []
 var communicationServicesAppSettings = concat(
   communicationServicesSenderAppSettings,
   communicationServicesEndpointAppSettings
+)
+var keyVaultReferenceAppSettings = concat(
+  !empty(communicationServicesConnectionStringSecretUri)
+    ? [
+        {
+          name: 'COMMUNICATION_SERVICES_CONNECTION_STRING'
+          value: '@Microsoft.KeyVault(SecretUri=${communicationServicesConnectionStringSecretUri})'
+        }
+      ]
+    : [],
+  !empty(contentSafetyKeySecretUri)
+    ? [
+        {
+          name: 'CONTENT_SAFETY_KEY'
+          value: '@Microsoft.KeyVault(SecretUri=${contentSafetyKeySecretUri})'
+        }
+      ]
+    : [],
+  !empty(tenorApiKeySecretUri)
+    ? [
+        {
+          name: 'TENOR_API_KEY'
+          value: '@Microsoft.KeyVault(SecretUri=${tenorApiKeySecretUri})'
+        }
+      ]
+    : []
 )
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
@@ -126,88 +159,92 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
       }
     }
     siteConfig: {
-      appSettings: concat([
-        {
-          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-          value: applicationInsightsConnectionString
-        }
-        {
-          name: 'AzureWebJobsStorage__blobServiceUri'
-          value: blobServiceUri
-        }
-        {
-          name: 'AzureWebJobsStorage__credential'
-          value: 'managedidentity'
-        }
-        {
-          name: 'AzureWebJobsStorage__queueServiceUri'
-          value: queueServiceUri
-        }
-        {
-          name: 'AzureWebJobsStorage__tableServiceUri'
-          value: tableServiceUri
-        }
-        {
-          name: 'COSMOS_DATABASE_NAME'
-          value: cosmosDatabaseName
-        }
-        {
-          name: 'COSMOS_CONNECTION__accountEndpoint'
-          value: cosmosEndpoint
-        }
-        {
-          name: 'COSMOS_CONNECTION__credential'
-          value: 'managedidentity'
-        }
-        {
-          name: 'COSMOS_ENDPOINT'
-          value: cosmosEndpoint
-        }
-        {
-          name: 'MEDIA_BASE_URL'
-          value: mediaBaseUrl
-        }
-        {
-          name: 'MEDIA_CONTAINER_NAME'
-          value: names.mediaContainer
-        }
-        {
-          name: 'NOTIFICATIONS_CONTAINER_NAME'
-          value: names.notificationsContainer
-        }
-        {
-          name: 'NOTIFICATION_PREFS_CONTAINER_NAME'
-          value: names.notificationPrefsContainer
-        }
-        {
-          name: 'CONTENT_SAFETY_THRESHOLD'
-          value: string(contentSafetyThreshold)
-        }
-        {
-          name: 'SEARCH_ENDPOINT'
-          value: searchEndpoint
-        }
-        {
-          name: 'SEARCH_INDEX_POSTS_NAME'
-          value: searchPostsIndexName
-        }
-        {
-          name: 'SEARCH_INDEX_USERS_NAME'
-          value: searchUsersIndexName
-        }
-        {
-          name: 'AZURE_REGION'
-          value: location
-        }
-        {
-          name: 'FUNCTIONS_EXTENSION_VERSION'
-          value: '~4'
-        }
-        {
-          name: 'WEBSITE_CLOUD_ROLENAME'
-          value: names.functionApp
-        }
-      ], communicationServicesAppSettings)
+      appSettings: concat(
+        [
+          {
+            name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+            value: applicationInsightsConnectionString
+          }
+          {
+            name: 'AzureWebJobsStorage__blobServiceUri'
+            value: blobServiceUri
+          }
+          {
+            name: 'AzureWebJobsStorage__credential'
+            value: 'managedidentity'
+          }
+          {
+            name: 'AzureWebJobsStorage__queueServiceUri'
+            value: queueServiceUri
+          }
+          {
+            name: 'AzureWebJobsStorage__tableServiceUri'
+            value: tableServiceUri
+          }
+          {
+            name: 'COSMOS_DATABASE_NAME'
+            value: cosmosDatabaseName
+          }
+          {
+            name: 'COSMOS_CONNECTION__accountEndpoint'
+            value: cosmosEndpoint
+          }
+          {
+            name: 'COSMOS_CONNECTION__credential'
+            value: 'managedidentity'
+          }
+          {
+            name: 'COSMOS_ENDPOINT'
+            value: cosmosEndpoint
+          }
+          {
+            name: 'MEDIA_BASE_URL'
+            value: mediaBaseUrl
+          }
+          {
+            name: 'MEDIA_CONTAINER_NAME'
+            value: names.mediaContainer
+          }
+          {
+            name: 'NOTIFICATIONS_CONTAINER_NAME'
+            value: names.notificationsContainer
+          }
+          {
+            name: 'NOTIFICATION_PREFS_CONTAINER_NAME'
+            value: names.notificationPrefsContainer
+          }
+          {
+            name: 'CONTENT_SAFETY_THRESHOLD'
+            value: string(contentSafetyThreshold)
+          }
+          {
+            name: 'SEARCH_ENDPOINT'
+            value: searchEndpoint
+          }
+          {
+            name: 'SEARCH_INDEX_POSTS_NAME'
+            value: searchPostsIndexName
+          }
+          {
+            name: 'SEARCH_INDEX_USERS_NAME'
+            value: searchUsersIndexName
+          }
+          {
+            name: 'AZURE_REGION'
+            value: location
+          }
+          {
+            name: 'FUNCTIONS_EXTENSION_VERSION'
+            value: '~4'
+          }
+          {
+            name: 'WEBSITE_CLOUD_ROLENAME'
+            value: names.functionApp
+          }
+        ],
+        communicationServicesAppSettings,
+        keyVaultReferenceAppSettings
+      )
     }
   }
 }

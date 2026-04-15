@@ -10,6 +10,7 @@ npm run build
 npm run lint
 npm run test
 npm run test:a11y --workspace @artificialcontact/web
+npm audit --workspaces --include-workspace-root --omit=dev --audit-level=high
 ```
 
 ## Workspace coverage
@@ -73,3 +74,8 @@ az bicep build --only-show-errors --file infra/main.bicep --outfile infra/main.j
 ```
 
 Delete `infra/main.json` after validation or leave it ignored via `.gitignore`.
+
+## Security validation
+
+- The `security` GitHub Actions workflow runs `npm audit` for production dependencies and a `gitleaks` secret scan.
+- For local dependency review, run `npm audit --workspaces --include-workspace-root --omit=dev --audit-level=high` from the repository root.

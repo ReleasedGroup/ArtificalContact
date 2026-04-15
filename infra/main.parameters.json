@@ -12,6 +12,15 @@
     },
     "location": {
       "value": "${AZURE_LOCATION}"
+    },
+    "communicationServicesConnectionStringSecretUri": {
+      "value": "${COMMUNICATION_SERVICES_CONNECTION_STRING_SECRET_URI}"
+    },
+    "contentSafetyKeySecretUri": {
+      "value": "${CONTENT_SAFETY_KEY_SECRET_URI}"
+    },
+    "tenorApiKeySecretUri": {
+      "value": "${TENOR_API_KEY_SECRET_URI}"
     }
   }
 }

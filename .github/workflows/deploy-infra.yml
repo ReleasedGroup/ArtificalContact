@@ -41,4 +41,7 @@ jobs:
             location=${{ vars.AZURE_LOCATION || 'australiaeast' }}
             staticWebAppLocation=${{ vars.AZURE_STATIC_WEB_APP_LOCATION || '' }}
             frontDoorCustomDomainHostName=${{ vars.FRONTDOOR_CUSTOM_DOMAIN || 'cdn-placeholder.example.com' }}
+            communicationServicesConnectionStringSecretUri=${{ vars.COMMUNICATION_SERVICES_CONNECTION_STRING_SECRET_URI || '' }}
+            contentSafetyKeySecretUri=${{ vars.CONTENT_SAFETY_KEY_SECRET_URI || '' }}
+            tenorApiKeySecretUri=${{ vars.TENOR_API_KEY_SECRET_URI || '' }}
           deploymentName: artificialcontact-infra-${{ github.run_number }}
