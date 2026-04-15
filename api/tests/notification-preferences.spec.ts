@@ -227,6 +227,54 @@ describe('notification preference handlers', () => {
     expect(response.status).toBe(200)
   })
 
+  it('ignores a replacement subscription when the same update disables web push', async () => {
+    const existingDocument = createStoredPreferences()
+    const store: NotificationPreferenceStore = {
+      getByUserId: vi.fn(async () => existingDocument),
+      upsert: vi.fn(async (document) => document),
+    }
+
+    const handler = buildUpdateNotificationPreferencesHandler({
+      storeFactory: () => store,
+      now: () => new Date('2026-04-15T03:30:00.000Z'),
+    })
+
+    await handler(
+      createPrincipalRequest(
+        {
+          identityProvider: 'github',
+          userId: 'abc123',
+          userDetails: 'nickbeau',
+          userRoles: ['anonymous', 'authenticated'],
+          claims: [{ typ: 'emails', val: 'nick@example.com' }],
+        },
+        {
+          webPush: {
+            supported: false,
+            subscription: {
+              endpoint: 'https://push.example.com/subscriptions/new',
+              expirationTime: null,
+              keys: {
+                p256dh: 'new-p256dh',
+                auth: 'new-auth',
+              },
+            },
+          },
+        },
+      ),
+      createContext(),
+    )
+
+    expect(store.upsert).toHaveBeenCalledWith({
+      ...existingDocument,
+      webPush: {
+        supported: false,
+        subscription: null,
+      },
+      updatedAt: '2026-04-15T03:30:00.000Z',
+    })
+  })
+
   it('creates a new document when the caller updates preferences for the first time', async () => {
     const store: NotificationPreferenceStore = {
       getByUserId: vi.fn(async () => null),

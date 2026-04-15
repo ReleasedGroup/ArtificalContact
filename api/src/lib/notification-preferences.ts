@@ -234,14 +234,16 @@ export function applyNotificationPreferencesUpdate(
   }
 
   if (update.webPush !== undefined) {
+    const disablesWebPush = update.webPush.supported === false
+
     if (update.webPush.supported !== undefined) {
       nextDocument.webPush.supported = update.webPush.supported
-      if (!update.webPush.supported) {
+      if (disablesWebPush) {
         nextDocument.webPush.subscription = null
       }
     }
 
-    if (update.webPush.subscription !== undefined) {
+    if (update.webPush.subscription !== undefined && !disablesWebPush) {
       nextDocument.webPush.subscription =
         update.webPush.subscription === null
           ? null

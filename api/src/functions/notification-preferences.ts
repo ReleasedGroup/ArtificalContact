@@ -157,18 +157,19 @@ export function buildUpdateNotificationPreferencesHandler(
     }
 
     try {
+      const timestamp = now()
       const existingDocument =
         (await store.getByUserId(principalResult.principal.subject)) ??
         buildDefaultNotificationPreferences(
           principalResult.principal.subject,
-          now(),
+          timestamp,
         )
 
       const persistedDocument = await store.upsert(
         applyNotificationPreferencesUpdate(
           existingDocument,
           parsedBody.data,
-          now(),
+          timestamp,
         ),
       )
 
