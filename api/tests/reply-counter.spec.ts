@@ -9,7 +9,11 @@ import {
 import type { StoredPostDocument } from '../src/lib/posts.js'
 
 class InMemoryReplyCounterStore implements ReplyCounterStore {
-  public readonly upsertedPosts: StoredPostDocument[] = []
+  public readonly replyCountUpdates: Array<{
+    postId: string
+    replyCount: number
+    threadId: string
+  }> = []
 
   constructor(private readonly posts = new Map<string, StoredPostDocument>()) {}
 
@@ -30,12 +34,6 @@ class InMemoryReplyCounterStore implements ReplyCounterStore {
     return post
   }
 
-  async upsertPost(post: StoredPostDocument): Promise<StoredPostDocument> {
-    this.posts.set(post.id, post)
-    this.upsertedPosts.push(post)
-    return post
-  }
-
   async countActiveReplies(
     threadId: string,
     parentId: string,
@@ -48,6 +46,36 @@ class InMemoryReplyCounterStore implements ReplyCounterStore {
         post.deletedAt == null
       )
     }).length
+  }
+
+  async setReplyCount(
+    postId: string,
+    threadId: string,
+    replyCount: number,
+  ): Promise<void> {
+    const post = this.posts.get(postId)
+    if (post === undefined) {
+      throw new Error(`Cannot update missing post '${postId}'.`)
+    }
+
+    if (post.threadId !== threadId) {
+      throw new Error(
+        `Cannot update post '${postId}' in unexpected thread '${threadId}'.`,
+      )
+    }
+
+    this.posts.set(postId, {
+      ...post,
+      counters: {
+        ...(post.counters ?? {}),
+        replies: replyCount,
+      },
+    })
+    this.replyCountUpdates.push({
+      postId,
+      replyCount,
+      threadId,
+    })
   }
 }
 
@@ -128,13 +156,12 @@ describe('syncReplyCountersBatch', () => {
 
     await syncReplyCountersBatch([createReplyDocument()], store, logger)
 
-    expect(store.upsertedPosts).toEqual([
-      expect.objectContaining({
-        id: 'p_root',
-        counters: expect.objectContaining({
-          replies: 1,
-        }),
-      }),
+    expect(store.replyCountUpdates).toEqual([
+      {
+        postId: 'p_root',
+        replyCount: 1,
+        threadId: 'p_root',
+      },
     ])
     expect(logger.info).toHaveBeenCalledWith(
       "Updated replies counter for parent '%s' in thread '%s' from %d to %d.",
@@ -180,17 +207,21 @@ describe('syncReplyCountersBatch', () => {
       ],
       store,
     )
+    const updatedParent = await store.getPostById('p_root', 'p_root')
 
-    expect(store.upsertedPosts).toEqual([
-      expect.objectContaining({
-        id: 'p_root',
-        counters: expect.objectContaining({
-          likes: 2,
-          emoji: 1,
-          replies: 0,
-        }),
-      }),
+    expect(store.replyCountUpdates).toEqual([
+      {
+        postId: 'p_root',
+        replyCount: 0,
+        threadId: 'p_root',
+      },
     ])
+    expect(updatedParent?.counters).toEqual({
+      likes: 2,
+      dislikes: 0,
+      emoji: 1,
+      replies: 0,
+    })
   })
 
   it('collapses duplicate change-feed deliveries and becomes a no-op once synchronized', async () => {
@@ -215,8 +246,8 @@ describe('syncReplyCountersBatch', () => {
     )
     await syncReplyCountersBatch([createReplyDocument()], store)
 
-    expect(store.upsertedPosts).toHaveLength(1)
-    expect(store.upsertedPosts[0]?.counters?.replies).toBe(1)
+    expect(store.replyCountUpdates).toHaveLength(1)
+    expect(store.replyCountUpdates[0]?.replyCount).toBe(1)
   })
 
   it('warns when a reply references a parent post that cannot be loaded', async () => {
@@ -229,7 +260,7 @@ describe('syncReplyCountersBatch', () => {
 
     await syncReplyCountersBatch([createReplyDocument()], store, logger)
 
-    expect(store.upsertedPosts).toEqual([])
+    expect(store.replyCountUpdates).toEqual([])
     expect(logger.warn).toHaveBeenCalledWith(
       "Skipping reply counter sync for reply '%s' because parent '%s' was not found in thread '%s'.",
       'p_reply',
@@ -261,7 +292,7 @@ describe('syncReplyCountersBatch', () => {
       store,
     )
 
-    expect(store.upsertedPosts).toEqual([])
+    expect(store.replyCountUpdates).toEqual([])
   })
 })
 
@@ -288,8 +319,8 @@ describe('counterFn', () => {
 
     await handler([createReplyDocument()], context)
 
-    expect(store.upsertedPosts).toHaveLength(1)
-    expect(store.upsertedPosts[0]?.counters?.replies).toBe(1)
+    expect(store.replyCountUpdates).toHaveLength(1)
+    expect(store.replyCountUpdates[0]?.replyCount).toBe(1)
     expect(context.info).toHaveBeenCalledWith(
       "Updated replies counter for parent '%s' in thread '%s' from %d to %d.",
       'p_root',

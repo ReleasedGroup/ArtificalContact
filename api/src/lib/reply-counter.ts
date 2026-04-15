@@ -11,8 +11,12 @@ export interface ReplyCounterStore {
     postId: string,
     threadId?: string,
   ): Promise<StoredPostDocument | null>
-  upsertPost(post: StoredPostDocument): Promise<StoredPostDocument>
   countActiveReplies(threadId: string, parentId: string): Promise<number>
+  setReplyCount(
+    postId: string,
+    threadId: string,
+    replyCount: number,
+  ): Promise<void>
 }
 
 export interface ReplyCounterSourceDocument {
@@ -140,13 +144,11 @@ export async function syncReplyCountersBatch(
       continue
     }
 
-    await store.upsertPost({
-      ...parentPost,
-      counters: {
-        ...(parentPost.counters ?? {}),
-        replies: activeReplyCount,
-      },
-    })
+    await store.setReplyCount(
+      parentPost.id,
+      workItem.threadId,
+      activeReplyCount,
+    )
 
     logger.info(
       "Updated replies counter for parent '%s' in thread '%s' from %d to %d.",

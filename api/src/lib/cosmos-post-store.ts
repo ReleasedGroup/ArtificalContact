@@ -93,6 +93,36 @@ export class CosmosPostStore implements MutablePostStore, PostRepository {
     return resource ?? post
   }
 
+  async setReplyCount(
+    postId: string,
+    threadId: string,
+    replyCount: number,
+  ): Promise<void> {
+    try {
+      await this.postsContainer.item(postId, threadId).patch([
+        {
+          op: 'set',
+          path: '/counters/replies',
+          value: replyCount,
+        },
+      ])
+    } catch (error) {
+      if (!isBadRequest(error)) {
+        throw error
+      }
+
+      await this.postsContainer.item(postId, threadId).patch([
+        {
+          op: 'set',
+          path: '/counters',
+          value: {
+            replies: replyCount,
+          },
+        },
+      ])
+    }
+  }
+
   async countActiveReplies(
     threadId: string,
     parentId: string,
@@ -145,4 +175,13 @@ export class CosmosPostStore implements MutablePostStore, PostRepository {
 
     return resources[0] ?? null
   }
+}
+
+function isBadRequest(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  const cosmosError = error as CosmosLikeError
+  return cosmosError.statusCode === 400 || cosmosError.code === 400
 }
