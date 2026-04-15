@@ -67,6 +67,25 @@ export class CosmosNotificationStore
     await this.notificationsContainer.items.upsert(document)
   }
 
+  async getNotification(
+    targetUserId: string,
+    notificationId: string,
+  ): Promise<NotificationDocument | null> {
+    try {
+      const response = await this.notificationsContainer
+        .item(notificationId, targetUserId)
+        .read<NotificationDocument>()
+
+      return response.resource ?? null
+    } catch (error) {
+      if (isNotFound(error)) {
+        return null
+      }
+
+      throw error
+    }
+  }
+
   async listNotifications(
     targetUserId: string,
     options: {

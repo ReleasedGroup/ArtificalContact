@@ -5,6 +5,9 @@ export interface EnvironmentConfig {
   serviceName: string
   buildSha: string
   region: string
+  communicationServicesConnectionString: string | undefined
+  communicationServicesEndpoint: string | undefined
+  communicationServicesEmailSenderAddress: string | undefined
   cosmosConnectionString: string | undefined
   cosmosDatabaseName: string | undefined
   cosmosEndpoint: string | undefined
@@ -54,6 +57,15 @@ export function getEnvironmentConfig(
     serviceName: 'artificialcontact-api',
     buildSha: readOptionalValue(env.BUILD_SHA) ?? API_BUILD_SHA,
     region: readOptionalValue(env.AZURE_REGION) ?? 'local',
+    communicationServicesConnectionString: readOptionalValue(
+      env.COMMUNICATION_SERVICES_CONNECTION_STRING,
+    ),
+    communicationServicesEndpoint: readOptionalValue(
+      env.COMMUNICATION_SERVICES_ENDPOINT,
+    ),
+    communicationServicesEmailSenderAddress: readOptionalValue(
+      env.COMMUNICATION_SERVICES_EMAIL_SENDER_ADDRESS,
+    ),
     cosmosConnectionString: readOptionalValue(env.COSMOS_CONNECTION_STRING),
     cosmosDatabaseName: readOptionalValue(env.COSMOS_DATABASE_NAME),
     cosmosEndpoint: readCosmosEndpoint(env),
