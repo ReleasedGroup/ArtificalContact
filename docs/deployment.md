@@ -23,6 +23,11 @@ Notification documents use deterministic ids of the form
 workers can safely upsert follow, reply, reaction, and mention notifications
 without duplication.
 
+The Cosmos `rateLimits` container is partitioned on `/userId` and enables
+per-item TTL values (`defaultTtl: -1`) so each token-bucket document can expire
+independently once its bucket has fully refilled. Rate-limit documents use ids of
+the form `${userId}:${endpointClass}`.
+
 ## Local prerequisites
 
 - Node.js 20+
@@ -95,7 +100,7 @@ For the Sprint 3 media upload pipeline, the Functions app also needs:
 - Optional `TENOR_CLIENT_KEY` override for the Tenor integration identifier; defaults to `artificialcontact-web`
 - Optional `REACTION_NOTIFICATION_HOURLY_THRESHOLD` to control when same-actor reaction notifications coalesce within a UTC hour; the default is `3`
 - Optional `RATE_LIMITS_CONTAINER_NAME` override for the Cosmos container that stores per-user token buckets; defaults to `rateLimits`
-- Optional per-endpoint-class rate-limit overrides via `RATE_LIMIT_<CLASS>_CAPACITY` and `RATE_LIMIT_<CLASS>_REFILL_PER_MINUTE` for `PROFILE`, `POSTS`, `REACTIONS`, `FOLLOWS`, `NOTIFICATIONS`, `MEDIA`, and `REPORTS`
+- Optional per-endpoint-class rate-limit overrides via `RATE_LIMIT_<CLASS>_CAPACITY` and `RATE_LIMIT_<CLASS>_REFILL_PER_MINUTE` for `PROFILE`, `POSTS`, `REACTIONS`, `FOLLOWS`, `NOTIFICATIONS`, `MEDIA`, `MODERATION`, and `REPORTS`
 - Optional `COMMUNICATION_SERVICES_CONNECTION_STRING` for local ACS Email authentication when managed identity is not available
 - Optional `COMMUNICATION_SERVICES_ENDPOINT` for managed-identity ACS Email authentication in deployed environments
 - Optional `COMMUNICATION_SERVICES_EMAIL_SENDER_ADDRESS` for the verified ACS MailFrom address used by follow, reply, and reaction-digest notification emails

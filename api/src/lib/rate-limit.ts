@@ -23,6 +23,7 @@ export type RateLimitEndpointClass =
   | 'follows'
   | 'notifications'
   | 'media'
+  | 'moderation'
   | 'reports'
 
 export interface RateLimitPolicy {
@@ -120,6 +121,10 @@ const DEFAULT_RATE_LIMIT_POLICIES: Record<
   media: {
     capacity: 10,
     refillPerMinute: 10,
+  },
+  moderation: {
+    capacity: 20,
+    refillPerMinute: 20,
   },
   reports: {
     capacity: 5,

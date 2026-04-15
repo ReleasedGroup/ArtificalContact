@@ -12,6 +12,7 @@ var usersContainerAutoscaleMaxThroughput = 4000
 var mediaContainerThroughput = 400
 var modActionsContainerThroughput = 400
 var notificationPrefsContainerThroughput = 400
+var rateLimitsContainerThroughput = 400
 var reportsContainerThroughput = 400
 
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
@@ -313,6 +314,28 @@ resource notificationPrefsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDa
   }
 }
 
+resource rateLimitsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
+  parent: sqlDatabase
+  name: names.rateLimitsContainer
+  properties: {
+    options: {
+      throughput: rateLimitsContainerThroughput
+    }
+    resource: {
+      id: names.rateLimitsContainer
+      partitionKey: {
+        kind: 'Hash'
+        paths: [
+          '/userId'
+        ]
+        version: 2
+      }
+      // Enable per-item TTL values so token buckets can expire independently.
+      defaultTtl: -1
+    }
+  }
+}
+
 output accountName string = cosmosAccount.name
 output databaseName string = sqlDatabase.name
 output endpoint string = cosmosAccount.properties.documentEndpoint
@@ -324,6 +347,7 @@ output modActionsContainerName string = modActionsContainer.name
 output notificationPrefsContainerName string = notificationPrefsContainer.name
 output notificationsContainerName string = notificationsContainer.name
 output postsContainerName string = postsContainer.name
+output rateLimitsContainerName string = rateLimitsContainer.name
 output reactionsContainerName string = reactionsContainer.name
 output reportsContainerName string = reportsContainer.name
 output usersContainerName string = usersContainer.name
