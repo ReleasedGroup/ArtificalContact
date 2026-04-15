@@ -39,5 +39,6 @@ jobs:
             appName=acn
             environmentName=${{ vars.AZURE_ENV_NAME || 'prod' }}
             location=${{ vars.AZURE_LOCATION || 'australiaeast' }}
+            staticWebAppLocation=${{ vars.AZURE_STATIC_WEB_APP_LOCATION || '' }}
             frontDoorCustomDomainHostName=${{ vars.FRONTDOOR_CUSTOM_DOMAIN || 'cdn-placeholder.example.com' }}
           deploymentName: artificialcontact-infra-${{ github.run_number }}

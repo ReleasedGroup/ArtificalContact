@@ -38,6 +38,8 @@ azd down
 
 `azd` reads `azure.yaml` and the Bicep files under `infra/`.
 
+If your primary Azure region doesn't support `Microsoft.Web/staticSites` (for example `australiaeast`), the infrastructure now keeps the rest of the stack in `AZURE_LOCATION` and automatically places the Static Web App in `eastasia`. The linked backend still points at the Function App's actual region.
+
 ## GitHub Actions configuration
 
 The following repository secrets are required:
@@ -51,6 +53,7 @@ The following repository variables are required:
 
 - `AZURE_ENV_NAME`
 - `AZURE_LOCATION`
+- `AZURE_STATIC_WEB_APP_LOCATION` (optional override when you want the Static Web App in a specific supported region)
 - `AZURE_RESOURCE_GROUP`
 - `AZURE_FUNCTION_APP_NAME`
 - `FRONTDOOR_CUSTOM_DOMAIN` (placeholder or real host name)
