@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { UploadPipelinePreview } from './UploadPipelinePreview'
 import { PostComposer, type PostComposerMediaFile } from './PostComposer'
-import { UploadPipelinePreview } from './UploadPipelinePreview'
 
 interface ComposerPreviewPanelProps {
   authorBadge: string
