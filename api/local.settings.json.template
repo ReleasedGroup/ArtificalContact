@@ -1,0 +1,12 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "BUILD_SHA": "local-dev",
+    "AZURE_REGION": "local",
+    "COSMOS_DATABASE_NAME": "acn",
+    "COSMOS_CONNECTION_STRING": "",
+    "COSMOS_ENDPOINT": ""
+  }
+}

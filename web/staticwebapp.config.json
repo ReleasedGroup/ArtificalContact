@@ -1,0 +1,17 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": [
+      "/assets/*",
+      "/favicon.svg",
+      "/api/*"
+    ]
+  },
+  "globalHeaders": {
+    "Content-Security-Policy": "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://rsms.me; font-src 'self' https://rsms.me data:; script-src 'self'; connect-src 'self' https://dc.services.visualstudio.com https://*.applicationinsights.azure.com https://*.livediagnostics.monitor.azure.com https://*.monitor.azure.com; frame-ancestors 'none'; base-uri 'self';",
+    "Permissions-Policy": "camera=(), geolocation=(), microphone=()",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY"
+  }
+}

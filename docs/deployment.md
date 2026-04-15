@@ -1,0 +1,63 @@
+# Deployment Guide
+
+## Scope
+
+Sprint 0 provisions the Azure and GitHub scaffolding required to start feature delivery:
+
+- Azure Static Web Apps (Standard)
+- Azure Functions (Flex Consumption)
+- Azure Cosmos DB for NoSQL + `acn` database
+- Azure Storage account + placeholder blob containers
+- Azure AI Search (Basic)
+- Azure Front Door (Standard) placeholder
+- Key Vault, Log Analytics, and Application Insights
+
+## Local prerequisites
+
+- Node.js 20+
+- npm 11+
+- Azure CLI with Bicep support
+- Azure Developer CLI (`azd`) for end-to-end environment orchestration
+
+## Local validation
+
+```bash
+npm install
+npm run build
+npm run lint
+npm run test
+az bicep build --only-show-errors --file infra/main.bicep --outfile infra/main.json
+```
+
+To deploy a development environment with Azure Developer CLI:
+
+```bash
+azd up
+azd down
+```
+
+`azd` reads `azure.yaml` and the Bicep files under `infra/`.
+
+## GitHub Actions configuration
+
+The following repository secrets are required:
+
+- `AZURE_CLIENT_ID`
+- `AZURE_TENANT_ID`
+- `AZURE_SUBSCRIPTION_ID`
+- `AZURE_STATIC_WEB_APPS_API_TOKEN`
+
+The following repository variables are required:
+
+- `AZURE_ENV_NAME`
+- `AZURE_LOCATION`
+- `AZURE_RESOURCE_GROUP`
+- `AZURE_FUNCTION_APP_NAME`
+- `FRONTDOOR_CUSTOM_DOMAIN` (placeholder or real host name)
+
+## Deployment workflows
+
+- `validate`: runs on pull requests and executes the shared `build`, `lint`, and `test` scripts for `web` and `api`
+- `deploy-infra`: deploys `infra/main.bicep` to the configured resource group on `main`
+- `deploy-api`: builds and deploys the Functions app on `main`
+- `deploy-web`: builds and deploys the Static Web App on `main`
