@@ -1,0 +1,17 @@
+{
+  "scriptFile": "../dist/functions/usersByHandleMirrorFn/index.js",
+  "entryPoint": "usersByHandleMirrorFn",
+  "bindings": [
+    {
+      "name": "documents",
+      "type": "cosmosDBTrigger",
+      "direction": "in",
+      "connection": "COSMOS_CONNECTION",
+      "databaseName": "acn",
+      "containerName": "users",
+      "leaseContainerName": "leases",
+      "leaseContainerPrefix": "usersByHandleMirror",
+      "createLeaseContainerIfNotExists": true
+    }
+  ]
+}
