@@ -88,10 +88,10 @@ resource immutableAssetsCacheRule 'Microsoft.Cdn/profiles/ruleSets/rules@2024-02
           operator: 'BeginsWith'
           negateCondition: false
           matchValues: [
-            'images/'
-            'video/'
-            'audio/'
-            'gif/'
+            '/images/'
+            '/video/'
+            '/audio/'
+            '/gif/'
           ]
           transforms: [
             'Lowercase'
@@ -127,7 +127,7 @@ resource mutableAssetsCacheRule 'Microsoft.Cdn/profiles/ruleSets/rules@2024-02-0
           operator: 'BeginsWith'
           negateCondition: false
           matchValues: [
-            'avatars/'
+            '/avatars/'
           ]
           transforms: [
             'Lowercase'

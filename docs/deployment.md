@@ -57,7 +57,7 @@ The following repository variables are required:
 - `AZURE_STATIC_WEB_APP_LOCATION` (optional override when you want the Static Web App in a specific supported region)
 - `AZURE_RESOURCE_GROUP`
 - `AZURE_FUNCTION_APP_NAME`
-- `FRONTDOOR_CUSTOM_DOMAIN` (set to a real delegated host name such as `cdn.example.com` to enable the managed-cert custom domain; `.example.com` placeholders keep Front Door on the default hostname only)
+- `FRONTDOOR_CUSTOM_DOMAIN` (set to a real delegated host name such as `cdn.yourdomain.com` to enable the managed-cert custom domain; `.example.com` placeholders keep Front Door on the default hostname only)
 
 ## Deployment workflows
 
@@ -81,8 +81,8 @@ For the Sprint 3 media upload pipeline, the Functions app also needs:
 
 The infrastructure deployment now attaches a Front Door ruleset to the storage route:
 
-- `images/`, `video/`, `audio/`, and `gif/` paths cache for `7` days
-- `avatars/` paths cache for `5` minutes
+- `/images/`, `/video/`, `/audio/`, and `/gif/` paths cache for `7` days
+- `/avatars/` paths cache for `5` minutes
 - query strings are ignored for cache key generation
 
 When `FRONTDOOR_CUSTOM_DOMAIN` is set to a real host name, the deployment also creates
