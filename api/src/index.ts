@@ -21,6 +21,7 @@ import { registerGetUserFunction } from './functions/get-user.js'
 import { registerHealthFunction } from './functions/health.js'
 import { registerMediaUploadUrlFunction } from './functions/media-upload-url.js'
 import { registerMediaPostProcessFunctions } from './functions/media-post-process.js'
+import { registerNotificationFunctions } from './functions/notification.js'
 import { registerUpdateProfileFunction } from './functions/update-profile.js'
 import { registerUserPostAuthorSyncFunction } from './functions/user-post-author-sync.js'
 import { registerUsersByHandleMirrorFunction } from './functions/users-by-handle-mirror.js'
@@ -50,6 +51,7 @@ registerGetUserFunction()
 registerHealthFunction()
 registerMediaUploadUrlFunction()
 registerMediaPostProcessFunctions()
+registerNotificationFunctions()
 registerUpdateProfileFunction()
 registerUserPostAuthorSyncFunction()
 registerUsersByHandleMirrorFunction()

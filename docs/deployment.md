@@ -18,6 +18,10 @@ can be upserted idempotently.
 
 The Cosmos `notifications` container is partitioned on `/targetUserId` and applies a
 default TTL of 90 days so stale notification documents age out automatically.
+Notification documents use deterministic ids of the form
+`${targetUserId}:${eventType}:${relatedEntityId}` so the change-feed notification
+workers can safely upsert follow, reply, reaction, and mention notifications
+without duplication.
 
 ## Local prerequisites
 
