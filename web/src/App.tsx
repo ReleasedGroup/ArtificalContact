@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
 } from 'react'
 import { ComposerPreviewPanel } from './components/ComposerPreviewPanel'
+import { PostDetailScreen } from './components/PostDetailScreen'
 import { WEB_BUILD_SHA } from './build-meta.generated'
 import { signOut } from './lib/auth'
 import { getHealth, type HealthPayload } from './lib/health'
@@ -27,6 +28,7 @@ import { initializeTelemetry } from './lib/telemetry'
 type AppRoute =
   | { kind: 'signin' }
   | { kind: 'me' }
+  | { kind: 'post'; postId: string }
   | { kind: 'profile'; handle: string }
 
 type PublicProfileState =
@@ -109,6 +111,14 @@ function decodePathSegment(segment: string): string {
 function getCurrentRoute(pathname = window.location.pathname): AppRoute {
   if (/^\/me\/?$/.test(pathname)) {
     return { kind: 'me' }
+  }
+
+  const postDetailMatch = /^\/p\/([^/]+)\/?$/.exec(pathname)
+  if (postDetailMatch) {
+    return {
+      kind: 'post',
+      postId: decodePathSegment(postDetailMatch[1]),
+    }
   }
 
   const publicProfileMatch = /^\/u\/([^/]+)\/?$/.exec(pathname)
@@ -249,6 +259,10 @@ function App() {
 
   if (route.kind === 'profile') {
     return <PublicProfileScreen handle={route.handle} />
+  }
+
+  if (route.kind === 'post') {
+    return <PostDetailScreen postId={route.postId} />
   }
 
   if (route.kind === 'me') {
