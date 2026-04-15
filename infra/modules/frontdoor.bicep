@@ -7,7 +7,7 @@ var normalizedCustomDomainHostName = toLower(customDomainHostName)
 var shouldCreateCustomDomain = !empty(normalizedCustomDomainHostName) && !contains(normalizedCustomDomainHostName, 'placeholder') && !endsWith(normalizedCustomDomainHostName, '.example.com')
 var customDomainResourceName = take(replace(normalizedCustomDomainHostName, '.', '-'), 90)
 
-resource frontDoorProfile 'Microsoft.Cdn/profiles@2024-02-01' = {
+resource frontDoorProfile 'Microsoft.Cdn/profiles@2020-09-01' = {
   name: names.frontDoorProfile
   location: 'global'
   sku: {
@@ -16,7 +16,7 @@ resource frontDoorProfile 'Microsoft.Cdn/profiles@2024-02-01' = {
   tags: tags
 }
 
-resource frontDoorEndpoint 'Microsoft.Cdn/profiles/afdEndpoints@2024-02-01' = {
+resource frontDoorEndpoint 'Microsoft.Cdn/profiles/afdEndpoints@2020-09-01' = {
   parent: frontDoorProfile
   name: names.frontDoorEndpoint
   location: 'global'
@@ -25,7 +25,7 @@ resource frontDoorEndpoint 'Microsoft.Cdn/profiles/afdEndpoints@2024-02-01' = {
   }
 }
 
-resource originGroup 'Microsoft.Cdn/profiles/originGroups@2024-02-01' = {
+resource originGroup 'Microsoft.Cdn/profiles/originGroups@2020-09-01' = {
   parent: frontDoorProfile
   name: names.frontDoorOriginGroup
   properties: {
@@ -44,7 +44,7 @@ resource originGroup 'Microsoft.Cdn/profiles/originGroups@2024-02-01' = {
   }
 }
 
-resource origin 'Microsoft.Cdn/profiles/originGroups/origins@2024-02-01' = {
+resource origin 'Microsoft.Cdn/profiles/originGroups/origins@2020-09-01' = {
   parent: originGroup
   name: names.frontDoorOrigin
   properties: {
@@ -58,7 +58,7 @@ resource origin 'Microsoft.Cdn/profiles/originGroups/origins@2024-02-01' = {
   }
 }
 
-resource customDomain 'Microsoft.Cdn/profiles/customDomains@2024-02-01' = if (shouldCreateCustomDomain) {
+resource customDomain 'Microsoft.Cdn/profiles/customDomains@2020-09-01' = if (shouldCreateCustomDomain) {
   parent: frontDoorProfile
   name: customDomainResourceName
   properties: {
@@ -70,14 +70,14 @@ resource customDomain 'Microsoft.Cdn/profiles/customDomains@2024-02-01' = if (sh
   }
 }
 
-resource cacheRuleSet 'Microsoft.Cdn/profiles/ruleSets@2024-02-01' = {
+resource cacheRuleSet 'Microsoft.Cdn/profiles/ruleSets@2020-09-01' = {
   parent: frontDoorProfile
-  name: 'storage-cache-rules'
+  name: 'storagecacherules'
 }
 
-resource immutableAssetsCacheRule 'Microsoft.Cdn/profiles/ruleSets/rules@2024-02-01' = {
+resource immutableAssetsCacheRule 'Microsoft.Cdn/profiles/ruleSets/rules@2020-09-01' = {
   parent: cacheRuleSet
-  name: 'immutable-assets'
+  name: 'immutableassets'
   properties: {
     order: 1
     matchProcessingBehavior: 'Stop'
@@ -114,9 +114,9 @@ resource immutableAssetsCacheRule 'Microsoft.Cdn/profiles/ruleSets/rules@2024-02
   }
 }
 
-resource mutableAssetsCacheRule 'Microsoft.Cdn/profiles/ruleSets/rules@2024-02-01' = {
+resource mutableAssetsCacheRule 'Microsoft.Cdn/profiles/ruleSets/rules@2020-09-01' = {
   parent: cacheRuleSet
-  name: 'mutable-assets'
+  name: 'mutableassets'
   properties: {
     order: 2
     matchProcessingBehavior: 'Stop'
@@ -150,16 +150,13 @@ resource mutableAssetsCacheRule 'Microsoft.Cdn/profiles/ruleSets/rules@2024-02-0
   }
 }
 
-resource route 'Microsoft.Cdn/profiles/afdEndpoints/routes@2024-02-01' = {
+resource route 'Microsoft.Cdn/profiles/afdEndpoints/routes@2020-09-01' = {
   parent: frontDoorEndpoint
   name: 'storage-route'
   dependsOn: [
     origin
   ]
   properties: {
-    cacheConfiguration: {
-      queryStringCachingBehavior: 'IgnoreQueryString'
-    }
     customDomains: shouldCreateCustomDomain ? [
       {
         id: customDomain.id

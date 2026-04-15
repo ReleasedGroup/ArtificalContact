@@ -2,13 +2,13 @@ param location string
 param names object
 param tags object = {}
 
-var ancillaryContainersSharedThroughput = 400
 var feedsContainerAutoscaleMaxThroughput = 10000
 var followersContainerAutoscaleMaxThroughput = 4000
 var followsContainerAutoscaleMaxThroughput = 4000
 var postsContainerAutoscaleMaxThroughput = 10000
 var reactionsContainerAutoscaleMaxThroughput = 4000
 var usersContainerAutoscaleMaxThroughput = 4000
+var mediaContainerThroughput = 400
 
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
   name: names.cosmosAccount
@@ -38,10 +38,6 @@ resource sqlDatabase 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2024-05
   parent: cosmosAccount
   name: names.cosmosDatabase
   properties: {
-    // Shared database throughput backs low-traffic ancillary containers such as media.
-    options: {
-      throughput: ancillaryContainersSharedThroughput
-    }
     resource: {
       id: names.cosmosDatabase
     }
@@ -213,6 +209,9 @@ resource mediaContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/cont
   parent: sqlDatabase
   name: names.mediaContainer
   properties: {
+    options: {
+      throughput: mediaContainerThroughput
+    }
     resource: {
       id: names.mediaContainer
       partitionKey: {
