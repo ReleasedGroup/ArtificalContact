@@ -25,8 +25,22 @@ interface DeletePostPayload {
   alreadyDeleted: boolean
 }
 
-interface WritePostInput {
+interface CreatePostInput {
   text: string
+}
+
+export interface ReplyGifMediaInput {
+  id: string
+  kind: 'gif'
+  url: string
+  thumbUrl?: string | null
+  width?: number | null
+  height?: number | null
+}
+
+interface CreateReplyInput {
+  text?: string
+  media?: ReplyGifMediaInput[]
 }
 
 function readErrorMessage<TData>(payload: ApiEnvelope<TData> | null): string | null {
@@ -59,7 +73,7 @@ async function readEnvelope<TData>(
 }
 
 export async function createPost(
-  input: WritePostInput,
+  input: CreatePostInput,
   signal?: AbortSignal,
 ): Promise<PostMutationPayload> {
   const response = await fetch('/api/posts', {
@@ -87,7 +101,7 @@ export async function createPost(
 
 export async function createReply(
   postId: string,
-  input: WritePostInput,
+  input: CreateReplyInput,
   signal?: AbortSignal,
 ): Promise<PostMutationPayload> {
   const response = await fetch(`/api/posts/${encodeURIComponent(postId)}/replies`, {

@@ -75,6 +75,22 @@ export interface PostContent {
   mentions: string[]
 }
 
+export interface ReplyGifMedia {
+  id: string
+  kind: 'gif'
+  url: string
+  thumbUrl: string | null
+  width: number | null
+  height: number | null
+}
+
+export interface ReplyContent {
+  text: string
+  hashtags: string[]
+  mentions: string[]
+  media: ReplyGifMedia[]
+}
+
 export interface PublicPostMedia {
   id: string | null
   kind: string | null
@@ -434,6 +450,67 @@ export function buildCreatePostRequestSchema(maxTextLength: number) {
 
 export type CreatePostRequest = PostContent
 
+function buildReplyGifMediaSchema() {
+  return z
+    .object({
+      id: z.preprocess(normalizePostText, z.string().min(1)),
+      kind: z.literal('gif'),
+      url: z.string().url(),
+      thumbUrl: z.string().url().nullable().optional(),
+      width: z.number().int().positive().nullable().optional(),
+      height: z.number().int().positive().nullable().optional(),
+    })
+    .strict()
+    .transform(
+      (value): ReplyGifMedia => ({
+        id: value.id,
+        kind: 'gif',
+        url: value.url,
+        thumbUrl: value.thumbUrl ?? null,
+        width: value.width ?? null,
+        height: value.height ?? null,
+      }),
+    )
+}
+
+export function buildCreateReplyRequestSchema(maxTextLength: number) {
+  return z
+    .object({
+      text: z.preprocess(
+        normalizePostText,
+        z.string().max(maxTextLength).optional(),
+      ),
+      media: z.array(buildReplyGifMediaSchema()).max(1).optional(),
+    })
+    .strict()
+    .superRefine((value, context) => {
+      const text = value.text ?? ''
+      const mediaCount = value.media?.length ?? 0
+
+      if (text.length === 0 && mediaCount === 0) {
+        context.addIssue({
+          code: 'custom',
+          message: 'A reply must include text or a GIF.',
+          path: ['text'],
+        })
+      }
+    })
+    .transform(
+      (value): ReplyContent => {
+        const text = value.text ?? ''
+
+        return {
+          text,
+          hashtags: extractHashtags(text),
+          mentions: extractMentions(text),
+          media: value.media ?? [],
+        }
+      },
+    )
+}
+
+export type CreateReplyRequest = ReplyContent
+
 export function mapCreatePostValidationIssues(
   issues: readonly ZodIssue[],
 ): ApiError[] {
@@ -447,7 +524,7 @@ export function mapCreatePostValidationIssues(
 export function createUserReplyDocument(
   user: UserDocument,
   parent: StoredPostDocument,
-  request: CreatePostRequest,
+  request: CreateReplyRequest,
   createdAt: Date,
   idFactory: () => string,
 ): UserPostDocument {
@@ -468,6 +545,7 @@ export function createUserReplyDocument(
     text: request.text,
     hashtags: request.hashtags,
     mentions: request.mentions,
+    ...(request.media.length > 0 ? { media: request.media } : {}),
     counters: {
       likes: 0,
       dislikes: 0,

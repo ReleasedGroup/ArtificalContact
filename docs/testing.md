@@ -19,6 +19,7 @@ npm run test
 - Vitest + Testing Library validate that `/u/{handle}` renders the public profile shell, surfaces the API-backed not-found state, and returns to loading immediately when the handle changes
 - Vitest + Testing Library validate that `/p/{id}` loads the standalone post detail view, fetches thread context, and handles missing-post states safely
 - Vitest + Testing Library validate that `/p/{id}` renders mixed-media posts with inline image, GIF, video, and audio attachments
+- Vitest + Testing Library validate that authenticated `/p/{id}` viewers can search Tenor-backed GIFs and publish GIF-only replies into the thread
 - Vitest + Testing Library validate the authenticated `/me` profile editor flow, including initial profile loading, error rendering, and `PUT /api/me` saves
 - Vitest + Testing Library validate the authenticated `/me` thread workspace publish flow, plus authenticated reply and delete actions on `/p/{id}`
 - Playwright covers the Sprint 1 golden path: GitHub sign-in handoff to `/me`, initial handle claim, and navigation to the resulting public profile at `/u/{handle}`
@@ -33,7 +34,9 @@ npm run test
 - Vitest covers post-content validation utilities, including configurable max-length enforcement plus hashtag and mention parsing
 - Vitest covers authenticated profile reads and updates at `GET /api/me` and `PUT /api/me`, including JIT provisioning, validation, and normalization
 - Vitest covers authenticated reply creation at `POST /api/posts/{id}/replies`, including parent lookup, nested thread inheritance, validation, and repository failure handling
+- Vitest covers authenticated Tenor GIF search at `GET /api/gifs/search`, including auth enforcement, configuration failures, and upstream error handling
 - Vitest covers authenticated post creation at `POST /api/posts`, including max-length validation, hashtag and mention parsing, denormalised author fields, and repository failure handling
+- Vitest covers the Tenor search client and upstream response mapping used by the GIF reply picker
 - Vitest covers authenticated follow creation and removal at `POST/DELETE /api/users/{handle}/follow`, including idempotent writes, self-target rejection, validation, and follow-store failure handling
 - Vitest covers authenticated feed reads at `GET /api/feed`, including cursor pagination, normalized denormalised entries, and feed-store failure handling
 - Vitest covers the user-profile change-feed worker that refreshes denormalised post author fields after profile updates, including avatar removal and duplicate change-feed image collapse

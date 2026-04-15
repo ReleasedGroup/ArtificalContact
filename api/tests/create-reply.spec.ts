@@ -191,6 +191,113 @@ describe('createReplyHandler', () => {
     })
   })
 
+  it('creates a GIF-only reply when the request includes a Tenor media payload', async () => {
+    const parentPost = createStoredPost()
+    const repository: ReadablePostRepository = {
+      getPostById: vi.fn(async () => parentPost),
+      create: vi.fn(async (post) => post),
+    }
+    const handler = buildCreateReplyHandler({
+      idFactory: () => 'reply-gif',
+      maxTextLength: 280,
+      now: () => new Date('2026-04-15T05:00:00.000Z'),
+      repositoryFactory: () => repository,
+    })
+
+    const response = await handler(
+      createRequest({
+        media: [
+          {
+            id: 'tenor-123',
+            kind: 'gif',
+            url: 'https://media.tenor.com/full.gif',
+            thumbUrl: 'https://media.tenor.com/tiny.gif',
+            width: 320,
+            height: 240,
+          },
+        ],
+      }),
+      createContext(),
+    )
+
+    expect(repository.create).toHaveBeenCalledWith({
+      id: 'reply-gif',
+      type: 'reply',
+      kind: 'user',
+      threadId: 'thread-root',
+      parentId: 'reply-parent',
+      authorId: 'github:abc123',
+      authorHandle: 'nick',
+      authorDisplayName: 'Nick Beaugeard',
+      authorAvatarUrl: 'https://cdn.example.com/nick.png',
+      text: '',
+      hashtags: [],
+      mentions: [],
+      media: [
+        {
+          id: 'tenor-123',
+          kind: 'gif',
+          url: 'https://media.tenor.com/full.gif',
+          thumbUrl: 'https://media.tenor.com/tiny.gif',
+          width: 320,
+          height: 240,
+        },
+      ],
+      counters: {
+        likes: 0,
+        dislikes: 0,
+        emoji: 0,
+        replies: 0,
+      },
+      visibility: 'public',
+      moderationState: 'ok',
+      createdAt: '2026-04-15T05:00:00.000Z',
+      updatedAt: '2026-04-15T05:00:00.000Z',
+      deletedAt: null,
+    } satisfies UserPostDocument)
+    expect(response.status).toBe(201)
+    expect(response.jsonBody).toEqual({
+      data: {
+        post: {
+          id: 'reply-gif',
+          type: 'reply',
+          kind: 'user',
+          threadId: 'thread-root',
+          parentId: 'reply-parent',
+          authorId: 'github:abc123',
+          authorHandle: 'nick',
+          authorDisplayName: 'Nick Beaugeard',
+          authorAvatarUrl: 'https://cdn.example.com/nick.png',
+          text: '',
+          hashtags: [],
+          mentions: [],
+          media: [
+            {
+              id: 'tenor-123',
+              kind: 'gif',
+              url: 'https://media.tenor.com/full.gif',
+              thumbUrl: 'https://media.tenor.com/tiny.gif',
+              width: 320,
+              height: 240,
+            },
+          ],
+          counters: {
+            likes: 0,
+            dislikes: 0,
+            emoji: 0,
+            replies: 0,
+          },
+          visibility: 'public',
+          moderationState: 'ok',
+          createdAt: '2026-04-15T05:00:00.000Z',
+          updatedAt: '2026-04-15T05:00:00.000Z',
+          deletedAt: null,
+        },
+      },
+      errors: [],
+    })
+  })
+
   it('returns 400 when the post id path parameter is missing', async () => {
     const repository: ReadablePostRepository = {
       getPostById: vi.fn(async () => null),
@@ -273,6 +380,34 @@ describe('createReplyHandler', () => {
         {
           code: 'invalid_post',
           message: 'Too big: expected string to have <=5 characters',
+          field: 'text',
+        },
+      ],
+    })
+  })
+
+  it('returns validation errors when the reply omits both text and a GIF', async () => {
+    const handler = buildCreateReplyHandler({
+      repositoryFactory: () => ({
+        getPostById: async () => createStoredPost(),
+        create: async (post) => post,
+      }),
+    })
+
+    const response = await handler(
+      createRequest({
+        text: '   ',
+      }),
+      createContext(),
+    )
+
+    expect(response.status).toBe(400)
+    expect(response.jsonBody).toEqual({
+      data: null,
+      errors: [
+        {
+          code: 'invalid_post',
+          message: 'A reply must include text or a GIF.',
           field: 'text',
         },
       ],

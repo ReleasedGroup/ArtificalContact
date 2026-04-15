@@ -7,6 +7,15 @@ interface MockUser {
   displayName: string
 }
 
+interface MockPostMedia {
+  id: string
+  kind: 'gif'
+  url: string
+  thumbUrl: string | null
+  width: number | null
+  height: number | null
+}
+
 interface MockPost {
   id: string
   type: 'post' | 'reply'
@@ -20,7 +29,7 @@ interface MockPost {
   text: string | null
   hashtags: string[]
   mentions: string[]
-  media: []
+  media: MockPostMedia[]
   counters: {
     likes: number
     dislikes: number
@@ -83,8 +92,9 @@ function createPostRecord(
     type: 'post' | 'reply'
     threadId: string
     parentId: string | null
-    text: string
+    text?: string
     createdAt: string
+    media?: MockPostMedia[]
   },
 ): MockPost {
   return {
@@ -97,10 +107,10 @@ function createPostRecord(
     authorHandle: user.handle,
     authorDisplayName: user.displayName,
     authorAvatarUrl: null,
-    text: options.text,
+    text: options.text ?? '',
     hashtags: [],
     mentions: [],
-    media: [],
+    media: options.media ?? [],
     counters: {
       likes: 0,
       dislikes: 0,
@@ -120,6 +130,23 @@ function jsonResponse(route: Route, status: number, payload: unknown) {
     contentType: 'application/json',
     body: JSON.stringify(payload),
   })
+}
+
+function createTenorSearchResponse(query: string) {
+  return {
+    mode: query.length > 0 ? 'search' : 'featured',
+    query,
+    results: [
+      {
+        id: 'tenor-party-parrot',
+        title: 'Party parrot celebration',
+        previewUrl: 'https://media.tenor.com/party-parrot-tiny.gif',
+        gifUrl: 'https://media.tenor.com/party-parrot-full.gif',
+        width: 320,
+        height: 240,
+      },
+    ],
+  }
 }
 
 test('two users can post, reply, and hide a soft-deleted reply from the public thread', async ({
@@ -194,6 +221,16 @@ test('two users can post, reply, and hide a soft-deleted reply from the public t
         return
       }
 
+      if (pathname === '/api/gifs/search' && request.method() === 'GET') {
+        const query = url.searchParams.get('q')?.trim() ?? ''
+
+        await jsonResponse(route, 200, {
+          data: createTenorSearchResponse(query),
+          errors: [],
+        })
+        return
+      }
+
       if (pathname.startsWith('/api/posts/') && pathname.endsWith('/replies')) {
         const parentId = pathname.split('/')[3] ?? ''
         const parentPost = visiblePost(parentId)
@@ -211,14 +248,20 @@ test('two users can post, reply, and hide a soft-deleted reply from the public t
           return
         }
 
-        const payload = request.postDataJSON() as { text: string }
+        const payload = request.postDataJSON() as {
+          text?: string
+          media?: MockPostMedia[]
+        }
+        const isGifReply =
+          Array.isArray(payload.media) && payload.media.length > 0
         const createdReply = createPostRecord(currentUser, {
-          id: 'reply-1',
+          id: isGifReply ? 'reply-gif' : 'reply-1',
           type: 'reply',
           threadId: parentPost.threadId,
           parentId: parentPost.id,
-          text: payload.text.trim(),
+          text: payload.text?.trim() ?? '',
           createdAt: '2026-04-15T00:02:00.000Z',
+          media: payload.media ?? [],
         })
         replyPostId = createdReply.id
         posts.set(createdReply.id, createdReply)
@@ -400,4 +443,157 @@ test('two users can post, reply, and hide a soft-deleted reply from the public t
 
   await contextA.close()
   await contextB.close()
+})
+
+test('an authenticated viewer can publish a GIF-only reply from the Tenor picker', async ({
+  baseURL,
+  browser,
+}) => {
+  const posts = new Map<string, MockPost>()
+
+  const syncReplyCounts = () => {
+    for (const post of posts.values()) {
+      const activeReplies = [...posts.values()].filter(
+        (candidate) =>
+          candidate.parentId === post.id && candidate.deletedAt === null,
+      ).length
+      post.counters.replies = activeReplies
+    }
+  }
+
+  const visiblePost = (postId: string) => {
+    const post = posts.get(postId)
+    return post && post.deletedAt === null ? post : null
+  }
+
+  const visibleThread = (threadId: string) =>
+    [...posts.values()]
+      .filter(
+        (post) => post.threadId === threadId && post.deletedAt === null,
+      )
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+
+  const currentUser = users.userA
+  posts.set(
+    'post-1',
+    createPostRecord(currentUser, {
+      id: 'post-1',
+      type: 'post',
+      threadId: 'post-1',
+      parentId: null,
+      text: 'User A root post for the GIF reply flow.',
+      createdAt: '2026-04-15T00:01:00.000Z',
+    }),
+  )
+
+  const context = await browser.newContext()
+
+  await context.route('**/api/**', async (route) => {
+    const request = route.request()
+    const url = new URL(request.url())
+    const pathname = url.pathname
+
+    if (pathname === '/api/me' && request.method() === 'GET') {
+      await jsonResponse(route, 200, {
+        data: createMePayload(currentUser),
+        errors: [],
+      })
+      return
+    }
+
+    if (pathname === '/api/gifs/search' && request.method() === 'GET') {
+      const query = url.searchParams.get('q')?.trim() ?? ''
+
+      await jsonResponse(route, 200, {
+        data: createTenorSearchResponse(query),
+        errors: [],
+      })
+      return
+    }
+
+    if (pathname === '/api/posts/post-1' && request.method() === 'GET') {
+      await jsonResponse(route, 200, {
+        data: visiblePost('post-1'),
+        errors: [],
+      })
+      return
+    }
+
+    if (pathname === '/api/threads/post-1' && request.method() === 'GET') {
+      await jsonResponse(route, 200, {
+        data: {
+          threadId: 'post-1',
+          posts: visibleThread('post-1'),
+          continuationToken: null,
+        },
+        errors: [],
+      })
+      return
+    }
+
+    if (pathname === '/api/posts/post-1/replies' && request.method() === 'POST') {
+      const payload = request.postDataJSON() as {
+        text?: string
+        media?: MockPostMedia[]
+      }
+      const createdReply = createPostRecord(currentUser, {
+        id: 'reply-gif',
+        type: 'reply',
+        threadId: 'post-1',
+        parentId: 'post-1',
+        text: payload.text?.trim() ?? '',
+        createdAt: '2026-04-15T00:02:00.000Z',
+        media: payload.media ?? [],
+      })
+
+      posts.set(createdReply.id, createdReply)
+      syncReplyCounts()
+
+      await jsonResponse(route, 201, {
+        data: {
+          post: createdReply,
+        },
+        errors: [],
+      })
+      return
+    }
+
+    throw new Error(`Unexpected API request: ${request.method()} ${pathname}`)
+  })
+
+  const page = await context.newPage()
+
+  await page.goto(`${baseURL}/p/post-1`)
+  await expect(
+    page.getByText('User A root post for the GIF reply flow.'),
+  ).toBeVisible()
+
+  await page.getByPlaceholder('Search Tenor').fill('party parrot')
+  await page.getByRole('button', { name: 'Find GIFs' }).click()
+  await page
+    .getByRole('button', { name: 'Reply with GIF: Party parrot celebration' })
+    .click()
+
+  await expect(
+    page.getByText('GIF reply published and thread refreshed.'),
+  ).toBeVisible()
+  await expect(
+    page.getByAltText('gif attachment from Ada Lovelace'),
+  ).toBeVisible()
+
+  expect(posts.get('reply-gif')).toMatchObject({
+    text: '',
+    media: [
+      {
+        id: 'tenor-party-parrot',
+        kind: 'gif',
+        url: 'https://media.tenor.com/party-parrot-full.gif',
+        thumbUrl: 'https://media.tenor.com/party-parrot-tiny.gif',
+        width: 320,
+        height: 240,
+      },
+    ],
+  })
+
+  await context.close()
 })
