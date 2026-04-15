@@ -117,6 +117,12 @@ function looksLikeEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 }
 
+export function normalizeRoles(roles: readonly string[]): string[] {
+  return [
+    ...new Set(roles.map((role) => role.trim().toLowerCase()).filter(Boolean)),
+  ]
+}
+
 export function getClaimValue(
   principal: Pick<StaticWebAppsClientPrincipal, 'claims'>,
   claimTypes: readonly string[],
@@ -213,7 +219,7 @@ export function resolveAuthenticatedPrincipal(
     }
   }
 
-  const normalizedRoles = principal.userRoles.map((role) => role.toLowerCase())
+  const normalizedRoles = normalizeRoles(principal.userRoles)
   if (!normalizedRoles.includes('authenticated')) {
     return {
       ok: false,
@@ -228,6 +234,7 @@ export function resolveAuthenticatedPrincipal(
     ok: true,
     principal: {
       ...principal,
+      userRoles: normalizedRoles,
       subject: `${principal.identityProvider.toLowerCase()}:${principal.userId}`,
       displayName: resolveDisplayName(principal),
       ...(email ? { email } : {}),

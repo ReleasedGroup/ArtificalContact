@@ -6,6 +6,7 @@
     "BUILD_SHA": "local-dev",
     "AZURE_REGION": "local",
     "COSMOS_DATABASE_NAME": "acn",
+    "USERS_CONTAINER_NAME": "users",
     "COSMOS_CONNECTION_STRING": "",
     "COSMOS_ENDPOINT": "",
     "COSMOS_CONNECTION__accountEndpoint": "",

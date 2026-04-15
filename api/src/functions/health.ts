@@ -6,6 +6,7 @@ import {
 } from '@azure/functions'
 import { createErrorResponse } from '../lib/api-envelope.js'
 import { createHealthReport } from '../lib/health.js'
+import { withHttpAuth } from '../lib/http-auth.js'
 
 export function buildHealthHandler(
   reportFactory: typeof createHealthReport = createHealthReport,
@@ -48,6 +49,8 @@ export function registerHealthFunction() {
     methods: ['GET'],
     authLevel: 'anonymous',
     route: 'health',
-    handler: healthHandler,
+    handler: withHttpAuth(healthHandler, {
+      allowAnonymous: true,
+    }),
   })
 }
