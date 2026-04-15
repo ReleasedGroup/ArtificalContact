@@ -3,16 +3,37 @@ import { z, type ZodIssue } from 'zod'
 import type { ApiError } from './api-envelope.js'
 import { getEnvironmentConfig, type EnvironmentConfig } from './config.js'
 import { createCosmosClient } from './cosmos-client.js'
+import {
+  applyReactionRequestToState,
+  DEFAULT_REACTION_POLICY,
+  type CreateReactionRequest,
+  type ReactionPolicy,
+  type ReactionSentiment,
+} from './reaction-rules.js'
 import { readOptionalValue } from './strings.js'
+
+export {
+  DEFAULT_REACTION_POLICY,
+  ReactionPolicyConflictError,
+} from './reaction-rules.js'
+export type {
+  ApplyReactionPlan,
+  CreateReactionRequest,
+  ReactionPolicy,
+  ReactionPolicyConfig,
+  ReactionSelection,
+  ReactionSentiment,
+  ReactionState,
+  ReactionType,
+  RemoveReactionPlan,
+  RemoveReactionRequest,
+} from './reaction-rules.js'
 
 export const DEFAULT_REACTIONS_CONTAINER_NAME = 'reactions'
 export const DEFAULT_REACTION_VALUE_MAX_LENGTH = 2048
 export const DEFAULT_EMOJI_VALUE_MAX_LENGTH = 128
 
 let cachedReactionRepository: ReactionRepository | undefined
-
-export type ReactionType = 'like' | 'dislike' | 'emoji' | 'gif'
-export type ReactionSentiment = 'like' | 'dislike'
 
 export interface ReactionDocument {
   id: string
@@ -24,18 +45,6 @@ export interface ReactionDocument {
   gifValue: string | null
   createdAt: string
   updatedAt: string
-}
-
-export type CreateReactionRequest =
-  | { type: 'like' }
-  | { type: 'dislike' }
-  | { type: 'emoji'; value: string }
-  | { type: 'gif'; value: string }
-
-export interface ReactionPolicy {
-  allowEmojiWithSentiment: boolean
-  allowGifWithSentiment: boolean
-  allowGifWithEmoji: boolean
 }
 
 export interface ReactionMutationResult {
@@ -53,12 +62,6 @@ export interface ReactionRepository {
   upsert(reaction: ReactionDocument): Promise<ReactionDocument>
 }
 
-export const DEFAULT_REACTION_POLICY: ReactionPolicy = {
-  allowEmojiWithSentiment: true,
-  allowGifWithSentiment: true,
-  allowGifWithEmoji: true,
-}
-
 function normalizeOptionalString(value: unknown): unknown {
   if (typeof value !== 'string') {
     return value
@@ -66,10 +69,6 @@ function normalizeOptionalString(value: unknown): unknown {
 
   const trimmed = value.trim()
   return trimmed ? trimmed : undefined
-}
-
-function toUniqueReactionValues(values: readonly string[]): string[] {
-  return [...new Set(values)]
 }
 
 function buildReactionRequestBaseSchema() {
@@ -251,63 +250,22 @@ export function applyReactionMutation(
     existingReaction ??
     createBaseReactionDocument(options.postId, options.userId, options.now)
 
+  const plan = applyReactionRequestToState(
+    {
+      sentiment: baseReaction.sentiment,
+      emojiValues: baseReaction.emojiValues,
+      gifValue: baseReaction.gifValue,
+    },
+    request,
+    policy,
+  )
+
+  const changed = existingReaction === null || plan.changed
   const nextReaction: ReactionDocument = {
     ...baseReaction,
-    emojiValues: [...baseReaction.emojiValues],
-  }
-
-  let changed = existingReaction === null
-
-  if (
-    request.type === 'emoji' &&
-    nextReaction.sentiment !== null &&
-    !policy.allowEmojiWithSentiment
-  ) {
-    throw new Error('Emoji reactions cannot be combined with like or dislike.')
-  }
-
-  if (
-    request.type === 'gif' &&
-    nextReaction.sentiment !== null &&
-    !policy.allowGifWithSentiment
-  ) {
-    throw new Error('GIF reactions cannot be combined with like or dislike.')
-  }
-
-  if (
-    request.type === 'gif' &&
-    nextReaction.emojiValues.length > 0 &&
-    !policy.allowGifWithEmoji
-  ) {
-    throw new Error('GIF reactions cannot be combined with emoji reactions.')
-  }
-
-  switch (request.type) {
-    case 'like':
-    case 'dislike': {
-      if (nextReaction.sentiment !== request.type) {
-        nextReaction.sentiment = request.type
-        changed = true
-      }
-      break
-    }
-    case 'emoji': {
-      if (!nextReaction.emojiValues.includes(request.value)) {
-        nextReaction.emojiValues = toUniqueReactionValues([
-          ...nextReaction.emojiValues,
-          request.value,
-        ])
-        changed = true
-      }
-      break
-    }
-    case 'gif': {
-      if (nextReaction.gifValue !== request.value) {
-        nextReaction.gifValue = request.value
-        changed = true
-      }
-      break
-    }
+    sentiment: plan.nextState.sentiment,
+    emojiValues: [...plan.nextState.emojiValues],
+    gifValue: plan.nextState.gifValue,
   }
 
   if (changed) {

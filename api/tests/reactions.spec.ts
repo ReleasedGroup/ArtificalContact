@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   applyReactionMutation,
   buildCreateReactionRequestSchema,
+  DEFAULT_REACTION_POLICY,
+  ReactionPolicyConflictError,
   type ReactionDocument,
 } from '../src/lib/reactions.js'
 
@@ -169,6 +171,57 @@ describe('applyReactionMutation', () => {
         updatedAt: '2026-04-15T05:30:00.000Z',
       }),
     })
+  })
+
+  it('can restrict the document to a single emoji value without changing handler code', () => {
+    const result = applyReactionMutation(
+      createStoredReaction({
+        emojiValues: ['🎉', '🔥'],
+      }),
+      { type: 'emoji', value: '👏' },
+      {
+        postId: 'post-1',
+        userId: 'user-1',
+        now: new Date('2026-04-15T05:45:00.000Z'),
+        policy: {
+          ...DEFAULT_REACTION_POLICY,
+          allowMultipleEmojiValues: false,
+        },
+      },
+    )
+
+    expect(result).toEqual({
+      created: false,
+      changed: true,
+      reaction: createStoredReaction({
+        emojiValues: ['👏'],
+        updatedAt: '2026-04-15T05:45:00.000Z',
+      }),
+    })
+  })
+
+  it('rejects new sentiment when emoji coexistence is disabled', () => {
+    const attempt = () =>
+      applyReactionMutation(
+        createStoredReaction({
+          emojiValues: ['🎉'],
+        }),
+        { type: 'like' },
+        {
+          postId: 'post-1',
+          userId: 'user-1',
+          now: new Date('2026-04-15T05:50:00.000Z'),
+          policy: {
+            ...DEFAULT_REACTION_POLICY,
+            allowEmojiWithSentiment: false,
+          },
+        },
+      )
+
+    expect(attempt).toThrowError(ReactionPolicyConflictError)
+    expect(attempt).toThrowError(
+      'Like and dislike cannot be combined with emoji reactions.',
+    )
   })
 
   it('replaces the stored gif value when a new gif reaction is posted', () => {
