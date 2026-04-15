@@ -9,6 +9,18 @@ interface ApiEnvelope<TData> {
   errors: ApiError[]
 }
 
+class MeRequestError extends Error {
+  status: number
+  code: string | null
+
+  constructor(message: string, status: number, code: string | null) {
+    super(message)
+    this.name = 'MeRequestError'
+    this.status = status
+    this.code = code
+  }
+}
+
 export interface UserCounters {
   posts: number
   followers: number
@@ -69,10 +81,27 @@ async function readEnvelope<TData>(
   }
 
   if (!response.ok) {
-    throw new Error(payload?.errors?.[0]?.message ?? failureFallback)
+    throw new MeRequestError(
+      payload?.errors?.[0]?.message ?? failureFallback,
+      response.status,
+      payload?.errors?.[0]?.code?.trim() || null,
+    )
   }
 
   return payload
+}
+
+function isOptionalMeAuthFailure(error: unknown): error is MeRequestError {
+  if (!(error instanceof MeRequestError)) {
+    return false
+  }
+
+  return (
+    error.status === 401 ||
+    error.status === 403 ||
+    error.code === 'auth.forbidden' ||
+    Boolean(error.code?.startsWith('auth.'))
+  )
 }
 
 export async function getMe(signal?: AbortSignal): Promise<ResolvedMeProfile> {
@@ -100,8 +129,12 @@ export async function getOptionalMe(
 ): Promise<ResolvedMeProfile | null> {
   try {
     return await getMe(signal)
-  } catch {
-    return null
+  } catch (error) {
+    if (isOptionalMeAuthFailure(error)) {
+      return null
+    }
+
+    throw error
   }
 }
 

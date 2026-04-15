@@ -37,6 +37,7 @@ function readErrorMessage<TData>(payload: ApiEnvelope<TData> | null): string | n
 async function readEnvelope<TData>(
   response: Response,
   fallbackMessage: string,
+  invalidJsonMessage: string,
 ): Promise<ApiEnvelope<TData>> {
   let payload: ApiEnvelope<TData> | null = null
 
@@ -47,7 +48,7 @@ async function readEnvelope<TData>(
       throw new Error(fallbackMessage)
     }
 
-    throw new Error('The post response was not valid JSON.')
+    throw new Error(invalidJsonMessage)
   }
 
   if (!response.ok) {
@@ -74,6 +75,7 @@ export async function createPost(
   const payload = await readEnvelope<PostMutationPayload>(
     response,
     `Post publish failed with status ${response.status}.`,
+    'The post publish response was not valid JSON.',
   )
 
   if (!payload.data?.post) {
@@ -101,6 +103,7 @@ export async function createReply(
   const payload = await readEnvelope<PostMutationPayload>(
     response,
     `Reply publish failed with status ${response.status}.`,
+    'The reply publish response was not valid JSON.',
   )
 
   if (!payload.data?.post) {
@@ -125,6 +128,7 @@ export async function deletePost(
   const payload = await readEnvelope<DeletePostPayload>(
     response,
     `Post delete failed with status ${response.status}.`,
+    'The post delete response was not valid JSON.',
   )
 
   if (!payload.data) {

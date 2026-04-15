@@ -926,13 +926,23 @@ describe('App', () => {
         '[data-thread-entry]',
       ),
     ).toHaveAttribute('data-thread-depth', '1')
-    expect(mockFetch).toHaveBeenCalledWith(
+    expect(mockFetch).toHaveBeenCalledTimes(3)
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/me',
+      expect.objectContaining({
+        headers: { Accept: 'application/json' },
+      }),
+    )
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
       '/api/posts/post-1',
       expect.objectContaining({
         headers: { Accept: 'application/json' },
       }),
     )
-    expect(mockFetch).toHaveBeenCalledWith(
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      3,
       '/api/threads/post-1',
       expect.objectContaining({
         headers: { Accept: 'application/json' },
@@ -1070,6 +1080,18 @@ describe('App', () => {
     ]
 
     mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(403, {
+          data: null,
+          errors: [
+            {
+              code: 'auth.forbidden',
+              message: 'The authenticated user context was not available.',
+            },
+          ],
+        })
+      }
+
       if (String(input) === '/api/posts/post-mixed-media') {
         return createJsonResponse(200, {
           data: createPublicPost({

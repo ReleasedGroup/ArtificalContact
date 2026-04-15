@@ -196,27 +196,26 @@ function formatTimestamp(value: string | null): string | null {
   }).format(parsed)
 }
 
-function buildAuthorMonogram(post: RenderablePost): string {
-  const source =
-    post.authorDisplayName?.trim() || post.authorHandle?.trim() || 'AI'
-  const words = source.split(/\s+/).filter(Boolean)
+function buildInitialBadge(source: string | null | undefined, fallback: string): string {
+  const resolvedSource = source?.trim() || fallback
+  const words = resolvedSource.split(/\s+/).filter(Boolean)
 
   if (words.length >= 2) {
     return `${words[0][0]}${words[1][0]}`.toUpperCase()
   }
 
-  return source.slice(0, 2).toUpperCase()
+  return resolvedSource.slice(0, 2).toUpperCase()
+}
+
+function buildAuthorMonogram(post: RenderablePost): string {
+  return buildInitialBadge(
+    post.authorDisplayName?.trim() || post.authorHandle?.trim(),
+    'AI',
+  )
 }
 
 function buildViewerBadge(viewer: MeProfile): string {
-  const source = viewer.displayName.trim() || viewer.handle?.trim() || 'ME'
-  const words = source.split(/\s+/).filter(Boolean)
-
-  if (words.length >= 2) {
-    return `${words[0][0]}${words[1][0]}`.toUpperCase()
-  }
-
-  return source.slice(0, 2).toUpperCase()
+  return buildInitialBadge(viewer.displayName.trim() || viewer.handle?.trim(), 'ME')
 }
 
 function getAuthorName(post: RenderablePost): string {
@@ -1044,14 +1043,25 @@ export function PostDetailScreen({ postId }: { postId: string }) {
     const controller = new AbortController()
 
     const loadViewer = async () => {
-      const data = await getOptionalMe(controller.signal)
-      if (controller.signal.aborted) {
-        return
-      }
+      try {
+        const data = await getOptionalMe(controller.signal)
+        if (controller.signal.aborted) {
+          return
+        }
 
-      startTransition(() => {
-        setViewer(data?.user ?? null)
-      })
+        startTransition(() => {
+          setViewer(data?.user ?? null)
+        })
+      } catch (error) {
+        if (
+          controller.signal.aborted ||
+          (error instanceof DOMException && error.name === 'AbortError')
+        ) {
+          return
+        }
+
+        console.error('Unable to load the authenticated viewer context.', error)
+      }
     }
 
     void loadViewer()

@@ -36,6 +36,22 @@ const mixedMedia = [
 ]
 
 async function stubMixedMediaPost(page: Page) {
+  await page.route('**/api/me', async (route) => {
+    await route.fulfill({
+      status: 403,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: null,
+        errors: [
+          {
+            code: 'auth.forbidden',
+            message: 'The authenticated user context was not available.',
+          },
+        ],
+      }),
+    })
+  })
+
   await page.route('**/api/posts/post-mixed-media', async (route) => {
     await route.fulfill({
       status: 200,
