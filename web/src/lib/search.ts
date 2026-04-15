@@ -39,7 +39,7 @@ export interface SearchResponse {
   users: SearchUserResult[]
 }
 
-const minimumSearchLength = 2
+export const MIN_SEARCH_QUERY_LENGTH = 2
 
 function readErrorMessage(payload: ApiEnvelope<unknown> | null): string | null {
   const firstError = payload?.errors?.[0]
@@ -56,7 +56,7 @@ export async function search(
 ): Promise<SearchResponse> {
   const normalizedQuery = query.trim()
 
-  if (normalizedQuery.length < minimumSearchLength) {
+  if (normalizedQuery.length < MIN_SEARCH_QUERY_LENGTH) {
     return {
       query: normalizedQuery,
       type: options.type ?? 'all',

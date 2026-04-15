@@ -110,23 +110,46 @@ export function buildSearchHandler(
     }
 
     try {
-      const response: SearchResponse = {
-        query: requestedQuery,
-        type: searchType,
-        posts:
-          searchType === 'all' || searchType === 'posts'
-            ? await store.searchPosts({
-                query: normalizedQuery,
-                limit,
-              })
-            : [],
-        users:
-          searchType === 'all' || searchType === 'users'
-            ? await store.searchUsers({
-                query: normalizedQuery,
-                limit,
-              })
-            : [],
+      let response: SearchResponse
+
+      if (searchType === 'all') {
+        const [posts, users] = await Promise.all([
+          store.searchPosts({
+            query: normalizedQuery,
+            limit,
+          }),
+          store.searchUsers({
+            query: normalizedQuery,
+            limit,
+          }),
+        ])
+
+        response = {
+          query: requestedQuery,
+          type: searchType,
+          posts,
+          users,
+        }
+      } else if (searchType === 'posts') {
+        response = {
+          query: requestedQuery,
+          type: searchType,
+          posts: await store.searchPosts({
+            query: normalizedQuery,
+            limit,
+          }),
+          users: [],
+        }
+      } else {
+        response = {
+          query: requestedQuery,
+          type: searchType,
+          posts: [],
+          users: await store.searchUsers({
+            query: normalizedQuery,
+            limit,
+          }),
+        }
       }
 
       context.log('Search completed.', {

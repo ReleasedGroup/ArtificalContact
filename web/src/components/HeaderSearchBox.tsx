@@ -1,5 +1,6 @@
 import { startTransition, useEffect, useId, useRef, useState } from 'react'
 import {
+  MIN_SEARCH_QUERY_LENGTH,
   search,
   type SearchResponse,
   type SearchPostResult,
@@ -7,7 +8,6 @@ import {
 } from '../lib/search'
 
 const debounceDelayMs = 250
-const minimumSearchLength = 2
 const compactCountFormatter = new Intl.NumberFormat(undefined, {
   notation: 'compact',
   maximumFractionDigits: 1,
@@ -107,9 +107,11 @@ export function HeaderSearchBox() {
     status: 'idle',
   })
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const isFocusedRef = useRef(false)
   const resultsId = useId()
   const trimmedQuery = query.trim()
-  const hasReachedMinimumLength = trimmedQuery.length >= minimumSearchLength
+  const hasReachedMinimumLength =
+    trimmedQuery.length >= MIN_SEARCH_QUERY_LENGTH
 
   useEffect(() => {
     if (!isFocused) {
@@ -123,6 +125,7 @@ export function HeaderSearchBox() {
         target instanceof Node &&
         !containerRef.current.contains(target)
       ) {
+        isFocusedRef.current = false
         startTransition(() => {
           setIsFocused(false)
         })
@@ -136,6 +139,10 @@ export function HeaderSearchBox() {
   }, [isFocused])
 
   useEffect(() => {
+    if (!isFocused) {
+      return
+    }
+
     if (!hasReachedMinimumLength) {
       startTransition(() => {
         setSearchState({ status: 'idle' })
@@ -145,6 +152,10 @@ export function HeaderSearchBox() {
 
     const controller = new AbortController()
     const timeoutId = window.setTimeout(() => {
+      if (!isFocusedRef.current) {
+        return
+      }
+
       startTransition(() => {
         setSearchState({ status: 'loading' })
       })
@@ -182,7 +193,7 @@ export function HeaderSearchBox() {
       window.clearTimeout(timeoutId)
       controller.abort()
     }
-  }, [hasReachedMinimumLength, trimmedQuery])
+  }, [hasReachedMinimumLength, isFocused, trimmedQuery])
 
   const hasResults =
     searchState.status === 'ready' &&
@@ -224,6 +235,7 @@ export function HeaderSearchBox() {
           autoComplete="off"
           className="w-full rounded-[1.5rem] border border-white/12 bg-slate-950/65 py-3 pl-11 pr-4 text-sm text-white shadow-lg shadow-slate-950/25 outline-none transition placeholder:text-slate-500 focus:border-cyan-300/35 focus:bg-slate-950/80 focus:ring-2 focus:ring-cyan-300/20"
           onBlur={() => {
+            isFocusedRef.current = false
             window.setTimeout(() => {
               startTransition(() => {
                 setIsFocused(false)
@@ -236,12 +248,14 @@ export function HeaderSearchBox() {
             })
           }}
           onFocus={() => {
+            isFocusedRef.current = true
             startTransition(() => {
               setIsFocused(true)
             })
           }}
           onKeyDown={(event) => {
             if (event.key === 'Escape') {
+              isFocusedRef.current = false
               startTransition(() => {
                 setIsFocused(false)
               })
@@ -261,7 +275,7 @@ export function HeaderSearchBox() {
         >
           {!hasReachedMinimumLength && (
             <p className="text-sm text-slate-400">
-              Type at least 2 characters to search.
+              Type at least {MIN_SEARCH_QUERY_LENGTH} characters to search.
             </p>
           )}
 

@@ -142,6 +142,47 @@ describe('searchHandler', () => {
     })
   })
 
+  it('starts user and post searches together when type is omitted', async () => {
+    let resolvePosts: ((value: SearchPostResult[]) => void) | undefined
+    let resolveUsers: ((value: SearchUserResult[]) => void) | undefined
+    const postsPromise = new Promise<SearchPostResult[]>((resolve) => {
+      resolvePosts = resolve
+    })
+    const usersPromise = new Promise<SearchUserResult[]>((resolve) => {
+      resolveUsers = resolve
+    })
+    const store = createSearchStore({
+      searchPosts: vi.fn(() => postsPromise),
+      searchUsers: vi.fn(() => usersPromise),
+    })
+    const handler = buildSearchHandler({
+      storeFactory: () => store,
+    })
+
+    const responsePromise = handler(
+      createRequest({
+        q: 'ada',
+      }),
+      createContext(),
+    )
+
+    expect(store.searchPosts).toHaveBeenCalledWith({
+      query: 'ada',
+      limit: 4,
+    })
+    expect(store.searchUsers).toHaveBeenCalledWith({
+      query: 'ada',
+      limit: 4,
+    })
+
+    resolvePosts?.([])
+    resolveUsers?.([])
+
+    const response = await responsePromise
+
+    expect(response.status).toBe(200)
+  })
+
   it('rejects queries shorter than two characters', async () => {
     const handler = buildSearchHandler({
       storeFactory: () => createSearchStore(),

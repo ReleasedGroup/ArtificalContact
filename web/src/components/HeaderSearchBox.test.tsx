@@ -146,4 +146,27 @@ describe('HeaderSearchBox', () => {
       screen.getByText('No quick results matched "zz".'),
     ).toBeInTheDocument()
   })
+
+  it('does not issue a search request after the control loses focus', async () => {
+    render(<HeaderSearchBox />)
+
+    const input = screen.getByRole('searchbox', {
+      name: 'Search people and posts',
+    })
+
+    fireEvent.focus(input)
+    fireEvent.change(input, {
+      target: {
+        value: 'ada',
+      },
+    })
+    fireEvent.blur(input)
+
+    await act(async () => {
+      vi.advanceTimersByTime(250)
+      await Promise.resolve()
+    })
+
+    expect(mockFetch).not.toHaveBeenCalled()
+  })
 })
