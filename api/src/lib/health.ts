@@ -1,16 +1,6 @@
+import type { ApiEnvelope } from './api-envelope.js'
 import { getEnvironmentConfig, type EnvironmentConfig } from './config.js'
 import { pingCosmos, type CosmosPingResult } from './cosmos-ping.js'
-
-export interface ApiError {
-  code: string
-  message: string
-  field?: string
-}
-
-export interface ApiEnvelope<TData> {
-  data: TData
-  errors: ApiError[]
-}
 
 export interface HealthPayload {
   service: string
