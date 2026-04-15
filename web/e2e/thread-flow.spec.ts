@@ -337,8 +337,13 @@ test('two users can post, reply, and hide a soft-deleted reply from the public t
     pageA.getByRole('heading', { name: 'Edit your profile' }),
   ).toBeVisible()
 
-  await pageA.getByLabel('Thread post body').fill('User A root post for the shared thread.')
-  await pageA.getByRole('button', { name: 'Publish post' }).click()
+  const threadWorkspace = pageA.getByTestId('thread-workspace')
+  await threadWorkspace.scrollIntoViewIfNeeded()
+  await threadWorkspace
+    .locator('textarea')
+    .first()
+    .fill('User A root post for the shared thread.')
+  await threadWorkspace.getByRole('button', { name: 'Publish post' }).click()
 
   await expect(pageA.getByText('Post published to /p/post-1.')).toBeVisible()
   await expect(
@@ -356,7 +361,9 @@ test('two users can post, reply, and hide a soft-deleted reply from the public t
     pageB.getByText('User A root post for the shared thread.'),
   ).toBeVisible()
 
-  await pageB.getByLabel('Thread reply body').fill('User B reply that should later be soft-deleted.')
+  await pageB
+    .getByPlaceholder('Reply to @ada…')
+    .fill('User B reply that should later be soft-deleted.')
   await pageB.getByRole('button', { name: 'Reply in thread' }).click()
 
   await expect(

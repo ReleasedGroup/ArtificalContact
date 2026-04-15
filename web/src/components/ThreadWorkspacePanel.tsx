@@ -62,7 +62,10 @@ export function ThreadWorkspacePanel({
   }
 
   return (
-    <section className="mt-6 rounded-[1.75rem] border border-white/10 bg-slate-900/70 p-6">
+    <section
+      data-testid="thread-workspace"
+      className="mt-6 rounded-[1.75rem] border border-white/10 bg-slate-900/70 p-6"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-medium uppercase tracking-[0.24em] text-cyan-100/80">
