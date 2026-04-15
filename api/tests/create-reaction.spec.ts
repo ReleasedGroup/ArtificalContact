@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { buildCreateReactionHandler } from '../src/functions/create-reaction.js'
 import type { PostStore, StoredPostDocument } from '../src/lib/posts.js'
 import type {
+  ReactionPolicy,
   ReactionDocument,
   ReactionRepository,
 } from '../src/lib/reactions.js'
@@ -128,6 +129,7 @@ function createReactionRepository(
     getByPostAndUser: vi.fn(async () => null),
     create: vi.fn(async (reaction) => reaction),
     upsert: vi.fn(async (reaction) => reaction),
+    deleteByPostAndUser: vi.fn(async () => undefined),
     ...overrides,
   }
 }
@@ -248,6 +250,51 @@ describe('createReactionHandler', () => {
       },
       errors: [],
     })
+  })
+
+  it('returns 409 when a configured reaction policy rejects the requested coexistence', async () => {
+    const postStore: PostStore = {
+      getPostById: vi.fn(async () => createStoredPost()),
+    }
+    const reactionRepository = createReactionRepository({
+      getByPostAndUser: vi.fn(async () =>
+        createStoredReaction({
+          sentiment: 'like',
+        }),
+      ),
+    })
+    const reactionPolicy: ReactionPolicy = {
+      allowEmojiWithSentiment: false,
+      allowGifWithSentiment: true,
+      allowGifWithEmoji: true,
+      allowMultipleEmojiValues: true,
+    }
+    const handler = buildCreateReactionHandler({
+      postStoreFactory: () => postStore,
+      reactionPolicy,
+      reactionRepositoryFactory: () => reactionRepository,
+    })
+
+    const response = await handler(
+      createRequest({
+        type: 'emoji',
+        value: '🔥',
+      }),
+      createContext(),
+    )
+
+    expect(response.status).toBe(409)
+    expect(response.jsonBody).toEqual({
+      data: null,
+      errors: [
+        {
+          code: 'reaction_conflict',
+          message: 'Emoji reactions cannot be combined with like or dislike.',
+        },
+      ],
+    })
+    expect(reactionRepository.create).not.toHaveBeenCalled()
+    expect(reactionRepository.upsert).not.toHaveBeenCalled()
   })
 
   it('recovers from a create conflict by re-reading and upserting the merged reaction', async () => {

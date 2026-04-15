@@ -230,6 +230,18 @@ describe('App', () => {
 
   it('renders the sign-in screen and exposes both SWA auth providers', async () => {
     mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(403, {
+          data: null,
+          errors: [
+            {
+              code: 'auth.forbidden',
+              message: 'Sign-in required.',
+            },
+          ],
+        })
+      }
+
       if (String(input) === '/api/health') {
         return createJsonResponse(200, {
           data: {
@@ -253,20 +265,17 @@ describe('App', () => {
     renderApp()
 
     expect(
-      screen.getByRole('heading', {
+      await screen.findByRole('heading', {
         name: 'Sign in to ArtificialContact.',
       }),
     ).toBeInTheDocument()
 
     expect(
       screen.getByRole('link', { name: /continue with microsoft/i }),
-    ).toHaveAttribute('href', '/.auth/login/aad?post_login_redirect_uri=%2Fme')
+    ).toHaveAttribute('href', '/.auth/login/aad?post_login_redirect_uri=%2F')
     expect(
       screen.getByRole('link', { name: /continue with github/i }),
-    ).toHaveAttribute(
-      'href',
-      '/.auth/login/github?post_login_redirect_uri=%2Fme',
-    )
+    ).toHaveAttribute('href', '/.auth/login/github?post_login_redirect_uri=%2F')
     expect(
       screen.getByRole('button', { name: /sign out/i }),
     ).toBeInTheDocument()
@@ -274,6 +283,56 @@ describe('App', () => {
     expect(await screen.findByText('Healthy')).toBeInTheDocument()
     expect(screen.getByText(/sha-1234/)).toBeInTheDocument()
     expect(screen.getByText(/Cosmos ping:/)).toBeInTheDocument()
+  })
+
+  it('renders the authenticated home feed on the root route when a session exists', async () => {
+    mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(200, {
+          data: createResolvedMeProfile(),
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/feed') {
+        return createJsonResponse(200, {
+          data: [
+            {
+              id: 'feed-1',
+              postId: 'post-1',
+              authorId: 'u1',
+              authorHandle: 'ada',
+              authorDisplayName: 'Ada Lovelace',
+              authorAvatarUrl: null,
+              excerpt: 'A fresh feed entry from the personalised timeline.',
+              media: [],
+              counters: {
+                likes: 9,
+                replies: 2,
+              },
+              createdAt: '2026-04-15T00:00:00.000Z',
+            },
+          ],
+          cursor: null,
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    renderApp()
+
+    expect(await screen.findByRole('heading', { name: 'Home feed' })).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        'A fresh feed entry from the personalised timeline.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Edit profile' })).toHaveAttribute(
+      'href',
+      '/me',
+    )
   })
 
   it('loads the /me profile editor with existing profile data', async () => {

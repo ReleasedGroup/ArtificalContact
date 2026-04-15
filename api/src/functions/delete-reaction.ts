@@ -13,21 +13,31 @@ import { CosmosPostStore } from '../lib/cosmos-post-store.js'
 import { withHttpAuth } from '../lib/http-auth.js'
 import { isPubliclyVisiblePost, type PostStore } from '../lib/posts.js'
 import {
-  applyReactionMutation,
-  buildCreateReactionRequestSchema,
+  applyReactionDeletion,
+  buildReactionDocumentId,
   createReactionRepository,
-  getErrorStatusCode,
-  mapReactionValidationIssues,
-  ReactionPolicyConflictError,
-  type ReactionPolicy,
+  DEFAULT_EMOJI_VALUE_MAX_LENGTH,
+  type ReactionDocument,
   type ReactionRepository,
 } from '../lib/reactions.js'
 
-export interface CreateReactionHandlerDependencies {
+export interface DeleteReactionHandlerDependencies {
   now?: () => Date
   postStoreFactory?: () => PostStore
-  reactionPolicy?: ReactionPolicy
   reactionRepositoryFactory?: () => ReactionRepository
+}
+
+interface DeleteReactionResponse {
+  unreact: {
+    id: string
+    postId: string
+    userId: string
+    reactionExisted: boolean
+    deletedReaction: boolean
+    removedEmojiValue: string | null
+    emojiValueRemoved: boolean
+  }
+  reaction: ReactionDocument | null
 }
 
 let cachedPostStore: CosmosPostStore | undefined
@@ -42,17 +52,21 @@ function normalizeRoutePostId(postId: string | undefined): string | null {
   return trimmed ? trimmed : null
 }
 
-export function buildCreateReactionHandler(
-  dependencies: CreateReactionHandlerDependencies = {},
+function normalizeOptionalEmojiValue(value: string | null): string | null {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : null
+}
+
+export function buildDeleteReactionHandler(
+  dependencies: DeleteReactionHandlerDependencies = {},
 ) {
   const now = dependencies.now ?? (() => new Date())
   const postStoreFactory =
     dependencies.postStoreFactory ?? (() => getPostStore())
   const reactionRepositoryFactory =
     dependencies.reactionRepositoryFactory ?? (() => createReactionRepository())
-  const requestSchema = buildCreateReactionRequestSchema()
 
-  return async function createReactionHandler(
+  return async function deleteReactionHandler(
     request: HttpRequest,
     context: InvocationContext,
   ): Promise<HttpResponseInit> {
@@ -68,7 +82,7 @@ export function buildCreateReactionHandler(
       return createErrorResponse(403, {
         code: 'auth.forbidden',
         message:
-          'The authenticated user must have an active profile before reacting to posts.',
+          'The authenticated user must have an active profile before removing reactions from posts.',
       })
     }
 
@@ -81,6 +95,40 @@ export function buildCreateReactionHandler(
             code: 'invalid_post_id',
             message: 'The post id path parameter is required.',
             field: 'id',
+          },
+        ],
+      })
+    }
+
+    const emojiSelectorProvided = request.query.has('emoji')
+    const removedEmojiValue = normalizeOptionalEmojiValue(
+      request.query.get('emoji'),
+    )
+
+    if (emojiSelectorProvided && removedEmojiValue === null) {
+      return createJsonEnvelopeResponse(400, {
+        data: null,
+        errors: [
+          {
+            code: 'invalid_emoji_value',
+            message: 'The emoji query parameter must be a non-empty string.',
+            field: 'emoji',
+          },
+        ],
+      })
+    }
+
+    if (
+      removedEmojiValue !== null &&
+      removedEmojiValue.length > DEFAULT_EMOJI_VALUE_MAX_LENGTH
+    ) {
+      return createJsonEnvelopeResponse(400, {
+        data: null,
+        errors: [
+          {
+            code: 'invalid_emoji_value',
+            message: `Emoji selectors must be ${DEFAULT_EMOJI_VALUE_MAX_LENGTH} characters or fewer.`,
+            field: 'emoji',
           },
         ],
       })
@@ -122,25 +170,6 @@ export function buildCreateReactionHandler(
       })
     }
 
-    let requestBody: unknown
-
-    try {
-      requestBody = await request.json()
-    } catch {
-      return createErrorResponse(400, {
-        code: 'invalid_json',
-        message: 'The request body must be valid JSON.',
-      })
-    }
-
-    const parsedBody = requestSchema.safeParse(requestBody)
-    if (!parsedBody.success) {
-      return createJsonEnvelopeResponse(400, {
-        data: null,
-        errors: mapReactionValidationIssues(parsedBody.error.issues),
-      })
-    }
-
     try {
       const post = await postStore.getPostById(postId)
       if (post === null || !isPubliclyVisiblePost(post)) {
@@ -156,11 +185,16 @@ export function buildCreateReactionHandler(
         })
       }
     } catch (error) {
-      context.log('Failed to resolve the requested post for a reaction.', {
-        error:
-          error instanceof Error ? error.message : 'Unknown post lookup error.',
-        postId,
-      })
+      context.log(
+        'Failed to resolve the requested post for a reaction delete.',
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Unknown post lookup error.',
+          postId,
+        },
+      )
 
       return createErrorResponse(500, {
         code: 'server.post_lookup_failed',
@@ -169,115 +203,79 @@ export function buildCreateReactionHandler(
     }
 
     try {
-      let existingReaction = await reactionRepository.getByPostAndUser(
+      const existingReaction = await reactionRepository.getByPostAndUser(
         postId,
         authenticatedUser.id,
       )
-
-      const firstMutationAt = now()
-      let mutation = applyReactionMutation(existingReaction, parsedBody.data, {
-        postId,
-        userId: authenticatedUser.id,
-        now: firstMutationAt,
-        ...(dependencies.reactionPolicy === undefined
+      const deletion = applyReactionDeletion(existingReaction, {
+        now: now(),
+        ...(removedEmojiValue === null
           ? {}
-          : { policy: dependencies.reactionPolicy }),
+          : { emojiValue: removedEmojiValue }),
       })
+      const reactionId = buildReactionDocumentId(postId, authenticatedUser.id)
 
-      let storedReaction = mutation.reaction
-      let status = mutation.created ? 201 : 200
-
-      if (mutation.created) {
-        try {
-          storedReaction = await reactionRepository.create(mutation.reaction)
-        } catch (error) {
-          if (getErrorStatusCode(error) !== 409) {
-            throw error
-          }
-
-          existingReaction = await reactionRepository.getByPostAndUser(
+      if (deletion.changed) {
+        if (deletion.deleted) {
+          await reactionRepository.deleteByPostAndUser(
             postId,
             authenticatedUser.id,
           )
-
-          if (existingReaction === null) {
-            throw error
-          }
-
-          const retryMutationAt = now()
-
-          mutation = applyReactionMutation(existingReaction, parsedBody.data, {
-            postId,
-            userId: authenticatedUser.id,
-            now: retryMutationAt,
-            ...(dependencies.reactionPolicy === undefined
-              ? {}
-              : { policy: dependencies.reactionPolicy }),
-          })
-
-          storedReaction = mutation.changed
-            ? await reactionRepository.upsert(mutation.reaction)
-            : existingReaction
-          status = 200
+        } else if (deletion.reaction !== null) {
+          await reactionRepository.upsert(deletion.reaction)
         }
-      } else if (mutation.changed) {
-        storedReaction = await reactionRepository.upsert(mutation.reaction)
-      } else if (existingReaction !== null) {
-        storedReaction = existingReaction
       }
 
-      context.log('Recorded post reaction.', {
+      const responseBody: DeleteReactionResponse = {
+        unreact: {
+          id: reactionId,
+          postId,
+          userId: authenticatedUser.id,
+          reactionExisted: existingReaction !== null,
+          deletedReaction: deletion.deleted,
+          removedEmojiValue,
+          emojiValueRemoved: deletion.emojiValueRemoved,
+        },
+        reaction: deletion.reaction,
+      }
+
+      context.log('Processed reaction delete request.', {
         actorId: authenticatedUser.id,
         postId,
-        reactionId: storedReaction.id,
-        reactionType: parsedBody.data.type,
-        status,
+        reactionId,
+        reactionExisted: existingReaction !== null,
+        deletedReaction: deletion.deleted,
+        removedEmojiValue,
+        emojiValueRemoved: deletion.emojiValueRemoved,
       })
 
-      return createSuccessResponse(
-        {
-          reaction: storedReaction,
-        },
-        status,
-      )
+      return createSuccessResponse(responseBody)
     } catch (error) {
-      if (error instanceof ReactionPolicyConflictError) {
-        return createJsonEnvelopeResponse(409, {
-          data: null,
-          errors: [
-            {
-              code: 'reaction_conflict',
-              message: error.message,
-            },
-          ],
-        })
-      }
-
-      context.log('Failed to record the requested reaction.', {
+      context.log('Failed to delete the requested reaction.', {
         error:
           error instanceof Error
             ? error.message
-            : 'Unknown reaction write error.',
+            : 'Unknown reaction delete error.',
         actorId: authenticatedUser.id,
         postId,
-        reactionType: parsedBody.data.type,
+        removedEmojiValue,
       })
 
       return createErrorResponse(500, {
-        code: 'server.reaction_create_failed',
-        message: 'Unable to record the reaction.',
+        code: 'server.reaction_delete_failed',
+        message: 'Unable to delete the requested reaction.',
       })
     }
   }
 }
 
-export const createReactionHandler = withHttpAuth(buildCreateReactionHandler())
+export const deleteReactionHandler = withHttpAuth(buildDeleteReactionHandler())
 
-export function registerCreateReactionFunction() {
-  app.http('createReaction', {
-    methods: ['POST'],
+export function registerDeleteReactionFunction() {
+  app.http('deleteReaction', {
+    methods: ['DELETE'],
     authLevel: 'anonymous',
     route: 'posts/{id}/reactions',
-    handler: createReactionHandler,
+    handler: deleteReactionHandler,
   })
 }

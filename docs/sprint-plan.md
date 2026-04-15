@@ -117,6 +117,7 @@
 **Definition of done**
 - All four reaction styles work and counters are eventually consistent within 2 seconds under load
 - Reacting twice with the same type is a no-op
+- Deleting with `DELETE /api/posts/{id}/reactions?emoji={value}` removes only that emoji while preserving any remaining caller reaction state
 
 ---
 

@@ -3,6 +3,7 @@ import { registerCreateReactionFunction } from './functions/create-reaction.js'
 import { registerCounterFunction } from './functions/counter.js'
 import { registerDeleteFollowFunction } from './functions/delete-follow.js'
 import { registerDeletePostFunction } from './functions/delete-post.js'
+import { registerDeleteReactionFunction } from './functions/delete-reaction.js'
 import { registerFeedFanOutFunction } from './functions/feed-fanout.js'
 import { registerFollowUserFunction } from './functions/follow-user.js'
 import { registerFollowersMirrorFunction } from './functions/followers-mirror.js'
@@ -27,6 +28,7 @@ registerCreateReactionFunction()
 registerCounterFunction()
 registerDeleteFollowFunction()
 registerDeletePostFunction()
+registerDeleteReactionFunction()
 registerFeedFanOutFunction()
 registerFollowUserFunction()
 registerFollowersMirrorFunction()

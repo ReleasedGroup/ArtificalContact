@@ -16,6 +16,7 @@ npm run test
 ### `web`
 
 - Vitest + Testing Library validate that the sign-in screen renders both Static Web Apps auth provider links, clears the TanStack Query cache on sign-out, and displays a successful `/api/health` response
+- Vitest + Testing Library validate that the authenticated `/` home route renders the personalised feed, loads additional pages through infinite scroll, and supports touch pull-to-refresh
 - Vitest + Testing Library validate that `/u/{handle}` renders the public profile shell, surfaces the API-backed not-found state, and returns to loading immediately when the handle changes
 - Vitest + Testing Library validate that `/p/{id}` loads the standalone post detail view, fetches thread context, and handles missing-post states safely
 - Vitest + Testing Library validate that `/p/{id}` renders mixed-media posts with inline image, GIF, video, and audio attachments
@@ -46,6 +47,7 @@ npm run test
 - Vitest covers the `followersMirrorFn` change-feed mirror logic, including deterministic ids, soft-delete cleanup, duplicate deliveries, and invalid-document skips
 - Vitest covers the follow-counter change-feed logic, including inserts, soft deletes, duplicate deliveries, and missing-user safety
 - Vitest covers the `counterFn` reply-counter change-feed logic, including inserts, soft deletes, duplicate deliveries, and missing-parent safety
+- Vitest covers the `reactionCounterFn` reaction-counter change-feed logic, including idempotent recomputation, additive emoji totals, duplicate deliveries, and missing-post safety
 - Vitest covers the `feedFanOutFn` worker, including duplicate deliveries, follower cap enforcement, and safe skips for replies, GitHub posts, and deleted posts
 - Vitest covers the media post-processing logic, default visual generation, and function dependency wiring, including deterministic `media` upserts, content-safety flagging, derived-blob recursion guards, public media URL rewriting, and image thumbnail variant generation
 - TypeScript compilation validates the Azure Functions source and module graph

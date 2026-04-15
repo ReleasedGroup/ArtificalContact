@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyReactionDeletion,
   applyReactionMutation,
   buildCreateReactionRequestSchema,
+  DEFAULT_REACTION_POLICY,
+  ReactionPolicyConflictError,
   type ReactionDocument,
 } from '../src/lib/reactions.js'
 
@@ -171,6 +174,57 @@ describe('applyReactionMutation', () => {
     })
   })
 
+  it('can restrict the document to a single emoji value without changing handler code', () => {
+    const result = applyReactionMutation(
+      createStoredReaction({
+        emojiValues: ['🎉', '🔥'],
+      }),
+      { type: 'emoji', value: '👏' },
+      {
+        postId: 'post-1',
+        userId: 'user-1',
+        now: new Date('2026-04-15T05:45:00.000Z'),
+        policy: {
+          ...DEFAULT_REACTION_POLICY,
+          allowMultipleEmojiValues: false,
+        },
+      },
+    )
+
+    expect(result).toEqual({
+      created: false,
+      changed: true,
+      reaction: createStoredReaction({
+        emojiValues: ['👏'],
+        updatedAt: '2026-04-15T05:45:00.000Z',
+      }),
+    })
+  })
+
+  it('rejects new sentiment when emoji coexistence is disabled', () => {
+    const attempt = () =>
+      applyReactionMutation(
+        createStoredReaction({
+          emojiValues: ['🎉'],
+        }),
+        { type: 'like' },
+        {
+          postId: 'post-1',
+          userId: 'user-1',
+          now: new Date('2026-04-15T05:50:00.000Z'),
+          policy: {
+            ...DEFAULT_REACTION_POLICY,
+            allowEmojiWithSentiment: false,
+          },
+        },
+      )
+
+    expect(attempt).toThrowError(ReactionPolicyConflictError)
+    expect(attempt).toThrowError(
+      'Like and dislike cannot be combined with emoji reactions.',
+    )
+  })
+
   it('replaces the stored gif value when a new gif reaction is posted', () => {
     const result = applyReactionMutation(
       createStoredReaction({
@@ -191,6 +245,95 @@ describe('applyReactionMutation', () => {
         gifValue: 'gif://new',
         updatedAt: '2026-04-15T06:00:00.000Z',
       }),
+    })
+  })
+})
+
+describe('applyReactionDeletion', () => {
+  it('deletes the whole reaction document when no emoji selector is provided', () => {
+    const result = applyReactionDeletion(createStoredReaction(), {
+      now: new Date('2026-04-15T07:00:00.000Z'),
+    })
+
+    expect(result).toEqual({
+      changed: true,
+      deleted: true,
+      reaction: null,
+      emojiValueRemoved: false,
+    })
+  })
+
+  it('removes a selected emoji while preserving other reaction state', () => {
+    const result = applyReactionDeletion(
+      createStoredReaction({
+        sentiment: 'like',
+        emojiValues: ['🎉', '🔥'],
+        gifValue: 'gif://party',
+      }),
+      {
+        now: new Date('2026-04-15T07:05:00.000Z'),
+        emojiValue: '🎉',
+      },
+    )
+
+    expect(result).toEqual({
+      changed: true,
+      deleted: false,
+      reaction: createStoredReaction({
+        sentiment: 'like',
+        emojiValues: ['🔥'],
+        gifValue: 'gif://party',
+        updatedAt: '2026-04-15T07:05:00.000Z',
+      }),
+      emojiValueRemoved: true,
+    })
+  })
+
+  it('deletes the reaction document when the last emoji is removed', () => {
+    const result = applyReactionDeletion(
+      createStoredReaction({
+        emojiValues: ['🎉'],
+      }),
+      {
+        now: new Date('2026-04-15T07:10:00.000Z'),
+        emojiValue: '🎉',
+      },
+    )
+
+    expect(result).toEqual({
+      changed: true,
+      deleted: true,
+      reaction: null,
+      emojiValueRemoved: true,
+    })
+  })
+
+  it('treats missing reactions or missing emoji values as no-ops', () => {
+    expect(
+      applyReactionDeletion(null, {
+        now: new Date('2026-04-15T07:15:00.000Z'),
+      }),
+    ).toEqual({
+      changed: false,
+      deleted: false,
+      reaction: null,
+      emojiValueRemoved: false,
+    })
+
+    const existingReaction = createStoredReaction({
+      emojiValues: ['🎉'],
+    })
+
+    expect(
+      applyReactionDeletion(existingReaction, {
+        now: new Date('2026-04-15T07:20:00.000Z'),
+        emojiValue: '🔥',
+      }),
+    ).toEqual({
+      changed: false,
+      deleted: false,
+      reaction: existingReaction,
+      emojiValueRemoved: false,
     })
   })
 })
