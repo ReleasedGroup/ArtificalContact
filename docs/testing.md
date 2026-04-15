@@ -15,7 +15,7 @@ npm run test
 
 ### `web`
 
-- Vitest + Testing Library validate that the foundation shell renders and displays a successful `/api/health` response
+- Vitest + Testing Library validate that the sign-in screen renders both Static Web Apps auth provider links and displays a successful `/api/health` response
 - ESLint enforces the TypeScript/React code style
 - Vite production build verifies the SPA compiles cleanly
 
