@@ -16,6 +16,7 @@ export const DEFAULT_NOTIFICATIONS_CONTAINER_NAME = 'notifications'
 export const NOTIFICATION_TTL_SECONDS = 60 * 60 * 24 * 90
 export const DEFAULT_NOTIFICATIONS_PAGE_SIZE = 20
 export const MAX_NOTIFICATIONS_PAGE_SIZE = 100
+export const DEFAULT_REACTION_NOTIFICATION_HOURLY_THRESHOLD = 3
 
 export type NotificationEventType = 'follow' | 'reply' | 'reaction' | 'mention'
 
@@ -38,6 +39,10 @@ export interface NotificationDocument {
   readAt: string | null
   createdAt: string
   updatedAt: string
+  eventCount: number
+  coalesced: boolean
+  coalescedWindowStart: string | null
+  coalescedRelatedEntityIds: string[]
   ttl: number
 }
 
@@ -45,6 +50,14 @@ export type StoredNotificationDocument = NotificationDocument
 
 export interface NotificationStore {
   upsertNotification(document: NotificationDocument): Promise<void>
+  listNotificationsByActorAndWindow(
+    targetUserId: string,
+    eventType: NotificationEventType,
+    actorUserId: string,
+    windowStart: string,
+    windowEndExclusive: string,
+  ): Promise<NotificationDocument[]>
+  deleteNotification(targetUserId: string, notificationId: string): Promise<void>
 }
 
 export interface NotificationReadStore {
@@ -101,6 +114,9 @@ export interface NotificationEntry {
   readAt: string | null
   createdAt: string
   updatedAt: string
+  eventCount: number
+  coalesced: boolean
+  coalescedWindowStart: string | null
 }
 
 export interface NotificationPage {
@@ -158,6 +174,20 @@ function toNonNegativeInteger(value: unknown): number {
     : 0
 }
 
+function toDistinctStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return [
+    ...new Set(
+      value
+        .map((entry) => toNonEmptyString(entry))
+        .filter((entry): entry is string => entry !== null),
+    ),
+  ]
+}
+
 function collapseDocumentsToLatest<T extends { id?: string | null }>(
   documents: readonly T[],
 ): T[] {
@@ -177,6 +207,74 @@ function collapseDocumentsToLatest<T extends { id?: string | null }>(
 
 function buildExcerpt(text: unknown): string | null {
   return toNonEmptyString(text)
+}
+
+function buildUtcHourWindow(
+  timestamp: string,
+): { start: string; endExclusive: string } | null {
+  const parsedTimestamp = new Date(timestamp)
+  if (Number.isNaN(parsedTimestamp.getTime())) {
+    return null
+  }
+
+  const hourStart = new Date(parsedTimestamp)
+  hourStart.setUTCMinutes(0, 0, 0)
+
+  const hourEnd = new Date(hourStart)
+  hourEnd.setUTCHours(hourEnd.getUTCHours() + 1)
+
+  return {
+    start: hourStart.toISOString(),
+    endExclusive: hourEnd.toISOString(),
+  }
+}
+
+function extractCoalescedEntityIds(document: NotificationDocument): string[] {
+  const coalescedIds = toDistinctStringArray(document.coalescedRelatedEntityIds)
+  if (coalescedIds.length > 0) {
+    return coalescedIds
+  }
+
+  const relatedEntityId = toNonEmptyString(document.relatedEntityId)
+  return relatedEntityId === null ? [] : [relatedEntityId]
+}
+
+function getEarliestCreatedAt(
+  documents: readonly NotificationDocument[],
+  fallback: string,
+): string {
+  let earliestTimestamp = fallback
+  let earliestValue = new Date(fallback).getTime()
+
+  if (Number.isNaN(earliestValue)) {
+    return fallback
+  }
+
+  for (const document of documents) {
+    const candidateValue = new Date(document.createdAt).getTime()
+    if (Number.isNaN(candidateValue)) {
+      continue
+    }
+
+    if (candidateValue < earliestValue) {
+      earliestTimestamp = document.createdAt
+      earliestValue = candidateValue
+    }
+  }
+
+  return earliestTimestamp
+}
+
+function buildReactionThrottleNotificationId(
+  targetUserId: string,
+  actorUserId: string,
+  windowStart: string,
+): string {
+  return buildNotificationId(
+    targetUserId,
+    'reaction',
+    `coalesced:${actorUserId}:${windowStart}`,
+  )
 }
 
 function buildReactionType(
@@ -217,16 +315,23 @@ function buildNotificationDocument(
   createdAt: string,
   updatedAt: string,
   options: {
+    notificationId?: string
     postId?: string | null
     threadId?: string | null
     parentId?: string | null
     reactionType?: ReactionType | null
     reactionValues?: string[]
     excerpt?: string | null
+    eventCount?: number
+    coalesced?: boolean
+    coalescedWindowStart?: string | null
+    coalescedRelatedEntityIds?: string[]
   } = {},
 ): NotificationDocument {
   return {
-    id: buildNotificationId(targetUserId, eventType, relatedEntityId),
+    id:
+      options.notificationId ??
+      buildNotificationId(targetUserId, eventType, relatedEntityId),
     type: 'notification',
     targetUserId,
     actorUserId: actor.userId,
@@ -244,6 +349,10 @@ function buildNotificationDocument(
     readAt: null,
     createdAt,
     updatedAt,
+    eventCount: options.eventCount ?? 1,
+    coalesced: options.coalesced ?? false,
+    coalescedWindowStart: options.coalescedWindowStart ?? null,
+    coalescedRelatedEntityIds: options.coalescedRelatedEntityIds ?? [],
     ttl: NOTIFICATION_TTL_SECONDS,
   }
 }
@@ -419,6 +528,9 @@ export function buildNotificationEntry(
     readAt: toNonEmptyString(document.readAt),
     createdAt,
     updatedAt,
+    eventCount: toNonNegativeInteger(document.eventCount),
+    coalesced: document.coalesced === true,
+    coalescedWindowStart: toNonEmptyString(document.coalescedWindowStart),
   }
 }
 
@@ -639,9 +751,20 @@ export async function syncReactionNotificationsBatch(
   profileStore: NotificationProfileStore,
   notificationStore: NotificationStore,
   logger: LoggerLike = nullLogger,
+  options: {
+    hourlyActorThrottleThreshold?: number
+  } = {},
 ): Promise<void> {
   const latestDocuments = collapseDocumentsToLatest(documents)
   const actorCache = new Map<string, NotificationActor>()
+  const windowNotificationCache = new Map<string, NotificationDocument[]>()
+  const hourlyActorThrottleThreshold = Math.max(
+    1,
+    Math.trunc(
+      options.hourlyActorThrottleThreshold ??
+        DEFAULT_REACTION_NOTIFICATION_HOURLY_THRESHOLD,
+    ),
+  )
   let upsertCount = 0
 
   for (const document of latestDocuments) {
@@ -700,23 +823,136 @@ export async function syncReactionNotificationsBatch(
       actorCache,
     )
 
-    await notificationStore.upsertNotification(
-      buildNotificationDocument(
+    const reactionHourWindow = buildUtcHourWindow(createdAt)
+
+    if (reactionHourWindow === null) {
+      await notificationStore.upsertNotification(
+        buildNotificationDocument(
+          'reaction',
+          actor,
+          targetUserId,
+          reactionId,
+          createdAt,
+          updatedAt,
+          {
+            postId,
+            threadId: toNonEmptyString(post.threadId) ?? postId,
+            parentId: toNonEmptyString(post.parentId),
+            reactionType: buildReactionType(document),
+            reactionValues: buildReactionValues(document),
+            excerpt: buildExcerpt(post.text),
+          },
+        ),
+      )
+      upsertCount += 1
+      continue
+    }
+
+    const cacheKey = [
+      targetUserId,
+      'reaction',
+      actorUserId,
+      reactionHourWindow.start,
+    ].join(':')
+    let windowNotifications = windowNotificationCache.get(cacheKey)
+
+    if (windowNotifications === undefined) {
+      windowNotifications = await notificationStore.listNotificationsByActorAndWindow(
+        targetUserId,
+        'reaction',
+        actorUserId,
+        reactionHourWindow.start,
+        reactionHourWindow.endExclusive,
+      )
+      windowNotificationCache.set(cacheKey, windowNotifications)
+    }
+
+    const representedReactionIds = new Set(
+      windowNotifications.flatMap((notification) =>
+        extractCoalescedEntityIds(notification),
+      ),
+    )
+    const reactionAlreadyRepresented = representedReactionIds.has(reactionId)
+    const aggregateNotificationId = buildReactionThrottleNotificationId(
+      targetUserId,
+      actorUserId,
+      reactionHourWindow.start,
+    )
+    const shouldCoalesce =
+      windowNotifications.some(
+        (notification) => notification.id === aggregateNotificationId,
+      ) ||
+      (!reactionAlreadyRepresented &&
+        representedReactionIds.size + 1 > hourlyActorThrottleThreshold)
+
+    if (shouldCoalesce) {
+      if (!reactionAlreadyRepresented) {
+        representedReactionIds.add(reactionId)
+      }
+
+      for (const notification of windowNotifications) {
+        if (notification.id === aggregateNotificationId) {
+          continue
+        }
+
+        await notificationStore.deleteNotification(targetUserId, notification.id)
+      }
+
+      const aggregateNotification = buildNotificationDocument(
         'reaction',
         actor,
         targetUserId,
         reactionId,
-        createdAt,
+        getEarliestCreatedAt(windowNotifications, createdAt),
         updatedAt,
         {
+          notificationId: aggregateNotificationId,
           postId,
           threadId: toNonEmptyString(post.threadId) ?? postId,
           parentId: toNonEmptyString(post.parentId),
           reactionType: buildReactionType(document),
           reactionValues: buildReactionValues(document),
           excerpt: buildExcerpt(post.text),
+          eventCount: representedReactionIds.size,
+          coalesced: true,
+          coalescedWindowStart: reactionHourWindow.start,
+          coalescedRelatedEntityIds: [...representedReactionIds],
         },
-      ),
+      )
+
+      await notificationStore.upsertNotification(aggregateNotification)
+      windowNotificationCache.set(cacheKey, [aggregateNotification])
+      upsertCount += 1
+      continue
+    }
+
+    const individualNotification = buildNotificationDocument(
+      'reaction',
+      actor,
+      targetUserId,
+      reactionId,
+      createdAt,
+      updatedAt,
+      {
+        postId,
+        threadId: toNonEmptyString(post.threadId) ?? postId,
+        parentId: toNonEmptyString(post.parentId),
+        reactionType: buildReactionType(document),
+        reactionValues: buildReactionValues(document),
+        excerpt: buildExcerpt(post.text),
+      },
+    )
+
+    await notificationStore.upsertNotification(individualNotification)
+    windowNotificationCache.set(
+      cacheKey,
+      reactionAlreadyRepresented
+        ? windowNotifications.map((notification) =>
+            notification.relatedEntityId === reactionId
+              ? individualNotification
+              : notification,
+          )
+        : [...windowNotifications, individualNotification],
     )
     upsertCount += 1
   }

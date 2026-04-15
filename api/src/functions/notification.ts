@@ -1,4 +1,5 @@
 import { app, type InvocationContext } from '@azure/functions'
+import { getEnvironmentConfig } from '../lib/config.js'
 import { CosmosNotificationStore } from '../lib/cosmos-notification-store.js'
 import { CosmosPostStore } from '../lib/cosmos-post-store.js'
 import { CosmosUserProfileStore } from '../lib/cosmos-user-profile-store.js'
@@ -94,6 +95,10 @@ export function buildReactionNotificationFn(
       profileStoreFactory(),
       notificationStoreFactory(),
       context,
+      {
+        hourlyActorThrottleThreshold:
+          getEnvironmentConfig().reactionNotificationHourlyThreshold,
+      },
     )
   }
 }
