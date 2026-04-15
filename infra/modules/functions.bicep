@@ -36,7 +36,11 @@ var keyVaultSecretsUserRoleDefinitionId = subscriptionResourceId(
 )
 var searchIndexDataContributorRoleDefinitionId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
-  '7ca7617b-dad8-4a2f-bb0a-67fef9d4f7f0'
+  '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
+)
+var searchIndexDataReaderRoleDefinitionId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  '1407120a-92aa-4202-b7e9-c0e197c71c8f'
 )
 var blobServiceUri = 'https://${storageAccountName}.blob.${environment().suffixes.storage}'
 var deploymentContainerUri = '${blobServiceUri}/${deploymentContainerName}'
@@ -239,6 +243,16 @@ resource searchIndexDataContributorRoleAssignment 'Microsoft.Authorization/roleA
     principalId: functionApp.identity.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: searchIndexDataContributorRoleDefinitionId
+  }
+}
+
+resource searchIndexDataReaderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(searchResourceId, functionApp.name, 'search-index-data-reader')
+  scope: searchService
+  properties: {
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: searchIndexDataReaderRoleDefinitionId
   }
 }
 
