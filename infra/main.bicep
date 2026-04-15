@@ -68,9 +68,6 @@ module search './modules/search.bicep' = {
     location: location
     names: naming.outputs.names
     tags: tags
-    cosmosAccountName: cosmos.outputs.accountName
-    cosmosDatabaseName: cosmos.outputs.databaseName
-    cosmosPostsContainerName: cosmos.outputs.postsContainerName
   }
 }
 
@@ -160,5 +157,9 @@ output frontDoorCustomDomainValidationExpiry string = frontDoor.outputs.customDo
 output frontDoorHostName string = frontDoor.outputs.endpointHostName
 output functionAppName string = functions.outputs.functionAppName
 output keyVaultUri string = observability.outputs.keyVaultUri
+output searchEndpoint string = search.outputs.endpoint
+output searchPostsIndexName string = search.outputs.postsIndexName
+output searchUsersIndexName string = search.outputs.usersIndexName
+output searchHashtagsIndexName string = search.outputs.hashtagsIndexName
 output staticWebAppLocation string = staticWebApp.outputs.location
 output staticWebAppUrl string = 'https://${staticWebApp.outputs.defaultHostname}'

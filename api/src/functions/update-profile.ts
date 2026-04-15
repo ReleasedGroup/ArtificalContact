@@ -12,6 +12,8 @@ import {
 import { resolveAuthenticatedPrincipal } from '../lib/auth.js'
 import { CosmosUsersByHandleMirrorStore } from '../lib/cosmos-users-by-handle-mirror-store.js'
 import {
+  buildMirrorDocument,
+  buildUserHandleStateId,
   normalizeHandleLower,
   type UsersByHandleMirrorStore,
 } from '../lib/users-by-handle-mirror.js'
@@ -100,9 +102,9 @@ export function buildUpdateProfileHandler(
       })
     }
 
-    if (parsedBody.data.handle !== undefined) {
-      let handleStore: UsersByHandleMirrorStore
+    let handleStore: UsersByHandleMirrorStore | undefined
 
+    if (parsedBody.data.handle !== undefined) {
       try {
         handleStore = handleStoreFactory()
       } catch (error) {
@@ -159,12 +161,43 @@ export function buildUpdateProfileHandler(
     }
 
     try {
-      const storedUser = await persistProfileUpdate(
+      const { previousHandleLower, storedUser } = await persistProfileUpdate(
         principalResult.principal,
         repository,
         parsedBody.data,
         now,
       )
+
+      const currentHandleLower = normalizeHandleLower(storedUser)
+      const shouldSyncHandleMirror =
+        parsedBody.data.handle !== undefined ||
+        previousHandleLower !== currentHandleLower
+
+      if (shouldSyncHandleMirror) {
+        try {
+          handleStore ??= handleStoreFactory()
+          await syncStoredUserHandleMirror(
+            storedUser,
+            previousHandleLower,
+            handleStore,
+          )
+        } catch (error) {
+          context.log('Failed to synchronize the usersByHandle mirror.', {
+            currentHandle: currentHandleLower,
+            error:
+              error instanceof Error
+                ? error.message
+                : 'Unknown usersByHandle synchronization error.',
+            previousHandle: previousHandleLower,
+            userId: principalResult.principal.subject,
+          })
+
+          return createErrorResponse(500, {
+            code: 'server.user_update_failed',
+            message: 'Unable to update the authenticated user profile.',
+          })
+        }
+      }
 
       context.log('Updated authenticated profile.', {
         identityProvider: storedUser.identityProvider,
@@ -237,18 +270,24 @@ async function persistProfileUpdate(
   const existingUser = await repository.getById(principal.subject)
 
   if (existingUser !== null) {
-    return repository.upsert(
-      applyProfileUpdate(existingUser, profileUpdate, now()),
-    )
+    return {
+      previousHandleLower: normalizeHandleLower(existingUser),
+      storedUser: await repository.upsert(
+        applyProfileUpdate(existingUser, profileUpdate, now()),
+      ),
+    }
   }
 
   const createdAt = now()
   const pendingUser = createPendingUserDocument(principal, createdAt)
 
   try {
-    return await repository.create(
-      applyProfileUpdate(pendingUser, profileUpdate, createdAt),
-    )
+    return {
+      previousHandleLower: null,
+      storedUser: await repository.create(
+        applyProfileUpdate(pendingUser, profileUpdate, createdAt),
+      ),
+    }
   } catch (error) {
     if (getErrorStatusCode(error) !== 409) {
       throw error
@@ -259,8 +298,42 @@ async function persistProfileUpdate(
       throw error
     }
 
-    return repository.upsert(
-      applyProfileUpdate(concurrentlyCreatedUser, profileUpdate, now()),
-    )
+    return {
+      previousHandleLower: normalizeHandleLower(concurrentlyCreatedUser),
+      storedUser: await repository.upsert(
+        applyProfileUpdate(concurrentlyCreatedUser, profileUpdate, now()),
+      ),
+    }
   }
+}
+
+async function syncStoredUserHandleMirror(
+  storedUser: Awaited<ReturnType<UserRepository['upsert']>>,
+  previousHandleLower: string | null,
+  handleStore: UsersByHandleMirrorStore,
+): Promise<void> {
+  const currentHandleLower = normalizeHandleLower(storedUser)
+
+  if (previousHandleLower !== null && previousHandleLower !== currentHandleLower) {
+    await handleStore.deleteByHandle(previousHandleLower)
+  }
+
+  if (currentHandleLower === null) {
+    await handleStore.deleteStateByUserId(storedUser.id)
+    return
+  }
+
+  const mirrorDocument = buildMirrorDocument(storedUser)
+  if (mirrorDocument === null) {
+    throw new Error('Unable to build a usersByHandle mirror document.')
+  }
+
+  await handleStore.upsertMirror(mirrorDocument)
+  await handleStore.upsertState({
+    id: buildUserHandleStateId(storedUser.id),
+    type: 'usersByHandleState',
+    handle: buildUserHandleStateId(storedUser.id),
+    userId: storedUser.id,
+    currentHandle: currentHandleLower,
+  })
 }

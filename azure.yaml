@@ -4,8 +4,15 @@ metadata:
 infra:
   provider: bicep
   path: infra
+hooks:
+  postprovision:
+    shell: pwsh
+    run: node ./scripts/postprovision.mjs
+    continueOnError: false
+    interactive: true
 services:
   api:
+    dist: dist
     host: function
     language: js
     project: ./api

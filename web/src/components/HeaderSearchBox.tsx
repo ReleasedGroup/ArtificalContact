@@ -225,7 +225,10 @@ export function HeaderSearchBox() {
       hasResults)
 
   return (
-    <div ref={containerRef} className="relative w-full max-w-xl">
+    <div
+      ref={containerRef}
+      className={`relative w-full max-w-xl ${shouldRenderDropdown ? 'z-50' : 'z-10'}`}
+    >
       <label className="sr-only" htmlFor={resultsId}>
         Search people and posts
       </label>
@@ -290,7 +293,7 @@ export function HeaderSearchBox() {
       {shouldRenderDropdown && (
         <div
           id={`${resultsId}-dropdown`}
-          className="absolute left-0 right-0 top-[calc(100%+0.75rem)] z-20 rounded-[1.75rem] border border-white/10 bg-slate-950/96 p-4 shadow-2xl shadow-slate-950/45 backdrop-blur"
+          className="absolute left-0 right-0 top-[calc(100%+0.75rem)] z-50 rounded-[1.75rem] border border-white/10 bg-slate-950/96 p-4 shadow-2xl shadow-slate-950/45 backdrop-blur"
         >
           {!hasReachedMinimumLength && (
             <p className="text-sm text-slate-400">

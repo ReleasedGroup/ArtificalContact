@@ -1,7 +1,12 @@
 import { DefaultAzureCredential } from '@azure/identity'
-import { SearchClient, type FacetResult } from '@azure/search-documents'
+import {
+  AzureKeyCredential,
+  SearchClient,
+  type FacetResult,
+} from '@azure/search-documents'
 import { getEnvironmentConfig } from './config.js'
 import { getRequestMetricsEndpoint } from './request-metrics-context.js'
+import { readOptionalValue } from './strings.js'
 import type {
   SearchFacetValue,
   SearchFilters,
@@ -31,10 +36,17 @@ function createSearchClient<TDocument extends { id: string }>(
   endpoint: string,
   indexName: string,
 ) {
+  const searchApiKey =
+    readOptionalValue(process.env.SEARCH_API_KEY) ??
+    readOptionalValue(process.env.SEARCH_QUERY_KEY) ??
+    readOptionalValue(process.env.AZURE_AI_SEARCH_API_KEY)
+
   return new SearchClient<TDocument>(
     endpoint,
     indexName,
-    new DefaultAzureCredential(),
+    searchApiKey
+      ? new AzureKeyCredential(searchApiKey)
+      : new DefaultAzureCredential(),
   )
 }
 
