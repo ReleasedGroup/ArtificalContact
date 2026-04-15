@@ -6,6 +6,8 @@
     "BUILD_SHA": "local-dev",
     "AZURE_REGION": "local",
     "COSMOS_DATABASE_NAME": "acn",
+    "POSTS_CONTAINER_NAME": "posts",
+    "POST_MAX_LENGTH": "280",
     "USERS_CONTAINER_NAME": "users",
     "COSMOS_CONNECTION_STRING": "",
     "COSMOS_ENDPOINT": "",
