@@ -14,11 +14,16 @@ export function buildHealthHandler(
     context: InvocationContext,
   ): Promise<HttpResponseInit> {
     const report = await reportFactory()
+    const healthPayload = report.data
+
+    if (!healthPayload) {
+      throw new Error('Health report did not include a payload.')
+    }
 
     context.log('Health probe completed.', {
-      buildSha: report.data.buildSha,
-      cosmosStatus: report.data.cosmos.status,
-      region: report.data.region,
+      buildSha: healthPayload.buildSha,
+      cosmosStatus: healthPayload.cosmos.status,
+      region: healthPayload.region,
     })
 
     return {

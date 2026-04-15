@@ -1,3 +1,5 @@
+import type { HttpResponseInit } from '@azure/functions'
+
 export interface ApiError {
   code: string
   message: string
@@ -5,6 +7,46 @@ export interface ApiError {
 }
 
 export interface ApiEnvelope<TData> {
-  data: TData
+  data: TData | null
   errors: ApiError[]
+}
+
+const defaultJsonHeaders = {
+  'cache-control': 'no-store',
+  'content-type': 'application/json; charset=utf-8',
+} as const
+
+export function createJsonEnvelopeResponse<TData>(
+  status: number,
+  body: ApiEnvelope<TData>,
+  headers: Record<string, string> = {},
+): HttpResponseInit {
+  return {
+    status,
+    jsonBody: body,
+    headers: {
+      ...defaultJsonHeaders,
+      ...headers,
+    },
+  }
+}
+
+export function createSuccessResponse<TData>(
+  data: TData,
+  status = 200,
+): HttpResponseInit {
+  return createJsonEnvelopeResponse(status, {
+    data,
+    errors: [],
+  })
+}
+
+export function createErrorResponse(
+  status: number,
+  error: ApiError,
+): HttpResponseInit {
+  return createJsonEnvelopeResponse(status, {
+    data: null,
+    errors: [error],
+  })
 }
