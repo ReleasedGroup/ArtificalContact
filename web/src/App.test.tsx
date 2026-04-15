@@ -837,6 +837,134 @@ describe('App', () => {
     ).toHaveAttribute('href', '/')
   })
 
+  it('renders the /search route with posts selected by default', async () => {
+    window.history.replaceState({}, '', '/search?q=evals')
+
+    mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/search?q=evals&type=posts') {
+        return createJsonResponse(200, {
+          data: {
+            '@odata.count': 1,
+            value: [
+              {
+                id: 'post-1',
+                authorHandle: 'ada',
+                text: 'Exploring search sync',
+                hashtags: ['evals'],
+                mediaKinds: ['image'],
+                createdAt: '2026-04-15T00:00:00.000Z',
+                likeCount: 4,
+                replyCount: 2,
+                kind: 'user',
+              },
+            ],
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    renderApp()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Search results' }),
+    ).toBeInTheDocument()
+    expect(await screen.findByText('Exploring search sync')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Posts' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(screen.getByRole('link', { name: '#evals' })).toHaveAttribute(
+      'href',
+      '/search?q=evals&type=hashtags',
+    )
+  })
+
+  it('switches search tabs and updates user results as the query changes', async () => {
+    window.history.replaceState({}, '', '/search?q=ada&type=users')
+
+    mockFetch.mockImplementation(async (input) => {
+      if (String(input) === '/api/search?q=ada&type=users') {
+        return createJsonResponse(200, {
+          data: {
+            '@odata.count': 1,
+            value: [
+              {
+                id: 'user-1',
+                handle: 'ada',
+                displayName: 'Ada Lovelace',
+                bio: 'Designing resilient evaluation loops.',
+                expertise: ['agents', 'evals'],
+                followerCount: 8,
+              },
+            ],
+          },
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/search?q=adal&type=users') {
+        return createJsonResponse(200, {
+          data: {
+            '@odata.count': 1,
+            value: [
+              {
+                id: 'user-2',
+                handle: 'adal',
+                displayName: 'Adal Search',
+                bio: 'Prefix matches should update as you type.',
+                expertise: ['search'],
+                followerCount: 2,
+              },
+            ],
+          },
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/search?q=adal&type=hashtags') {
+        return createJsonResponse(200, {
+          data: {
+            '@odata.count': 1,
+            value: [{ id: 'adal', count: 1 }],
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    renderApp()
+
+    expect(
+      await screen.findByRole('link', { name: 'Ada Lovelace' }),
+    ).toHaveAttribute('href', '/u/ada')
+
+    fireEvent.change(screen.getByLabelText('Search query'), {
+      target: { value: 'adal' },
+    })
+
+    expect(
+      await screen.findByRole('link', { name: 'Adal Search' }),
+    ).toHaveAttribute('href', '/u/adal')
+    expect(window.location.pathname + window.location.search).toBe(
+      '/search?q=adal&type=users',
+    )
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Hashtags' }))
+
+    expect(await screen.findByRole('link', { name: '#adal' })).toHaveAttribute(
+      'href',
+      '/search?q=adal',
+    )
+    expect(window.location.pathname + window.location.search).toBe(
+      '/search?q=adal&type=hashtags',
+    )
+  })
+
   it('returns to loading immediately when the handle changes', async () => {
     window.history.replaceState({}, '', '/u/Ada')
 

@@ -9,6 +9,7 @@ import { registerFollowUserFunction } from './functions/follow-user.js'
 import { registerFollowersMirrorFunction } from './functions/followers-mirror.js'
 import { registerGetFeedFunction } from './functions/get-feed.js'
 import { registerGifSearchFunction } from './functions/search-gifs.js'
+import { registerSearchFunction } from './functions/search.js'
 import { registerGetPostFunction } from './functions/get-post.js'
 import { registerGetThreadFunction } from './functions/get-thread.js'
 import { registerListFollowersFunction } from './functions/list-followers.js'
@@ -16,7 +17,6 @@ import { registerListPostReactionsFunction } from './functions/list-post-reactio
 import { registerCreatePostFunction } from './functions/create-post.js'
 import { registerListFollowingFunction } from './functions/list-following.js'
 import { registerGetUserFunction } from './functions/get-user.js'
-import { registerSearchFunction } from './functions/search.js'
 import { registerHealthFunction } from './functions/health.js'
 import { registerMediaUploadUrlFunction } from './functions/media-upload-url.js'
 import { registerMediaPostProcessFunctions } from './functions/media-post-process.js'
@@ -37,6 +37,7 @@ registerFollowUserFunction()
 registerFollowersMirrorFunction()
 registerGetFeedFunction()
 registerGifSearchFunction()
+registerSearchFunction()
 registerGetPostFunction()
 registerGetThreadFunction()
 registerListFollowersFunction()
@@ -44,7 +45,6 @@ registerListPostReactionsFunction()
 registerCreatePostFunction()
 registerListFollowingFunction()
 registerGetUserFunction()
-registerSearchFunction()
 registerHealthFunction()
 registerMediaUploadUrlFunction()
 registerMediaPostProcessFunctions()
