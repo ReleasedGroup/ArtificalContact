@@ -10,6 +10,7 @@ import {
 import type { MeProfile } from '../lib/me'
 import { getFeedPage, type FeedEntry } from '../lib/feed'
 import { signOut } from '../lib/auth'
+import { HeaderSearchBox } from './HeaderSearchBox'
 
 interface HomeFeedScreenProps {
   viewer: MeProfile
@@ -407,38 +408,42 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <a
-                href="/me"
-                className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
-              >
-                Edit profile
-              </a>
-              {viewer.handle && (
+            <div className="flex w-full max-w-xl flex-col gap-3 lg:items-end">
+              <HeaderSearchBox />
+
+              <div className="flex flex-wrap items-center gap-3">
                 <a
-                  href={getProfileHref(viewer.handle)}
+                  href="/me"
                   className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
                 >
-                  View public profile
+                  Edit profile
                 </a>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  void handleRefresh()
-                }}
-                className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/35 hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-slate-400"
-                disabled={isPending || isRefetching}
-              >
-                Refresh feed
-              </button>
-              <button
-                type="button"
-                onClick={handleSignOut}
-                className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
-              >
-                Sign out
-              </button>
+                {viewer.handle && (
+                  <a
+                    href={getProfileHref(viewer.handle)}
+                    className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
+                  >
+                    View public profile
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleRefresh()
+                  }}
+                  className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/35 hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-slate-400"
+                  disabled={isPending || isRefetching}
+                >
+                  Refresh feed
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
+                >
+                  Sign out
+                </button>
+              </div>
             </div>
           </div>
         </header>
