@@ -15,22 +15,22 @@ import { registerGifSearchFunction } from './functions/search-gifs.js'
 import { registerSearchFunction } from './functions/search.js'
 import { registerGetPostFunction } from './functions/get-post.js'
 import { registerGetThreadFunction } from './functions/get-thread.js'
-import { registerListFollowersFunction } from './functions/list-followers.js'
-import { registerListPostReactionsFunction } from './functions/list-post-reactions.js'
-import { registerCreatePostFunction } from './functions/create-post.js'
-import { registerListFollowingFunction } from './functions/list-following.js'
 import { registerGetUserFunction } from './functions/get-user.js'
 import { registerHealthFunction } from './functions/health.js'
 import { registerMarkNotificationsReadFunction } from './functions/mark-notifications-read.js'
-import { registerMediaUploadUrlFunction } from './functions/media-upload-url.js'
+import { registerListFollowersFunction } from './functions/list-followers.js'
+import { registerListFollowingFunction } from './functions/list-following.js'
+import { registerListPostReactionsFunction } from './functions/list-post-reactions.js'
+import { registerAuthMeFunction } from './functions/me.js'
+import { registerCreatePostFunction } from './functions/create-post.js'
 import { registerMediaPostProcessFunctions } from './functions/media-post-process.js'
+import { registerMediaUploadUrlFunction } from './functions/media-upload-url.js'
 import { registerNotificationFunctions } from './functions/notification.js'
 import { registerNotificationPreferencesFunctions } from './functions/notification-preferences.js'
+import { registerSearchSyncFunctions } from './functions/search-sync.js'
 import { registerUpdateProfileFunction } from './functions/update-profile.js'
 import { registerUserPostAuthorSyncFunction } from './functions/user-post-author-sync.js'
 import { registerUsersByHandleMirrorFunction } from './functions/users-by-handle-mirror.js'
-import { registerAuthMeFunction } from './functions/me.js'
-import { registerSearchSyncFunctions } from './functions/search-sync.js'
 
 registerCreateReplyFunction()
 registerCreateReportFunction()
@@ -49,19 +49,19 @@ registerGifSearchFunction()
 registerSearchFunction()
 registerGetPostFunction()
 registerGetThreadFunction()
-registerListFollowersFunction()
-registerListPostReactionsFunction()
-registerCreatePostFunction()
-registerListFollowingFunction()
 registerGetUserFunction()
 registerHealthFunction()
 registerMarkNotificationsReadFunction()
-registerMediaUploadUrlFunction()
+registerListFollowersFunction()
+registerListFollowingFunction()
+registerListPostReactionsFunction()
+registerAuthMeFunction()
+registerCreatePostFunction()
 registerMediaPostProcessFunctions()
+registerMediaUploadUrlFunction()
 registerNotificationFunctions()
 registerNotificationPreferencesFunctions()
+registerSearchSyncFunctions()
 registerUpdateProfileFunction()
 registerUserPostAuthorSyncFunction()
 registerUsersByHandleMirrorFunction()
-registerAuthMeFunction()
-registerSearchSyncFunctions()

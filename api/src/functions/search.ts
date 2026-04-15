@@ -4,134 +4,85 @@ import {
   type HttpResponseInit,
   type InvocationContext,
 } from '@azure/functions'
-import { createErrorResponse, createSuccessResponse } from '../lib/api-envelope.js'
 import {
-  querySearchIndex,
-  resolveDefaultSearchFilter,
-  SearchConfigurationError,
-  SearchFilterValidationError,
-  SearchUpstreamError,
-  type SearchType,
-} from '../lib/search.js'
+  createErrorResponse,
+  createJsonEnvelopeResponse,
+} from '../lib/api-envelope.js'
+import { AzureSearchQueryStore } from '../lib/azure-search-query-store.js'
+import { searchSite, type SearchStore } from '../lib/search.js'
+import { withHttpAuth } from '../lib/http-auth.js'
 
 export interface SearchHandlerDependencies {
-  search?: (
-    input: {
-      q?: string
-      type: SearchType
-      filter?: string
-    },
-  ) => Promise<unknown>
+  storeFactory?: () => SearchStore
 }
 
-function normalizeSearchType(value: string | null): SearchType {
-  switch (value?.trim().toLowerCase()) {
-    case 'users':
-      return 'users'
-    case 'hashtags':
-      return 'hashtags'
-    case 'posts':
-    case '':
-    case null:
-    case undefined:
-      return 'posts'
-    default:
-      throw new Error('invalid_search_type')
-  }
+let cachedStore: AzureSearchQueryStore | undefined
+
+function getStore(): AzureSearchQueryStore {
+  cachedStore ??= AzureSearchQueryStore.fromEnvironment()
+  return cachedStore
 }
 
-function createInvalidSearchTypeResponse(): HttpResponseInit {
-  return createErrorResponse(400, {
-    code: 'invalid_search_type',
-    message: 'The type query parameter must be one of: posts, users, hashtags.',
-    field: 'type',
-  })
-}
-
-function createInvalidSearchFilterResponse(message: string): HttpResponseInit {
-  return createErrorResponse(400, {
-    code: 'invalid_search_filter',
-    message,
-    field: 'filter',
-  })
-}
-
-export function buildSearchHandler(dependencies: SearchHandlerDependencies = {}) {
-  const search = dependencies.search ?? querySearchIndex
+export function buildSearchHandler(
+  dependencies: SearchHandlerDependencies = {},
+) {
+  const storeFactory = dependencies.storeFactory ?? (() => getStore())
 
   return async function searchHandler(
     request: HttpRequest,
     context: InvocationContext,
   ): Promise<HttpResponseInit> {
-    let type: SearchType
-    try {
-      type = normalizeSearchType(request.query.get('type'))
-    } catch {
-      return createInvalidSearchTypeResponse()
-    }
+    let store: SearchStore
 
-    const query = request.query.get('q')
-    const rawFilter = request.query.get('filter') ?? undefined
-
-    let resolvedFilter: string | undefined
     try {
-      resolvedFilter = resolveDefaultSearchFilter(type, rawFilter)
+      store = storeFactory()
     } catch (error) {
-      if (error instanceof SearchFilterValidationError) {
-        return createInvalidSearchFilterResponse(error.message)
-      }
-
-      throw error
-    }
-
-    try {
-      const queryPayload: { type: SearchType; q?: string; filter?: string } = {
-        type,
-      }
-      if (query !== null) {
-        queryPayload.q = query
-      }
-      if (resolvedFilter !== undefined) {
-        queryPayload.filter = resolvedFilter
-      }
-
-      const results = await search(queryPayload)
-
-      context.log('Search lookup completed.', {
-        type,
-        query: query ?? null,
-        filterProvided: rawFilter ?? null,
-        filterApplied: resolvedFilter ?? null,
+      context.log('Failed to configure the search query store.', {
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Unknown search configuration error.',
       })
 
-      return createSuccessResponse(results)
-    } catch (error) {
-      if (error instanceof SearchConfigurationError) {
-        return createErrorResponse(503, {
-          code: 'search_unconfigured',
-          message: error.message,
-        })
-      }
-      if (error instanceof SearchUpstreamError) {
-        return createErrorResponse(502, {
-          code: 'search_upstream_failed',
-          message: error.message,
-        })
-      }
+      return createErrorResponse(500, {
+        code: 'server.configuration_error',
+        message: 'Search is not configured right now.',
+      })
+    }
 
-      context.log('Search lookup failed unexpectedly.', {
+    try {
+      const result = await searchSite(
+        {
+          q: request.query.get('q'),
+          type: request.query.get('type'),
+          filter: request.query.get('filter'),
+        },
+        store,
+      )
+
+      context.log('Search query completed.', {
+        query: request.query.get('q') ?? '',
+        type: request.query.get('type') ?? 'posts',
+        status: result.status,
+      })
+
+      return createJsonEnvelopeResponse(result.status, result.body)
+    } catch (error) {
+      context.log('Search query failed unexpectedly.', {
         error: error instanceof Error ? error.message : 'Unknown search error.',
       })
 
       return createErrorResponse(500, {
         code: 'server.search_failed',
-        message: 'Unable to execute search at this time.',
+        message: 'Unable to complete the search query right now.',
       })
     }
   }
 }
 
-export const searchHandler = buildSearchHandler()
+export const searchHandler = withHttpAuth(buildSearchHandler(), {
+  allowAnonymous: true,
+})
 
 export function registerSearchFunction() {
   app.http('search', {

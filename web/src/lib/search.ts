@@ -4,79 +4,132 @@ interface ApiError {
   field?: string
 }
 
-interface ApiEnvelope<TData> {
-  data: TData | null
-  errors: ApiError[]
-}
-
-interface SearchApiResponse {
-  '@odata.count'?: number
-  value: unknown[]
-}
-
 export type SearchType = 'posts' | 'users' | 'hashtags'
+export type SearchResultType = SearchType
+
+export interface SearchFilters {
+  hashtag: string | null
+  mediaKind: string | null
+}
+
+export interface SearchFacetValue {
+  value: string
+  count: number
+}
 
 export interface SearchPostResult {
+  type: 'post'
   id: string
-  authorHandle: string
-  text: string
+  kind: 'user' | 'github'
+  authorHandle: string | null
+  text: string | null
   hashtags: string[]
   mediaKinds: string[]
-  createdAt: string
+  createdAt: string | null
   likeCount: number
   replyCount: number
-  kind: string
-  githubEventType?: string
-  githubRepo?: string
+  githubEventType: string | null
+  githubRepo: string | null
 }
 
 export interface SearchUserResult {
+  type: 'user'
   id: string
   handle: string
-  displayName: string
-  bio: string
+  displayName: string | null
+  bio: string | null
   expertise: string[]
   followerCount: number
 }
 
 export interface SearchHashtagResult {
-  value: string
+  type: 'hashtag'
+  hashtag: string
   count: number
 }
 
-export interface SearchPostsResponse {
+export interface SearchPostsData {
   type: 'posts'
   query: string
+  filters: SearchFilters
   totalCount: number | null
+  facets: {
+    hashtags: SearchFacetValue[]
+    mediaKinds: SearchFacetValue[]
+  }
   results: SearchPostResult[]
 }
 
-export interface SearchUsersResponse {
+export interface SearchUsersData {
   type: 'users'
   query: string
+  filters: SearchFilters
   totalCount: number | null
   results: SearchUserResult[]
 }
 
-export interface SearchHashtagsResponse {
+export interface SearchHashtagsData {
   type: 'hashtags'
   query: string
+  filters: SearchFilters
   totalCount: number | null
   results: SearchHashtagResult[]
 }
 
-export type SearchResponse =
-  | SearchPostsResponse
-  | SearchUsersResponse
-  | SearchHashtagsResponse
+export type SearchResponseData =
+  | SearchPostsData
+  | SearchUsersData
+  | SearchHashtagsData
+
+export type SearchResponse = SearchResponseData
 
 export const MIN_SEARCH_QUERY_LENGTH = 2
 
-function readErrorMessage(
-  payload: ApiEnvelope<SearchApiResponse> | null,
-): string | null {
+interface SearchEnvelope {
+  data: SearchResponseData | null
+  errors: ApiError[]
+}
+
+interface LegacySearchApiResponse {
+  '@odata.count'?: number
+  value: unknown[]
+}
+
+interface SearchSiteOptions {
+  query: string
+  type: SearchResultType
+  filters?: SearchFilters
+  signal?: AbortSignal
+}
+
+function readErrorMessage(payload: { errors?: ApiError[] } | null): string | null {
   const firstError = payload?.errors?.[0]
   return firstError?.message?.trim() ? firstError.message : null
+}
+
+function normalizeFacetToken(value: string | null): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const normalizedValue = value.trim().replace(/^#/, '').toLowerCase()
+  return normalizedValue.length > 0 ? normalizedValue : null
+}
+
+function buildFilterValue(filters: SearchFilters): string | null {
+  const tokens: string[] = []
+
+  const hashtag = normalizeFacetToken(filters.hashtag)
+  if (hashtag) {
+    tokens.push(`hashtag:${hashtag}`)
+  }
+
+  const mediaKind = normalizeFacetToken(filters.mediaKind)
+  if (mediaKind) {
+    tokens.push(`mediaKind:${mediaKind}`)
+  }
+
+  return tokens.length > 0 ? tokens.join(',') : null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -99,7 +152,7 @@ function readNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
-function mapPostResults(results: unknown[]): SearchPostResult[] {
+function mapLegacyPostResults(results: unknown[]): SearchPostResult[] {
   return results.flatMap((result) => {
     if (!isRecord(result)) {
       return []
@@ -110,33 +163,26 @@ function mapPostResults(results: unknown[]): SearchPostResult[] {
       return []
     }
 
-    const mappedResult: SearchPostResult = {
-      id,
-      authorHandle: readString(result.authorHandle) ?? 'unknown',
-      text: readString(result.text) ?? '',
-      hashtags: readStringArray(result.hashtags),
-      mediaKinds: readStringArray(result.mediaKinds),
-      createdAt: readString(result.createdAt) ?? '',
-      likeCount: readNumber(result.likeCount),
-      replyCount: readNumber(result.replyCount),
-      kind: readString(result.kind) ?? 'user',
-    }
-
-    const githubEventType = readString(result.githubEventType)
-    if (githubEventType) {
-      mappedResult.githubEventType = githubEventType
-    }
-
-    const githubRepo = readString(result.githubRepo)
-    if (githubRepo) {
-      mappedResult.githubRepo = githubRepo
-    }
-
-    return [mappedResult]
+    return [
+      {
+        type: 'post',
+        id,
+        kind: readString(result.kind) === 'github' ? 'github' : 'user',
+        authorHandle: readString(result.authorHandle),
+        text: readString(result.text),
+        hashtags: readStringArray(result.hashtags),
+        mediaKinds: readStringArray(result.mediaKinds),
+        createdAt: readString(result.createdAt),
+        likeCount: readNumber(result.likeCount),
+        replyCount: readNumber(result.replyCount),
+        githubEventType: readString(result.githubEventType),
+        githubRepo: readString(result.githubRepo),
+      } satisfies SearchPostResult,
+    ]
   })
 }
 
-function mapUserResults(results: unknown[]): SearchUserResult[] {
+function mapLegacyUserResults(results: unknown[]): SearchUserResult[] {
   return results.flatMap((result) => {
     if (!isRecord(result)) {
       return []
@@ -150,10 +196,11 @@ function mapUserResults(results: unknown[]): SearchUserResult[] {
 
     return [
       {
+        type: 'user',
         id,
         handle,
-        displayName: readString(result.displayName) ?? '',
-        bio: readString(result.bio) ?? '',
+        displayName: readString(result.displayName),
+        bio: readString(result.bio),
         expertise: readStringArray(result.expertise),
         followerCount: readNumber(result.followerCount),
       } satisfies SearchUserResult,
@@ -161,67 +208,166 @@ function mapUserResults(results: unknown[]): SearchUserResult[] {
   })
 }
 
-function mapHashtagResults(results: unknown[]): SearchHashtagResult[] {
+function mapLegacyHashtagResults(results: unknown[]): SearchHashtagResult[] {
   return results.flatMap((result) => {
     if (!isRecord(result)) {
       return []
     }
 
-    const value = readString(result.id)
-    if (value === null) {
+    const hashtag = readString(result.hashtag) ?? readString(result.value) ?? readString(result.id)
+    if (hashtag === null) {
       return []
     }
 
     return [
       {
-        value,
+        type: 'hashtag',
+        hashtag,
         count: readNumber(result.count),
       } satisfies SearchHashtagResult,
     ]
   })
 }
 
+function normalizeLegacyPayload(
+  payload: SearchEnvelope | { data: LegacySearchApiResponse | null; errors: ApiError[] } | null,
+  options: SearchSiteOptions,
+): SearchResponseData | null {
+  if (!payload?.data) {
+    return null
+  }
+
+  if ('results' in payload.data || 'facets' in payload.data) {
+    return payload.data as SearchResponseData
+  }
+
+  if (!Array.isArray(payload.data.value)) {
+    return null
+  }
+
+  const totalCount =
+    typeof payload.data['@odata.count'] === 'number'
+      ? payload.data['@odata.count']
+      : null
+
+  if (options.type === 'posts') {
+    return {
+      type: 'posts',
+      query: options.query.trim(),
+      filters: options.filters ?? {
+        hashtag: null,
+        mediaKind: null,
+      },
+      totalCount,
+      facets: {
+        hashtags: [],
+        mediaKinds: [],
+      },
+      results: mapLegacyPostResults(payload.data.value),
+    }
+  }
+
+  if (options.type === 'users') {
+    return {
+      type: 'users',
+      query: options.query.trim(),
+      filters: options.filters ?? {
+        hashtag: null,
+        mediaKind: null,
+      },
+      totalCount,
+      results: mapLegacyUserResults(payload.data.value),
+    }
+  }
+
+  return {
+    type: 'hashtags',
+    query: options.query.trim(),
+    filters: options.filters ?? {
+      hashtag: null,
+      mediaKind: null,
+    },
+    totalCount,
+    results: mapLegacyHashtagResults(payload.data.value),
+  }
+}
+
+function normalizeOptions(
+  queryOrOptions: string | SearchSiteOptions,
+  type?: SearchResultType,
+  signal?: AbortSignal,
+): SearchSiteOptions {
+  if (typeof queryOrOptions === 'string') {
+    return {
+      query: queryOrOptions,
+      type: type ?? 'posts',
+      filters: {
+        hashtag: null,
+        mediaKind: null,
+      },
+      signal,
+    }
+  }
+
+  return {
+    ...queryOrOptions,
+    filters: queryOrOptions.filters ?? {
+      hashtag: null,
+      mediaKind: null,
+    },
+  }
+}
+
 export function searchSite(
   query: string,
   type: 'posts',
   signal?: AbortSignal,
-): Promise<SearchPostsResponse>
+): Promise<SearchPostsData>
 export function searchSite(
   query: string,
   type: 'users',
   signal?: AbortSignal,
-): Promise<SearchUsersResponse>
+): Promise<SearchUsersData>
 export function searchSite(
   query: string,
   type: 'hashtags',
   signal?: AbortSignal,
-): Promise<SearchHashtagsResponse>
-export function searchSite(
-  query: string,
-  type: SearchType,
-  signal?: AbortSignal,
-): Promise<SearchResponse>
+): Promise<SearchHashtagsData>
+export function searchSite(options: SearchSiteOptions): Promise<SearchResponseData>
 export async function searchSite(
-  query: string,
-  type: SearchType,
+  queryOrOptions: string | SearchSiteOptions,
+  type?: SearchResultType,
   signal?: AbortSignal,
-): Promise<SearchResponse> {
-  const normalizedQuery = query.trim()
+): Promise<SearchResponseData> {
+  const options = normalizeOptions(queryOrOptions, type, signal)
   const requestUrl = new URL('/api/search', window.location.origin)
-  requestUrl.searchParams.set('q', normalizedQuery)
-  requestUrl.searchParams.set('type', type)
+  requestUrl.searchParams.set('q', options.query.trim())
+  requestUrl.searchParams.set('type', options.type)
+
+  const filterValue = buildFilterValue(options.filters ?? {
+    hashtag: null,
+    mediaKind: null,
+  })
+  if (filterValue) {
+    requestUrl.searchParams.set('filter', filterValue)
+  }
 
   const response = await fetch(requestUrl.pathname + requestUrl.search, {
     headers: {
       Accept: 'application/json',
     },
-    signal,
+    signal: options.signal,
   })
 
-  let payload: ApiEnvelope<SearchApiResponse> | null = null
+  let payload:
+    | SearchEnvelope
+    | { data: LegacySearchApiResponse | null; errors: ApiError[] }
+    | null = null
 
   try {
-    payload = (await response.json()) as ApiEnvelope<SearchApiResponse>
+    payload = (await response.json()) as
+      | SearchEnvelope
+      | { data: LegacySearchApiResponse | null; errors: ApiError[] }
   } catch {
     payload = null
   }
@@ -233,37 +379,10 @@ export async function searchSite(
     )
   }
 
-  if (!payload?.data || !Array.isArray(payload.data.value)) {
-    throw new Error('Search response did not contain the expected payload.')
+  const normalizedPayload = normalizeLegacyPayload(payload, options)
+  if (!normalizedPayload) {
+    throw new Error('Search response did not contain a payload.')
   }
 
-  const totalCount =
-    typeof payload.data['@odata.count'] === 'number'
-      ? payload.data['@odata.count']
-      : null
-
-  switch (type) {
-    case 'users':
-      return {
-        type,
-        query: normalizedQuery,
-        totalCount,
-        results: mapUserResults(payload.data.value),
-      }
-    case 'hashtags':
-      return {
-        type,
-        query: normalizedQuery,
-        totalCount,
-        results: mapHashtagResults(payload.data.value),
-      }
-    case 'posts':
-    default:
-      return {
-        type: 'posts',
-        query: normalizedQuery,
-        totalCount,
-        results: mapPostResults(payload.data.value),
-      }
-  }
+  return normalizedPayload
 }

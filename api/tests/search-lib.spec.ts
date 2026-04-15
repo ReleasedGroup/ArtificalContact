@@ -1,150 +1,326 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  querySearchIndex,
-  resolveDefaultSearchFilter,
-  SearchConfigurationError,
-  SearchFilterValidationError,
-  SearchUpstreamError,
-} from '../src/lib/search.js'
+import { searchSite, type SearchStore } from '../src/lib/search.js'
 
-const originalEnv = { ...process.env }
-
-function createAsyncResults(documents: Record<string, unknown>[]) {
+function createSearchStore(): SearchStore {
   return {
-    async *[Symbol.asyncIterator]() {
-      for (const document of documents) {
-        yield { document }
-      }
-    },
+    searchPosts: vi.fn(
+      async ({
+        query,
+        filters,
+        limit,
+      }: Parameters<SearchStore['searchPosts']>[0]) => ({
+        totalCount: 1,
+        facets: {
+          hashtags: filters.hashtag
+            ? [{ value: filters.hashtag, count: 1 }]
+            : [],
+          mediaKinds: filters.mediaKind
+            ? [{ value: filters.mediaKind, count: 1 }]
+            : [],
+        },
+        results: [
+          {
+            type: 'post' as const,
+            id: 'post-1',
+            kind: 'user' as const,
+            authorHandle: 'ada',
+            text: query || 'all posts',
+            hashtags: filters.hashtag ? [filters.hashtag] : ['evals'],
+            mediaKinds: filters.mediaKind ? [filters.mediaKind] : [],
+            createdAt: '2026-04-15T00:00:00.000Z',
+            likeCount: limit,
+            replyCount: 2,
+            githubEventType: null,
+            githubRepo: null,
+          },
+        ],
+      }),
+    ),
+    searchUsers: vi.fn(
+      async ({ query, limit }: Parameters<SearchStore['searchUsers']>[0]) => ({
+        totalCount: 1,
+        results: [
+          {
+            type: 'user' as const,
+            id: 'user-1',
+            handle: 'ada',
+            displayName: 'Ada Lovelace',
+            bio: `${query}:${limit}`,
+            expertise: ['evals'],
+            followerCount: 42,
+          },
+        ],
+      }),
+    ),
+    searchHashtags: vi.fn(
+      async ({
+        query,
+        filters,
+        limit,
+      }: Parameters<SearchStore['searchHashtags']>[0]) => ({
+        totalCount: 1,
+        results: [
+          {
+            type: 'hashtag' as const,
+            hashtag: query.length > 0 ? query.toLowerCase() : 'evals',
+            count: filters.mediaKind ? limit - 19 : limit,
+          },
+        ],
+      }),
+    ),
   }
 }
 
 afterEach(() => {
-  process.env = { ...originalEnv }
   vi.restoreAllMocks()
 })
 
-describe('resolveDefaultSearchFilter', () => {
-  it('adds public/ok constraints for posts', () => {
-    expect(resolveDefaultSearchFilter('posts')).toBe(
-      "visibility eq 'public' and moderationState eq 'ok'",
-    )
-    expect(resolveDefaultSearchFilter('posts', "authorId eq 'user-1'")).toBe(
-      "visibility eq 'public' and moderationState eq 'ok' and (authorId eq 'user-1')",
-    )
-  })
+describe('searchSite', () => {
+  it('defaults to posts search and trims the query string', async () => {
+    const store = createSearchStore()
 
-  it('does not inject constraints for user search types', () => {
-    expect(resolveDefaultSearchFilter('users', "handle eq 'ada'")).toBe(
-      "handle eq 'ada'",
-    )
-  })
-
-  it('rejects filters that try to add grouping characters', () => {
-    expect(() =>
-      resolveDefaultSearchFilter(
-        'posts',
-        "authorHandle eq 'ada') or visibility eq 'private'",
-      ),
-    ).toThrow(SearchFilterValidationError)
-  })
-})
-
-describe('querySearchIndex', () => {
-  it('queries the selected index and returns normalized documents', async () => {
-    process.env.SEARCH_INDEX_POSTS_NAME = 'posts-v1'
-    process.env.SEARCH_INDEX_USERS_NAME = 'users-v1'
-    process.env.SEARCH_INDEX_HASHTAGS_NAME = 'hashtags-v1'
-
-    const search = vi.fn(async () => ({
-      count: 1,
-      results: createAsyncResults([{ id: 'post-1' }]),
-    }))
-    const clientFactory = vi.fn(() => ({ search }))
-
-    const result = await querySearchIndex(
+    const result = await searchSite(
       {
-        type: 'posts',
-        q: 'demo',
-        filter: "authorHandle eq 'ada'",
-        orderBy: ['createdAt desc'],
-        scoringProfile: 'recencyAndEngagement',
-        top: 20,
+        q: '  ada  ',
       },
-      clientFactory,
+      store,
     )
 
-    expect(clientFactory).toHaveBeenCalledWith('posts-v1')
-    expect(search).toHaveBeenCalledWith('demo', {
-      filter: "authorHandle eq 'ada'",
-      includeTotalCount: true,
-      orderBy: ['createdAt desc'],
-      scoringProfile: 'recencyAndEngagement',
-      top: 20,
+    expect(store.searchPosts).toHaveBeenCalledWith({
+      query: 'ada',
+      filters: {
+        hashtag: null,
+        mediaKind: null,
+      },
+      limit: 20,
     })
     expect(result).toEqual({
-      '@odata.count': 1,
-      value: [{ id: 'post-1' }],
-    })
-  })
-
-  it('falls back to a wildcard search when no query is provided', async () => {
-    process.env.SEARCH_INDEX_POSTS_NAME = 'posts-v1'
-    process.env.SEARCH_INDEX_USERS_NAME = 'users-v1'
-    process.env.SEARCH_INDEX_HASHTAGS_NAME = 'hashtags-v1'
-
-    const search = vi.fn(async () => ({
-      results: createAsyncResults([]),
-    }))
-
-    await querySearchIndex(
-      {
-        type: 'users',
+      status: 200,
+      body: {
+        data: {
+          type: 'posts',
+          query: 'ada',
+          filters: {
+            hashtag: null,
+            mediaKind: null,
+          },
+          totalCount: 1,
+          facets: {
+            hashtags: [],
+            mediaKinds: [],
+          },
+          results: [
+            {
+              type: 'post',
+              id: 'post-1',
+              kind: 'user',
+              authorHandle: 'ada',
+              text: 'ada',
+              hashtags: ['evals'],
+              mediaKinds: [],
+              createdAt: '2026-04-15T00:00:00.000Z',
+              likeCount: 20,
+              replyCount: 2,
+              githubEventType: null,
+              githubRepo: null,
+            },
+          ],
+        },
+        errors: [],
       },
-      () => ({ search }),
-    )
-
-    expect(search).toHaveBeenCalledWith('*', {
-      includeTotalCount: true,
     })
   })
 
-  it('raises a configuration error when the search endpoint is unavailable', async () => {
-    process.env.SEARCH_ENDPOINT = ''
+  it('normalizes facet filters before dispatching posts search', async () => {
+    const store = createSearchStore()
 
-    await expect(querySearchIndex({ type: 'posts' })).rejects.toBeInstanceOf(
-      SearchConfigurationError,
+    const result = await searchSite(
+      {
+        q: 'evals',
+        type: 'posts',
+        filter: 'hashtag:#Evals,mediaKind:IMAGE',
+      },
+      store,
     )
+
+    expect(store.searchPosts).toHaveBeenCalledWith({
+      query: 'evals',
+      filters: {
+        hashtag: 'evals',
+        mediaKind: 'image',
+      },
+      limit: 20,
+    })
+    expect(result.body.data).toMatchObject({
+      type: 'posts',
+      query: 'evals',
+      filters: {
+        hashtag: 'evals',
+        mediaKind: 'image',
+      },
+    })
   })
 
-  it('logs upstream failures without exposing the raw provider message', async () => {
-    process.env.SEARCH_INDEX_POSTS_NAME = 'posts-v1'
-    process.env.SEARCH_INDEX_USERS_NAME = 'users-v1'
-    process.env.SEARCH_INDEX_HASHTAGS_NAME = 'hashtags-v1'
+  it('routes people searches through the user store', async () => {
+    const store = createSearchStore()
 
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const search = vi.fn(async () => {
-      const error = new Error('sensitive upstream detail')
-      Object.assign(error, { statusCode: 503 })
-      throw error
+    const result = await searchSite(
+      {
+        q: 'Ada',
+        type: 'users',
+        filter: 'hashtag:evals',
+      },
+      store,
+    )
+
+    expect(store.searchUsers).toHaveBeenCalledWith({
+      query: 'Ada',
+      limit: 20,
     })
+    expect(store.searchPosts).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      status: 200,
+      body: {
+        data: {
+          type: 'users',
+          query: 'Ada',
+          filters: {
+            hashtag: 'evals',
+            mediaKind: null,
+          },
+          totalCount: 1,
+          results: [
+            {
+              type: 'user',
+              id: 'user-1',
+              handle: 'ada',
+              displayName: 'Ada Lovelace',
+              bio: 'Ada:20',
+              expertise: ['evals'],
+              followerCount: 42,
+            },
+          ],
+        },
+        errors: [],
+      },
+    })
+  })
 
-    await expect(
-      querySearchIndex({ type: 'posts', q: 'demo' }, () => ({ search })),
-    ).rejects.toEqual(
-      new SearchUpstreamError(
-        'Search index query failed with status 503.',
-        503,
-      ),
+  it('passes media kind filters through hashtag searches', async () => {
+    const store = createSearchStore()
+
+    const result = await searchSite(
+      {
+        q: 'Evals',
+        type: 'hashtags',
+        filter: 'mediaKind:video',
+      },
+      store,
     )
 
-    expect(consoleError).toHaveBeenCalledWith(
-      'Search index query failed.',
-      expect.objectContaining({
-        indexName: 'posts-v1',
-        status: 503,
-        error: 'sensitive upstream detail',
-      }),
+    expect(store.searchHashtags).toHaveBeenCalledWith({
+      query: 'Evals',
+      filters: {
+        hashtag: null,
+        mediaKind: 'video',
+      },
+      limit: 20,
+    })
+    expect(result.body.data).toEqual({
+      type: 'hashtags',
+      query: 'Evals',
+      filters: {
+        hashtag: null,
+        mediaKind: 'video',
+      },
+      totalCount: 1,
+      results: [
+        {
+          type: 'hashtag',
+          hashtag: 'evals',
+          count: 1,
+        },
+      ],
+    })
+  })
+
+  it('rejects unsupported search types before touching the store', async () => {
+    const store = createSearchStore()
+
+    const result = await searchSite(
+      {
+        type: 'threads',
+      },
+      store,
     )
+
+    expect(store.searchPosts).not.toHaveBeenCalled()
+    expect(store.searchUsers).not.toHaveBeenCalled()
+    expect(store.searchHashtags).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      status: 400,
+      body: {
+        data: null,
+        errors: [
+          {
+            code: 'invalid_search_type',
+            message: 'The search type must be posts, users, or hashtags.',
+            field: 'type',
+          },
+        ],
+      },
+    })
+  })
+
+  it('rejects malformed facet filters before dispatching search', async () => {
+    const store = createSearchStore()
+
+    const result = await searchSite(
+      {
+        filter: 'hashtag',
+      },
+      store,
+    )
+
+    expect(store.searchPosts).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      status: 400,
+      body: {
+        data: null,
+        errors: [
+          {
+            code: 'invalid_search_filter',
+            message: 'The search filter query parameter is malformed.',
+            field: 'filter',
+          },
+        ],
+      },
+    })
+  })
+
+  it('rejects unsupported facet keys', async () => {
+    const store = createSearchStore()
+
+    const result = await searchSite(
+      {
+        filter: 'repo:ReleasedGroup/ArtificalContact',
+      },
+      store,
+    )
+
+    expect(store.searchPosts).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      status: 400,
+      body: {
+        data: null,
+        errors: [
+          {
+            code: 'invalid_search_filter',
+            message: 'Unsupported search filter "repo".',
+            field: 'filter',
+          },
+        ],
+      },
+    })
   })
 })
