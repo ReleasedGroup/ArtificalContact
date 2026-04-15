@@ -1,9 +1,18 @@
 param location string
 param names object
 param tags object = {}
+param cosmosAccountName string
+param cosmosDatabaseName string
+param cosmosPostsContainerName string
 
 var postsV1IndexName = 'posts-v1'
 var usersV1IndexName = 'users-v1'
+var postsV1DataSourceName = 'posts-v1-cosmosdb-ds'
+var postsV1IndexerName = 'posts-v1-cosmosdb-idx'
+
+resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' existing = {
+  name: cosmosAccountName
+}
 
 resource searchService 'Microsoft.Search/searchServices@2023-11-01' = {
   name: names.search
@@ -243,6 +252,36 @@ resource usersV1Index 'Microsoft.Search/searchServices/indexes@2024-07-01' = {
         retrievable: true
       }
     ]
+  }
+}
+
+resource postsV1DataSource 'Microsoft.Search/searchServices/dataSources@2024-07-01' = {
+  name: postsV1DataSourceName
+  parent: searchService
+  properties: {
+    type: 'cosmosdb'
+    credentials: {
+      connectionString: 'AccountEndpoint=${cosmosAccount.properties.documentEndpoint};AccountKey=${cosmosAccount.listKeys().primaryReadonlyMasterKey};Database=${cosmosDatabaseName}'
+    }
+    container: {
+      name: cosmosPostsContainerName
+    }
+    dataChangeDetectionPolicy: {
+      '@odata.type': '#Microsoft.Azure.Search.HighWaterMarkChangeDetectionPolicy'
+      highWaterMarkColumnName: '_ts'
+    }
+  }
+}
+
+resource postsV1Indexer 'Microsoft.Search/searchServices/indexers@2024-07-01' = {
+  name: postsV1IndexerName
+  parent: searchService
+  properties: {
+    dataSourceName: postsV1DataSource.name
+    targetIndexName: postsV1Index.name
+    schedule: {
+      interval: 'PT5M'
+    }
   }
 }
 
