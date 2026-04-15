@@ -22,6 +22,7 @@ var resolvedStaticWebAppLocation = !empty(normalizedStaticWebAppLocation)
 
 var tags = {
   application: 'ArtificialContact'
+  'azd-env-name': environmentName
   environment: environmentName
   managedBy: 'bicep'
   repository: 'ReleasedGroup/ArtificalContact'
@@ -76,7 +77,9 @@ module functions './modules/functions.bicep' = {
   params: {
     location: location
     names: naming.outputs.names
-    tags: tags
+    tags: union(tags, {
+      'azd-service-name': 'api'
+    })
     applicationInsightsConnectionString: observability.outputs.applicationInsightsConnectionString
     cosmosDatabaseName: cosmos.outputs.databaseName
     cosmosEndpoint: cosmos.outputs.endpoint
@@ -93,7 +96,9 @@ module staticWebApp './modules/static-web-app.bicep' = {
     backendLocation: location
     location: resolvedStaticWebAppLocation
     names: naming.outputs.names
-    tags: tags
+    tags: union(tags, {
+      'azd-service-name': 'web'
+    })
     applicationInsightsConnectionString: observability.outputs.applicationInsightsConnectionString
     functionAppName: functions.outputs.functionAppName
     functionAppResourceId: functions.outputs.functionAppResourceId
