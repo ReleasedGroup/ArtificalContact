@@ -8,6 +8,7 @@ export interface FollowersMirrorSourceDocument {
   followerId?: string | null
   followedId?: string | null
   createdAt?: string | null
+  deletedAt?: string | null
 }
 
 export type FollowersMirrorDocument = FollowDocument
@@ -20,6 +21,7 @@ export interface FollowersMirrorStore {
     followedId: string,
   ): Promise<ExistingFollowersMirrorRecord | null>
   upsertMirror(document: FollowersMirrorDocument): Promise<void>
+  deleteMirror(followerId: string, followedId: string): Promise<void>
 }
 
 export interface LoggerLike {
@@ -42,6 +44,21 @@ function toNonEmptyString(value: unknown): string | null {
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : null
 }
+
+type FollowersMirrorWorkItem =
+  | {
+      action: 'upsert'
+      document: FollowersMirrorDocument
+      followerId: string
+      followedId: string
+      id: string
+    }
+  | {
+      action: 'delete'
+      followerId: string
+      followedId: string
+      id: string
+    }
 
 export function buildFollowersMirrorDocument(
   document: FollowersMirrorSourceDocument,
@@ -71,18 +88,47 @@ export function buildFollowersMirrorDocument(
 function collapseFollowChangesToLatest(
   documents: readonly FollowersMirrorSourceDocument[],
   logger: LoggerLike,
-): FollowersMirrorDocument[] {
-  const latestById = new Map<string, FollowersMirrorDocument>()
+): FollowersMirrorWorkItem[] {
+  const latestById = new Map<string, FollowersMirrorWorkItem>()
 
   for (const document of documents) {
-    const mirrorDocument = buildFollowersMirrorDocument(document)
+    const type = toNonEmptyString(document.type)
+    if (type !== null && type !== 'follow') {
+      logger.warn('Skipping followers mirror sync for an invalid follow document.')
+      continue
+    }
 
+    const followerId = toNonEmptyString(document.followerId)
+    const followedId = toNonEmptyString(document.followedId)
+    if (followerId === null || followedId === null) {
+      logger.warn('Skipping followers mirror sync for an invalid follow document.')
+      continue
+    }
+
+    const id = buildFollowDocumentId(followerId, followedId)
+    if (toNonEmptyString(document.deletedAt) !== null) {
+      latestById.set(id, {
+        action: 'delete',
+        followerId,
+        followedId,
+        id,
+      })
+      continue
+    }
+
+    const mirrorDocument = buildFollowersMirrorDocument(document)
     if (mirrorDocument === null) {
       logger.warn('Skipping followers mirror sync for an invalid follow document.')
       continue
     }
 
-    latestById.set(mirrorDocument.id, mirrorDocument)
+    latestById.set(id, {
+      action: 'upsert',
+      document: mirrorDocument,
+      followerId,
+      followedId,
+      id,
+    })
   }
 
   return [...latestById.values()]
@@ -108,22 +154,37 @@ export async function syncFollowersMirrorBatch(
 ): Promise<void> {
   const collapsedDocuments = collapseFollowChangesToLatest(documents, logger)
 
-  for (const mirrorDocument of collapsedDocuments) {
+  for (const workItem of collapsedDocuments) {
     const existingMirror = await store.getByFollowerAndFollowed(
-      mirrorDocument.followerId,
-      mirrorDocument.followedId,
+      workItem.followerId,
+      workItem.followedId,
     )
 
-    if (isMirrorSynchronized(existingMirror, mirrorDocument)) {
+    if (workItem.action === 'delete') {
+      if (existingMirror === null) {
+        continue
+      }
+
+      await store.deleteMirror(workItem.followerId, workItem.followedId)
+      logger.info(
+        "Deleted followers mirror '%s' for follower '%s' under followed user '%s'.",
+        workItem.id,
+        workItem.followerId,
+        workItem.followedId,
+      )
       continue
     }
 
-    await store.upsertMirror(mirrorDocument)
+    if (isMirrorSynchronized(existingMirror, workItem.document)) {
+      continue
+    }
+
+    await store.upsertMirror(workItem.document)
     logger.info(
       "Upserted followers mirror '%s' for follower '%s' under followed user '%s'.",
-      mirrorDocument.id,
-      mirrorDocument.followerId,
-      mirrorDocument.followedId,
+      workItem.document.id,
+      workItem.document.followerId,
+      workItem.document.followedId,
     )
   }
 }

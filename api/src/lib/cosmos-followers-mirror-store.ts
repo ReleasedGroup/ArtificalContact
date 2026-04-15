@@ -59,6 +59,20 @@ export class CosmosFollowersMirrorStore
     await this.container.items.upsert(document)
   }
 
+  async deleteMirror(followerId: string, followedId: string): Promise<void> {
+    try {
+      await this.container
+        .item(buildFollowDocumentId(followerId, followedId), followedId)
+        .delete()
+    } catch (error) {
+      if (isNotFound(error)) {
+        return
+      }
+
+      throw error
+    }
+  }
+
   async listFollowersByFollowedId(
     followedId: string,
     limit: number,

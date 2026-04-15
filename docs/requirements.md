@@ -592,6 +592,7 @@ May include:
 - follower user id
 - followed user id
 - created timestamp
+- deleted timestamp for unfollow tombstones so change-feed processors can decrement counters and clean mirrors idempotently
 
 A mirrored `followers` container partitioned on `/followedId` may be maintained via the change feed for efficient reverse lookups.
 

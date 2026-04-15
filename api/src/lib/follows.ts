@@ -14,6 +14,7 @@ export interface FollowDocument {
   followerId: string
   followedId: string
   createdAt: string
+  deletedAt?: string | null
 }
 
 export interface FollowRepository {
@@ -84,6 +85,19 @@ function isExpectedCosmosStatusCode(error: unknown, statusCode: number) {
   return getErrorStatusCode(error) === statusCode
 }
 
+function toNullableString(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmed = value.trim()
+  return trimmed ? trimmed : null
+}
+
+function isDeletedFollowDocument(document: FollowDocument | null): boolean {
+  return toNullableString(document?.deletedAt) !== null
+}
+
 export function buildFollowDocumentId(
   followerId: string,
   followedId: string,
@@ -94,43 +108,67 @@ export function buildFollowDocumentId(
 function createCosmosFollowRepository(
   container: Container,
 ): MutableFollowRepository {
+  async function readExistingFollow(
+    followerId: string,
+    followedId: string,
+  ): Promise<FollowDocument | null> {
+    const id = buildFollowDocumentId(followerId, followedId)
+
+    try {
+      const response = await container.item(id, followerId).read<FollowDocument>()
+      return response.resource ?? null
+    } catch (error) {
+      if (isExpectedCosmosStatusCode(error, 404)) {
+        return null
+      }
+
+      throw error
+    }
+  }
+
   return {
     async create(follow: FollowDocument) {
-      const response = await container.items.create<FollowDocument>(follow)
-      return response.resource ?? follow
+      try {
+        const response = await container.items.create<FollowDocument>(follow)
+        return response.resource ?? follow
+      } catch (error) {
+        if (!isExpectedCosmosStatusCode(error, 409)) {
+          throw error
+        }
+
+        const existingFollow = await readExistingFollow(
+          follow.followerId,
+          follow.followedId,
+        )
+
+        if (!isDeletedFollowDocument(existingFollow)) {
+          throw error
+        }
+
+        const response = await container.items.upsert<FollowDocument>(follow)
+        return response.resource ?? follow
+      }
     },
     async getByFollowerAndFollowed(
       followerId: string,
       followedId: string,
     ): Promise<FollowDocument | null> {
-      const id = buildFollowDocumentId(followerId, followedId)
-
-      try {
-        const response = await container.item(id, followerId).read<FollowDocument>()
-        return response.resource ?? null
-      } catch (error) {
-        if (isExpectedCosmosStatusCode(error, 404)) {
-          return null
-        }
-
-        throw error
-      }
+      const existingFollow = await readExistingFollow(followerId, followedId)
+      return isDeletedFollowDocument(existingFollow) ? null : existingFollow
     },
     async deleteByFollowerAndFollowed(
       followerId: string,
       followedId: string,
     ): Promise<void> {
-      const id = buildFollowDocumentId(followerId, followedId)
-
-      try {
-        await container.item(id, followerId).delete()
-      } catch (error) {
-        if (isExpectedCosmosStatusCode(error, 404)) {
-          return
-        }
-
-        throw error
+      const existingFollow = await readExistingFollow(followerId, followedId)
+      if (existingFollow === null || isDeletedFollowDocument(existingFollow)) {
+        return
       }
+
+      await container.items.upsert<FollowDocument>({
+        ...existingFollow,
+        deletedAt: new Date().toISOString(),
+      })
     },
     async listByFollowerId(
       followerId: string,
@@ -148,6 +186,7 @@ function createCosmosFollowRepository(
             SELECT * FROM c
             WHERE c.followerId = @followerId
               AND c.type = @type
+              AND (NOT IS_DEFINED(c.deletedAt) OR IS_NULL(c.deletedAt))
             ORDER BY c.createdAt DESC, c.id DESC
           `,
           parameters: [
