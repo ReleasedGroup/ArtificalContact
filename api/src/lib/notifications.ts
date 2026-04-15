@@ -1,0 +1,521 @@
+import type { FollowDocument } from './follows.js'
+import {
+  isPubliclyVisiblePost,
+  type PostStore,
+  type StoredPostDocument,
+} from './posts.js'
+import {
+  isReactionDocumentEmpty,
+  type ReactionDocument,
+  type ReactionType,
+} from './reactions.js'
+import type { StoredUserDocument, UserProfileStore } from './user-profile.js'
+
+export const DEFAULT_NOTIFICATIONS_CONTAINER_NAME = 'notifications'
+export const NOTIFICATION_TTL_SECONDS = 60 * 60 * 24 * 90
+
+export type NotificationEventType = 'follow' | 'reply' | 'reaction' | 'mention'
+
+export interface NotificationDocument {
+  id: string
+  type: 'notification'
+  targetUserId: string
+  actorUserId: string
+  actorHandle: string | null
+  actorDisplayName: string | null
+  actorAvatarUrl: string | null
+  eventType: NotificationEventType
+  relatedEntityId: string
+  postId: string | null
+  threadId: string | null
+  parentId: string | null
+  reactionType: ReactionType | null
+  reactionValues: string[]
+  excerpt: string | null
+  readAt: string | null
+  createdAt: string
+  updatedAt: string
+  ttl: number
+}
+
+export interface NotificationStore {
+  upsertNotification(document: NotificationDocument): Promise<void>
+}
+
+export type NotificationProfileStore = Pick<
+  UserProfileStore,
+  'getByHandle' | 'getUserById'
+>
+
+export interface LoggerLike {
+  info(message: string, ...args: unknown[]): void
+  warn(message: string, ...args: unknown[]): void
+  error(message: string, ...args: unknown[]): void
+}
+
+export interface NotificationActor {
+  userId: string
+  handle: string | null
+  displayName: string | null
+  avatarUrl: string | null
+}
+
+export type NotificationPostSourceDocument = StoredPostDocument
+export type NotificationReactionSourceDocument = ReactionDocument
+export type NotificationFollowSourceDocument = FollowDocument
+
+const noop = (): void => undefined
+
+const nullLogger: LoggerLike = {
+  info: noop,
+  warn: noop,
+  error: noop,
+}
+
+function toNonEmptyString(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return [
+    ...new Set(
+      value
+        .map((entry) => toNonEmptyString(entry)?.toLowerCase() ?? null)
+        .filter((entry): entry is string => entry !== null),
+    ),
+  ]
+}
+
+function collapseDocumentsToLatest<T extends { id?: string | null }>(
+  documents: readonly T[],
+): T[] {
+  const latestById = new Map<string, T>()
+
+  for (const document of documents) {
+    const id = toNonEmptyString(document.id)
+    if (id === null) {
+      continue
+    }
+
+    latestById.set(id, document)
+  }
+
+  return [...latestById.values()]
+}
+
+function buildExcerpt(text: unknown): string | null {
+  return toNonEmptyString(text)
+}
+
+function buildReactionType(
+  reaction: Pick<ReactionDocument, 'sentiment' | 'emojiValues' | 'gifValue'>,
+): ReactionType | null {
+  if (reaction.sentiment === 'like' || reaction.sentiment === 'dislike') {
+    return reaction.sentiment
+  }
+
+  if (toStringArray(reaction.emojiValues).length > 0) {
+    return 'emoji'
+  }
+
+  if (toNonEmptyString(reaction.gifValue) !== null) {
+    return 'gif'
+  }
+
+  return null
+}
+
+function buildReactionValues(
+  reaction: Pick<ReactionDocument, 'emojiValues' | 'gifValue'>,
+): string[] {
+  const emojiValues = toStringArray(reaction.emojiValues)
+  if (emojiValues.length > 0) {
+    return emojiValues
+  }
+
+  const gifValue = toNonEmptyString(reaction.gifValue)
+  return gifValue === null ? [] : [gifValue]
+}
+
+function buildNotificationDocument(
+  eventType: NotificationEventType,
+  actor: NotificationActor,
+  targetUserId: string,
+  relatedEntityId: string,
+  createdAt: string,
+  updatedAt: string,
+  options: {
+    postId?: string | null
+    threadId?: string | null
+    parentId?: string | null
+    reactionType?: ReactionType | null
+    reactionValues?: string[]
+    excerpt?: string | null
+  } = {},
+): NotificationDocument {
+  return {
+    id: buildNotificationId(targetUserId, eventType, relatedEntityId),
+    type: 'notification',
+    targetUserId,
+    actorUserId: actor.userId,
+    actorHandle: actor.handle,
+    actorDisplayName: actor.displayName,
+    actorAvatarUrl: actor.avatarUrl,
+    eventType,
+    relatedEntityId,
+    postId: options.postId ?? null,
+    threadId: options.threadId ?? null,
+    parentId: options.parentId ?? null,
+    reactionType: options.reactionType ?? null,
+    reactionValues: options.reactionValues ?? [],
+    excerpt: options.excerpt ?? null,
+    readAt: null,
+    createdAt,
+    updatedAt,
+    ttl: NOTIFICATION_TTL_SECONDS,
+  }
+}
+
+function buildActorFromUser(
+  userId: string,
+  user: StoredUserDocument | null,
+): NotificationActor {
+  return {
+    userId,
+    handle:
+      toNonEmptyString(user?.handle) ?? toNonEmptyString(user?.handleLower),
+    displayName: toNonEmptyString(user?.displayName),
+    avatarUrl: toNonEmptyString(user?.avatarUrl),
+  }
+}
+
+async function loadActorFromProfileStore(
+  userId: string,
+  profileStore: NotificationProfileStore,
+  actorCache: Map<string, NotificationActor>,
+): Promise<NotificationActor> {
+  const cachedActor = actorCache.get(userId)
+  if (cachedActor !== undefined) {
+    return cachedActor
+  }
+
+  const actor = buildActorFromUser(userId, await profileStore.getUserById(userId))
+  actorCache.set(userId, actor)
+  return actor
+}
+
+async function resolveMentionTargets(
+  handles: readonly string[],
+  profileStore: NotificationProfileStore,
+  mentionCache: Map<string, string | null>,
+): Promise<string[]> {
+  const targets: string[] = []
+
+  for (const handle of handles) {
+    let userId = mentionCache.get(handle)
+    if (userId === undefined) {
+      userId = (await profileStore.getByHandle(handle))?.userId ?? null
+      mentionCache.set(handle, userId)
+    }
+
+    if (userId !== null) {
+      targets.push(userId)
+    }
+  }
+
+  return [...new Set(targets)]
+}
+
+function buildActorFromPost(
+  post: Pick<
+    StoredPostDocument,
+    'authorId' | 'authorHandle' | 'authorDisplayName' | 'authorAvatarUrl'
+  >,
+): NotificationActor | null {
+  const userId = toNonEmptyString(post.authorId)
+  if (userId === null) {
+    return null
+  }
+
+  return {
+    userId,
+    handle: toNonEmptyString(post.authorHandle),
+    displayName: toNonEmptyString(post.authorDisplayName),
+    avatarUrl: toNonEmptyString(post.authorAvatarUrl),
+  }
+}
+
+export function buildNotificationId(
+  targetUserId: string,
+  eventType: NotificationEventType,
+  relatedEntityId: string,
+): string {
+  return `${targetUserId}:${eventType}:${relatedEntityId}`
+}
+
+export async function syncFollowNotificationsBatch(
+  documents: readonly NotificationFollowSourceDocument[],
+  profileStore: NotificationProfileStore,
+  notificationStore: NotificationStore,
+  logger: LoggerLike = nullLogger,
+): Promise<void> {
+  const latestDocuments = collapseDocumentsToLatest(documents)
+  const actorCache = new Map<string, NotificationActor>()
+  let upsertCount = 0
+
+  for (const document of latestDocuments) {
+    const followId = toNonEmptyString(document.id)
+    const followerId = toNonEmptyString(document.followerId)
+    const followedId = toNonEmptyString(document.followedId)
+    const createdAt = toNonEmptyString(document.createdAt)
+
+    if (
+      followId === null ||
+      document.type !== 'follow' ||
+      followerId === null ||
+      followedId === null ||
+      createdAt === null
+    ) {
+      logger.warn(
+        'Skipping notification sync for an invalid follow document.',
+      )
+      continue
+    }
+
+    if (toNonEmptyString(document.deletedAt) !== null || followerId === followedId) {
+      continue
+    }
+
+    const actor = await loadActorFromProfileStore(
+      followerId,
+      profileStore,
+      actorCache,
+    )
+
+    await notificationStore.upsertNotification(
+      buildNotificationDocument(
+        'follow',
+        actor,
+        followedId,
+        followId,
+        createdAt,
+        createdAt,
+      ),
+    )
+    upsertCount += 1
+  }
+
+  if (upsertCount > 0) {
+    logger.info('Upserted %d follow notifications.', upsertCount)
+  }
+}
+
+export async function syncPostNotificationsBatch(
+  documents: readonly NotificationPostSourceDocument[],
+  postStore: PostStore,
+  profileStore: NotificationProfileStore,
+  notificationStore: NotificationStore,
+  logger: LoggerLike = nullLogger,
+): Promise<void> {
+  const latestDocuments = collapseDocumentsToLatest(documents)
+  const mentionCache = new Map<string, string | null>()
+  let upsertCount = 0
+
+  for (const document of latestDocuments) {
+    const postId = toNonEmptyString(document.id)
+    const threadId = toNonEmptyString(document.threadId) ?? postId
+    const parentId = toNonEmptyString(document.parentId)
+    const createdAt = toNonEmptyString(document.createdAt)
+    const actor = buildActorFromPost(document)
+
+    if (
+      postId === null ||
+      threadId === null ||
+      createdAt === null ||
+      actor === null ||
+      toNonEmptyString(document.kind) !== 'user' ||
+      !isPubliclyVisiblePost(document)
+    ) {
+      if (postId === null || actor === null) {
+        logger.warn('Skipping notification sync for an invalid post document.')
+      }
+      continue
+    }
+
+    let replyTargetUserId: string | null = null
+    if (toNonEmptyString(document.type) === 'reply' && parentId !== null) {
+      const parentPost = await postStore.getPostById(parentId, threadId)
+      const parentAuthorId = toNonEmptyString(parentPost?.authorId)
+
+      if (parentPost === null) {
+        logger.warn(
+          "Skipping reply notification sync for reply '%s' because parent '%s' was not found in thread '%s'.",
+          postId,
+          parentId,
+          threadId,
+        )
+      } else if (
+        isPubliclyVisiblePost(parentPost) &&
+        toNonEmptyString(parentPost.kind) === 'user' &&
+        parentAuthorId !== null &&
+        parentAuthorId !== actor.userId
+      ) {
+        replyTargetUserId = parentAuthorId
+        await notificationStore.upsertNotification(
+          buildNotificationDocument(
+            'reply',
+            actor,
+            parentAuthorId,
+            postId,
+            createdAt,
+            createdAt,
+            {
+              postId,
+              threadId,
+              parentId,
+              excerpt: buildExcerpt(document.text),
+            },
+          ),
+        )
+        upsertCount += 1
+      }
+    }
+
+    const mentionTargets = await resolveMentionTargets(
+      toStringArray(document.mentions),
+      profileStore,
+      mentionCache,
+    )
+
+    for (const targetUserId of mentionTargets) {
+      if (
+        targetUserId === actor.userId ||
+        (replyTargetUserId !== null && targetUserId === replyTargetUserId)
+      ) {
+        continue
+      }
+
+      await notificationStore.upsertNotification(
+        buildNotificationDocument(
+          'mention',
+          actor,
+          targetUserId,
+          postId,
+          createdAt,
+          createdAt,
+          {
+            postId,
+            threadId,
+            parentId,
+            excerpt: buildExcerpt(document.text),
+          },
+        ),
+      )
+      upsertCount += 1
+    }
+  }
+
+  if (upsertCount > 0) {
+    logger.info('Upserted %d post-derived notifications.', upsertCount)
+  }
+}
+
+export async function syncReactionNotificationsBatch(
+  documents: readonly NotificationReactionSourceDocument[],
+  postStore: PostStore,
+  profileStore: NotificationProfileStore,
+  notificationStore: NotificationStore,
+  logger: LoggerLike = nullLogger,
+): Promise<void> {
+  const latestDocuments = collapseDocumentsToLatest(documents)
+  const actorCache = new Map<string, NotificationActor>()
+  let upsertCount = 0
+
+  for (const document of latestDocuments) {
+    const reactionId = toNonEmptyString(document.id)
+    const postId = toNonEmptyString(document.postId)
+    const actorUserId = toNonEmptyString(document.userId)
+    const createdAt =
+      toNonEmptyString(document.createdAt) ?? toNonEmptyString(document.updatedAt)
+    const updatedAt =
+      toNonEmptyString(document.updatedAt) ?? toNonEmptyString(document.createdAt)
+
+    if (
+      reactionId === null ||
+      document.type !== 'reaction' ||
+      postId === null ||
+      actorUserId === null ||
+      createdAt === null ||
+      updatedAt === null
+    ) {
+      logger.warn(
+        'Skipping notification sync for an invalid reaction document.',
+      )
+      continue
+    }
+
+    if (isReactionDocumentEmpty(document)) {
+      continue
+    }
+
+    const post = await postStore.getPostById(postId)
+    const targetUserId = toNonEmptyString(post?.authorId)
+
+    if (post === null) {
+      logger.warn(
+        "Skipping reaction notification sync for reaction '%s' because post '%s' was not found.",
+        reactionId,
+        postId,
+      )
+      continue
+    }
+
+    if (
+      !isPubliclyVisiblePost(post) ||
+      toNonEmptyString(post.kind) !== 'user' ||
+      targetUserId === null ||
+      targetUserId === actorUserId
+    ) {
+      continue
+    }
+
+    const actor = await loadActorFromProfileStore(
+      actorUserId,
+      profileStore,
+      actorCache,
+    )
+
+    await notificationStore.upsertNotification(
+      buildNotificationDocument(
+        'reaction',
+        actor,
+        targetUserId,
+        reactionId,
+        createdAt,
+        updatedAt,
+        {
+          postId,
+          threadId: toNonEmptyString(post.threadId) ?? postId,
+          parentId: toNonEmptyString(post.parentId),
+          reactionType: buildReactionType(document),
+          reactionValues: buildReactionValues(document),
+          excerpt: buildExcerpt(post.text),
+        },
+      ),
+    )
+    upsertCount += 1
+  }
+
+  if (upsertCount > 0) {
+    logger.info('Upserted %d reaction notifications.', upsertCount)
+  }
+}

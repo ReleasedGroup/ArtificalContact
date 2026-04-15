@@ -154,6 +154,10 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
           value: names.mediaContainer
         }
         {
+          name: 'NOTIFICATIONS_CONTAINER_NAME'
+          value: names.notificationsContainer
+        }
+        {
           name: 'CONTENT_SAFETY_THRESHOLD'
           value: string(contentSafetyThreshold)
         }

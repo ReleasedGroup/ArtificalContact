@@ -16,6 +16,7 @@
     "MEDIA_IMAGES_CONTAINER_NAME": "images",
     "MEDIA_UPLOAD_SAS_TTL_MINUTES": "15",
     "MEDIA_VIDEO_CONTAINER_NAME": "video",
+    "NOTIFICATIONS_CONTAINER_NAME": "notifications",
     "POSTS_CONTAINER_NAME": "posts",
     "POST_MAX_LENGTH": "280",
     "TENOR_API_KEY": "",
