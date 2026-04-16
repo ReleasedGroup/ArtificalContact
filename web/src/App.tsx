@@ -18,6 +18,12 @@ import { ReportDialog } from './components/ReportDialog'
 import { SearchResultsScreen } from './components/SearchResultsScreen'
 import { signOut } from './lib/auth'
 import {
+  followUser,
+  getFollowRelationship,
+  unfollowUser,
+  type FollowRelationship,
+} from './lib/follow'
+import {
   getMe,
   getOptionalMe,
   updateMe,
@@ -25,6 +31,10 @@ import {
   type ResolvedMeProfile,
   type UpdateMeInput,
 } from './lib/me'
+import {
+  OPTIONAL_ME_QUERY_KEY,
+  updateCachedOptionalMe,
+} from './lib/optional-me-cache'
 import {
   getPublicUserProfile,
   PublicProfileNotFoundError,
@@ -64,6 +74,11 @@ type SaveState =
   | { status: 'idle' }
   | { status: 'saving' }
   | { status: 'saved'; message: string }
+  | { status: 'error'; message: string }
+
+type FollowActionState =
+  | { status: 'idle' }
+  | { status: 'pending' }
   | { status: 'error'; message: string }
 
 interface ProfileDraft {
@@ -364,7 +379,7 @@ function OptionalMeGate({
   render,
 }: OptionalMeGateProps) {
   const viewerQuery = useQuery<ResolvedMeProfile | null>({
-    queryKey: ['optional-me'],
+    queryKey: OPTIONAL_ME_QUERY_KEY,
     queryFn: ({ signal }) => getOptionalMe(signal),
     retry: false,
     staleTime: 60_000,
@@ -1208,11 +1223,15 @@ function ProfileEditorScreen() {
 }
 
 function PublicProfileScreen({ handle }: { handle: string }) {
+  const queryClient = useQueryClient()
   const [profileState, setProfileState] = useState<PublicProfileState>({
     status: 'loading',
   })
+  const [followActionState, setFollowActionState] = useState<FollowActionState>({
+    status: 'idle',
+  })
   const viewerQuery = useQuery<ResolvedMeProfile | null>({
-    queryKey: ['optional-me'],
+    queryKey: OPTIONAL_ME_QUERY_KEY,
     queryFn: ({ signal }) => getOptionalMe(signal),
     retry: false,
     staleTime: 60_000,
@@ -1220,10 +1239,32 @@ function PublicProfileScreen({ handle }: { handle: string }) {
     refetchOnReconnect: false,
   })
   const viewer = viewerQuery.data?.user ?? null
+  const activeProfile = profileState.status === 'ready' ? profileState.data : null
+  const canFollowProfile =
+    viewer !== null &&
+    viewer.status === 'active' &&
+    Boolean(viewer.handle?.trim()) &&
+    activeProfile !== null &&
+    viewer.id !== activeProfile.id
+  const followQuery = useQuery<FollowRelationship>({
+    queryKey: [
+      'follow-relationship',
+      viewer?.id ?? 'anonymous',
+      activeProfile?.handle.toLowerCase() ?? handle.toLowerCase(),
+    ],
+    queryFn: ({ signal }) =>
+      getFollowRelationship(activeProfile?.handle ?? handle, signal),
+    enabled: canFollowProfile,
+    retry: false,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  })
 
   useEffect(() => {
     startTransition(() => {
       setProfileState({ status: 'loading' })
+      setFollowActionState({ status: 'idle' })
     })
 
     const controller = new AbortController()
@@ -1266,6 +1307,79 @@ function PublicProfileScreen({ handle }: { handle: string }) {
     }
   }, [handle])
 
+  const handleFollowToggle = async () => {
+    if (!viewer || !activeProfile || !canFollowProfile) {
+      return
+    }
+
+    const currentlyFollowing = followQuery.data?.following ?? false
+    const nextFollowing = !currentlyFollowing
+    const followerDelta = nextFollowing ? 1 : -1
+
+    setFollowActionState({ status: 'pending' })
+
+    try {
+      if (currentlyFollowing) {
+        await unfollowUser(activeProfile.handle)
+      } else {
+        await followUser(activeProfile.handle)
+      }
+
+      queryClient.setQueryData<FollowRelationship>(
+        [
+          'follow-relationship',
+          viewer.id,
+          activeProfile.handle.toLowerCase(),
+        ],
+        {
+          handle: activeProfile.handle,
+          following: nextFollowing,
+        },
+      )
+      updateCachedOptionalMe(queryClient, viewer, (currentViewer) => ({
+        ...currentViewer,
+        counters: {
+          ...currentViewer.counters,
+          following: Math.max(
+            0,
+            currentViewer.counters.following + followerDelta,
+          ),
+        },
+      }))
+
+      startTransition(() => {
+        setFollowActionState({ status: 'idle' })
+        setProfileState((currentState) => {
+          if (currentState.status !== 'ready') {
+            return currentState
+          }
+
+          return {
+            status: 'ready',
+            data: {
+              ...currentState.data,
+              counters: {
+                ...currentState.data.counters,
+                followers: Math.max(
+                  0,
+                  currentState.data.counters.followers + followerDelta,
+                ),
+              },
+            },
+          }
+        })
+      })
+    } catch (error) {
+      setFollowActionState({
+        status: 'error',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Unable to update the follow relationship right now.',
+      })
+    }
+  }
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-10">
       <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/90 shadow-2xl shadow-slate-950/35 backdrop-blur">
@@ -1294,7 +1408,18 @@ function PublicProfileScreen({ handle }: { handle: string }) {
 
         <div className="relative z-10 px-5 pb-6 sm:px-6 sm:pb-8 lg:px-10">
           {profileState.status === 'ready' ? (
-            <ReadyPublicProfile profile={profileState.data} viewer={viewer} />
+            <ReadyPublicProfile
+              followActionState={followActionState}
+              followQueryState={{
+                canFollowProfile,
+                following: followQuery.data?.following ?? false,
+                isError: followQuery.isError,
+                isPending: followQuery.isPending,
+              }}
+              onFollowToggle={handleFollowToggle}
+              profile={profileState.data}
+              viewer={viewer}
+            />
           ) : (
             <PublicProfileStatusCard handle={handle} state={profileState} />
           )}
@@ -1305,9 +1430,20 @@ function PublicProfileScreen({ handle }: { handle: string }) {
 }
 
 function ReadyPublicProfile({
+  followActionState,
+  followQueryState,
+  onFollowToggle,
   profile,
   viewer,
 }: {
+  followActionState: FollowActionState
+  followQueryState: {
+    canFollowProfile: boolean
+    following: boolean
+    isError: boolean
+    isPending: boolean
+  }
+  onFollowToggle: () => void
   profile: PublicUserProfile
   viewer: MeProfile | null
 }) {
@@ -1317,6 +1453,19 @@ function ReadyPublicProfile({
     viewer.status === 'active' &&
     Boolean(viewer.handle) &&
     viewer.id !== profile.id
+  const followButtonDisabled =
+    followActionState.status === 'pending' ||
+    followQueryState.isPending ||
+    followQueryState.isError
+  const followButtonLabel = followQueryState.isPending
+    ? 'Checking follow'
+    : followActionState.status === 'pending'
+      ? followQueryState.following
+        ? 'Unfollowing...'
+        : 'Following...'
+      : followQueryState.following
+        ? 'Following'
+        : 'Follow'
 
   return (
     <>
@@ -1365,6 +1514,20 @@ function ReadyPublicProfile({
           >
             Home
           </a>
+          {followQueryState.canFollowProfile && (
+            <button
+              type="button"
+              onClick={onFollowToggle}
+              disabled={followButtonDisabled}
+              className={
+                followQueryState.following
+                  ? 'rounded-2xl border border-cyan-300/25 bg-cyan-300/12 px-4 py-2.5 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/35 hover:bg-cyan-300/18 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-slate-400'
+                  : 'rounded-2xl bg-cyan-300/90 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-300'
+              }
+            >
+              {followButtonLabel}
+            </button>
+          )}
           {canReportProfile && (
             <ReportDialog
               actionLabel="Report profile"
@@ -1379,6 +1542,16 @@ function ReadyPublicProfile({
             />
           )}
         </div>
+        {followQueryState.canFollowProfile && followQueryState.isError && (
+          <p className="text-sm text-amber-200">
+            Unable to load the current follow state right now.
+          </p>
+        )}
+        {followActionState.status === 'error' && (
+          <p className="text-sm text-rose-200">
+            {followActionState.message}
+          </p>
+        )}
       </div>
 
       <div className="mt-8 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">

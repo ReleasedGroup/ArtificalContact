@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   startTransition,
   useDeferredValue,
@@ -10,12 +10,17 @@ import {
 } from 'react'
 import { AppImage } from './AppImage'
 import { NotificationBell } from './NotificationBell'
-import { hasRole, type MeProfile } from '../lib/me'
+import { hasRole, type MeProfile, type ResolvedMeProfile } from '../lib/me'
 import { getFeedPage, type FeedEntry } from '../lib/feed'
 import { createPost } from '../lib/post-write'
 import { signOut } from '../lib/auth'
 import { HeaderSearchBox } from './HeaderSearchBox'
 import { ReportDialog } from './ReportDialog'
+import {
+  createResolvedMeProfileSnapshot,
+  OPTIONAL_ME_QUERY_KEY,
+  updateCachedOptionalMe,
+} from '../lib/optional-me-cache'
 
 interface HomeFeedScreenProps {
   viewer: MeProfile
@@ -227,6 +232,12 @@ function FeedCard({ entry, viewer }: { entry: FeedEntry; viewer: MeProfile }) {
 
 export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
   const queryClient = useQueryClient()
+  const viewerState = useQuery<ResolvedMeProfile | null>({
+    queryKey: OPTIONAL_ME_QUERY_KEY,
+    queryFn: async () => createResolvedMeProfileSnapshot(viewer),
+    initialData: createResolvedMeProfileSnapshot(viewer),
+    enabled: false,
+  })
   const scrollRegionRef = useRef<HTMLDivElement | null>(null)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const touchStartYRef = useRef<number | null>(null)
@@ -400,16 +411,17 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
   const [composerPublishing, setComposerPublishing] = useState(false)
   const [composerError, setComposerError] = useState<string | null>(null)
   const composerSubmittingRef = useRef(false)
+  const resolvedViewer = viewerState.data?.user ?? viewer
 
   const viewerMonogram = buildMonogram(
-    viewer.displayName.trim() || viewer.handle?.trim(),
+    resolvedViewer.displayName.trim() || resolvedViewer.handle?.trim(),
     'ME',
   )
   const refreshMessage = getRefreshMessage(pullRefreshState)
-  const viewerIsAdmin = hasRole(viewer.roles, 'admin')
+  const viewerIsAdmin = hasRole(resolvedViewer.roles, 'admin')
   const canPublish =
-    viewer.status === 'active' &&
-    Boolean(viewer.handle) &&
+    resolvedViewer.status === 'active' &&
+    Boolean(resolvedViewer.handle) &&
     composerText.trim().length > 0 &&
     !composerPublishing
 
@@ -427,6 +439,13 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
 
     try {
       await createPost({ text: composerText.trim() })
+      updateCachedOptionalMe(queryClient, resolvedViewer, (currentViewer) => ({
+        ...currentViewer,
+        counters: {
+          ...currentViewer.counters,
+          posts: currentViewer.counters.posts + 1,
+        },
+      }))
       setComposerText('')
       await handleRefresh()
     } catch (error) {
@@ -469,9 +488,9 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                 >
                   Edit profile
                 </a>
-                {viewer.handle && (
+                {resolvedViewer.handle && (
                   <a
-                    href={getProfileHref(viewer.handle)}
+                    href={getProfileHref(resolvedViewer.handle)}
                     className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
                   >
                     View public profile
@@ -548,8 +567,8 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                       className="block w-full resize-none rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-300/50 focus:ring-2 focus:ring-sky-300/30"
                       disabled={
                         composerPublishing ||
-                        !viewer.handle ||
-                        viewer.status !== 'active'
+                        !resolvedViewer.handle ||
+                        resolvedViewer.status !== 'active'
                       }
                       maxLength={280}
                       onChange={(event) => {
@@ -557,9 +576,9 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                         setComposerError(null)
                       }}
                       placeholder={
-                        !viewer.handle
+                        !resolvedViewer.handle
                           ? 'Set a handle in your profile to start posting.'
-                          : viewer.status !== 'active'
+                          : resolvedViewer.status !== 'active'
                             ? 'Activate your profile to start posting.'
                             : 'Share an update...'
                       }
@@ -707,7 +726,11 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                 {!isPending && !isError && feedEntries.length > 0 && (
                   <div className="space-y-4">
                     {feedEntries.map((entry) => (
-                      <FeedCard key={entry.id} entry={entry} viewer={viewer} />
+                      <FeedCard
+                        key={entry.id}
+                        entry={entry}
+                        viewer={resolvedViewer}
+                      />
                     ))}
                   </div>
                 )}
@@ -755,13 +778,15 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                 </div>
                 <div className="min-w-0">
                   <p className="text-lg font-semibold text-white">
-                    {viewer.displayName}
+                    {resolvedViewer.displayName}
                   </p>
                   <p className="mt-1 text-sm text-slate-400">
-                    {viewer.handle ? `@${viewer.handle}` : 'Handle pending'}
+                    {resolvedViewer.handle
+                      ? `@${resolvedViewer.handle}`
+                      : 'Handle pending'}
                   </p>
                   <p className="mt-3 line-clamp-3 text-sm leading-7 text-slate-300">
-                    {viewer.bio?.trim() ||
+                    {resolvedViewer.bio?.trim() ||
                       'Add a bio in your profile to show it here.'}
                   </p>
                 </div>
@@ -773,7 +798,7 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                     Posts
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-white">
-                    {formatCount(viewer.counters.posts)}
+                    {formatCount(resolvedViewer.counters.posts)}
                   </p>
                 </div>
                 <div className="overflow-hidden rounded-[1.4rem] border border-white/8 bg-white/5 px-2 py-4 text-center">
@@ -781,7 +806,7 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                     Following
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-white">
-                    {formatCount(viewer.counters.following)}
+                    {formatCount(resolvedViewer.counters.following)}
                   </p>
                 </div>
                 <div className="overflow-hidden rounded-[1.4rem] border border-white/8 bg-white/5 px-2 py-4 text-center">
@@ -789,7 +814,7 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                     Followers
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-white">
-                    {formatCount(viewer.counters.followers)}
+                    {formatCount(resolvedViewer.counters.followers)}
                   </p>
                 </div>
               </div>

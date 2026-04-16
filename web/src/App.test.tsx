@@ -1061,6 +1061,18 @@ describe('App', () => {
         })
       }
 
+      if (String(input) === '/api/users/Ada/follow') {
+        return createJsonResponse(200, {
+          data: {
+            relationship: {
+              handle: 'Ada',
+              following: false,
+            },
+          },
+          errors: [],
+        })
+      }
+
       if (String(input) === '/api/reports') {
         expect(JSON.parse(String(init?.body ?? '{}'))).toEqual({
           targetType: 'user',
@@ -1104,6 +1116,124 @@ describe('App', () => {
     expect(
       await screen.findByText('Profile report submitted.'),
     ).toBeInTheDocument()
+  })
+
+  it('lets an authenticated viewer follow and unfollow from the public profile view', async () => {
+    window.history.replaceState({}, '', '/u/Ada')
+
+    mockFetch.mockImplementation(async (input, init) => {
+      if (String(input) === '/api/me') {
+        return createJsonResponse(200, {
+          data: createResolvedMeProfile(),
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/users/Ada') {
+        return createJsonResponse(200, {
+          data: {
+            id: 'github:ada-target',
+            handle: 'Ada',
+            displayName: 'Ada Lovelace',
+            bio: 'Symbolic AI nerd.',
+            avatarUrl: null,
+            bannerUrl: null,
+            expertise: ['llm', 'evals'],
+            counters: {
+              posts: 12,
+              followers: 34,
+              following: 5,
+            },
+            createdAt: '2026-04-15T00:00:00.000Z',
+            updatedAt: '2026-04-16T00:00:00.000Z',
+          },
+          errors: [],
+        })
+      }
+
+      if (
+        String(input) === '/api/users/Ada/follow' &&
+        init?.method === undefined
+      ) {
+        return createJsonResponse(200, {
+          data: {
+            relationship: {
+              handle: 'Ada',
+              following: false,
+            },
+          },
+          errors: [],
+        })
+      }
+
+      if (
+        String(input) === '/api/users/Ada/follow' &&
+        init?.method === 'POST'
+      ) {
+        return createJsonResponse(201, {
+          data: {
+            follow: {
+              handle: 'Ada',
+              following: true,
+            },
+          },
+          errors: [],
+        })
+      }
+
+      if (
+        String(input) === '/api/users/Ada/follow' &&
+        init?.method === 'DELETE'
+      ) {
+        return createJsonResponse(200, {
+          data: {
+            unfollow: {
+              handle: 'Ada',
+              following: false,
+            },
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${String(input)}`)
+    })
+
+    renderApp()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Ada Lovelace' }),
+    ).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Follow' })).toBeInTheDocument()
+    expect(screen.getByText('34')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Follow' }))
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/users/Ada/follow',
+        expect.objectContaining({
+          method: 'POST',
+        }),
+      )
+    })
+
+    expect(await screen.findByRole('button', { name: 'Following' })).toBeInTheDocument()
+    expect(screen.getByText('35')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Following' }))
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/users/Ada/follow',
+        expect.objectContaining({
+          method: 'DELETE',
+        }),
+      )
+    })
+
+    expect(await screen.findByRole('button', { name: 'Follow' })).toBeInTheDocument()
+    expect(screen.getByText('34')).toBeInTheDocument()
   })
 
   it('renders a not-found state when the public profile does not exist', async () => {

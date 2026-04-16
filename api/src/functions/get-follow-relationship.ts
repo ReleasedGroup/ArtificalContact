@@ -1,0 +1,184 @@
+import {
+  app,
+  type HttpRequest,
+  type HttpResponseInit,
+  type InvocationContext,
+} from '@azure/functions'
+import {
+  createErrorResponse,
+  createJsonEnvelopeResponse,
+  createSuccessResponse,
+} from '../lib/api-envelope.js'
+import { CosmosUserProfileStore } from '../lib/cosmos-user-profile-store.js'
+import { createFollowRepository, type FollowRepository } from '../lib/follows.js'
+import { withHttpAuth } from '../lib/http-auth.js'
+import {
+  lookupPublicUserProfile,
+  type UserProfileStore,
+} from '../lib/user-profile.js'
+import { withRateLimit } from '../lib/rate-limit.js'
+
+export interface GetFollowRelationshipHandlerDependencies {
+  repositoryFactory?: () => FollowRepository
+  targetStoreFactory?: () => UserProfileStore
+}
+
+let cachedTargetStore: CosmosUserProfileStore | undefined
+
+function getTargetStore(): CosmosUserProfileStore {
+  cachedTargetStore ??= CosmosUserProfileStore.fromEnvironment()
+  return cachedTargetStore
+}
+
+export function buildGetFollowRelationshipHandler(
+  dependencies: GetFollowRelationshipHandlerDependencies = {},
+) {
+  const repositoryFactory =
+    dependencies.repositoryFactory ?? (() => createFollowRepository())
+  const targetStoreFactory =
+    dependencies.targetStoreFactory ?? (() => getTargetStore())
+
+  return async function getFollowRelationshipHandler(
+    request: HttpRequest,
+    context: InvocationContext,
+  ): Promise<HttpResponseInit> {
+    const authenticatedUser = context.auth?.user
+    const followerHandle =
+      authenticatedUser?.handle ?? authenticatedUser?.handleLower
+
+    if (
+      !authenticatedUser ||
+      authenticatedUser.status !== 'active' ||
+      !followerHandle
+    ) {
+      return createErrorResponse(403, {
+        code: 'auth.forbidden',
+        message:
+          'The authenticated user must have an active profile before checking follow relationships.',
+      })
+    }
+
+    let repository: FollowRepository
+
+    try {
+      repository = repositoryFactory()
+    } catch (error) {
+      context.log('Failed to configure the follow repository.', {
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Unknown repository configuration error.',
+      })
+
+      return createErrorResponse(500, {
+        code: 'server.configuration_error',
+        message: 'The follow store is not configured.',
+      })
+    }
+
+    let targetStore: UserProfileStore
+
+    try {
+      targetStore = targetStoreFactory()
+    } catch (error) {
+      context.log('Failed to configure the user profile store.', {
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Unknown target store configuration error.',
+      })
+
+      return createErrorResponse(500, {
+        code: 'server.configuration_error',
+        message: 'The user profile store is not configured.',
+      })
+    }
+
+    let targetProfileResult: Awaited<
+      ReturnType<typeof lookupPublicUserProfile>
+    >
+
+    try {
+      targetProfileResult = await lookupPublicUserProfile(
+        request.params.handle,
+        targetStore,
+      )
+    } catch (error) {
+      context.log('Failed to resolve the follow target profile.', {
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Unknown follow target lookup error.',
+        handle: request.params.handle ?? null,
+      })
+
+      return createErrorResponse(500, {
+        code: 'server.user_lookup_failed',
+        message: 'Unable to resolve the requested user profile.',
+      })
+    }
+
+    if (targetProfileResult.status !== 200 || !targetProfileResult.body.data) {
+      return createJsonEnvelopeResponse(
+        targetProfileResult.status,
+        targetProfileResult.body,
+      )
+    }
+
+    const targetProfile = targetProfileResult.body.data
+
+    try {
+      const existingFollow =
+        targetProfile.id === authenticatedUser.id
+          ? null
+          : await repository.getByFollowerAndFollowed(
+              authenticatedUser.id,
+              targetProfile.id,
+            )
+
+      const following = existingFollow !== null
+
+      context.log('Resolved follow relationship.', {
+        followerId: authenticatedUser.id,
+        followedId: targetProfile.id,
+        following,
+      })
+
+      return createSuccessResponse({
+        relationship: {
+          handle: targetProfile.handle,
+          following,
+        },
+      })
+    } catch (error) {
+      context.log('Failed to resolve the follow relationship.', {
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Unknown follow relationship lookup error.',
+        followerId: authenticatedUser.id,
+        followedId: targetProfile.id,
+      })
+
+      return createErrorResponse(500, {
+        code: 'server.follow_lookup_failed',
+        message: 'Unable to load the requested follow relationship.',
+      })
+    }
+  }
+}
+
+export const getFollowRelationshipHandler = withHttpAuth(
+  withRateLimit(buildGetFollowRelationshipHandler(), {
+    endpointClass: 'follows',
+  }),
+)
+
+export function registerGetFollowRelationshipFunction() {
+  app.http('getFollowRelationship', {
+    methods: ['GET'],
+    authLevel: 'anonymous',
+    route: 'users/{handle}/follow',
+    handler: getFollowRelationshipHandler,
+  })
+}
