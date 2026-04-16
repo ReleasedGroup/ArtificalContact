@@ -39,6 +39,7 @@ interface PostComposerProps {
   authorHandle?: string | null
   authorName: string
   disabled?: boolean
+  hasExternalMedia?: boolean
   label: string
   maxLength?: number
   mediaFiles: PostComposerMediaFile[]
@@ -170,6 +171,7 @@ export function PostComposer({
   authorHandle = null,
   authorName,
   disabled = false,
+  hasExternalMedia = false,
   label,
   maxLength = 280,
   mediaFiles,
@@ -202,7 +204,9 @@ export function PostComposer({
     !disabled &&
     !submitting &&
     remainingCharacters >= 0 &&
-    !isComposerTextEmpty(value)
+    (variant === 'post'
+      ? hasExternalMedia || mediaFiles.length > 0 || !isComposerTextEmpty(value)
+      : !isComposerTextEmpty(value))
 
   const isReplyComposer = variant === 'reply'
   const isDropZoneActive = isDragActive && !isMediaInputDisabled
@@ -348,7 +352,7 @@ export function PostComposer({
   }
 
   return (
-    <form className="flex gap-3" onSubmit={handleSubmit}>
+    <form className={`flex ${isReplyComposer ? 'gap-2.5' : 'gap-3'}`} onSubmit={handleSubmit}>
       <div
         aria-hidden="true"
         className={`flex shrink-0 items-center justify-center rounded-[1.4rem] bg-gradient-to-br from-fuchsia-500 to-sky-500 font-semibold tracking-[0.08em] text-white shadow-lg shadow-sky-950/25 ${
@@ -366,9 +370,11 @@ export function PostComposer({
               {authorHandle ? `@${authorHandle}` : 'Handle pending'}
             </p>
           </div>
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-300">
-            {isReplyComposer ? 'Reply box' : 'Post composer'}
-          </span>
+          {!isReplyComposer && (
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-300">
+              Post composer
+            </span>
+          )}
         </div>
 
         <label className="sr-only" htmlFor={textAreaId}>
@@ -379,7 +385,13 @@ export function PostComposer({
           image files, and add alternative text so people using screen readers
           can understand the attachment content.
         </p>
-        <div className="relative mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-slate-950/85 shadow-inner shadow-slate-950/40 transition focus-within:border-sky-300/50 focus-within:ring-2 focus-within:ring-sky-300/40 focus-within:ring-offset-2 focus-within:ring-offset-slate-950">
+        <div
+          className={`relative mt-3 overflow-hidden border bg-slate-950/85 transition focus-within:border-sky-300/50 focus-within:ring-2 focus-within:ring-sky-300/40 focus-within:ring-offset-2 focus-within:ring-offset-slate-950 ${
+            isReplyComposer
+              ? 'rounded-[1.2rem] border-white/8 bg-white/[0.02]'
+              : 'rounded-[1.5rem] border-white/10 shadow-inner shadow-slate-950/40'
+          }`}
+        >
           <div
             ref={mirrorRef}
             aria-hidden="true"
@@ -428,16 +440,24 @@ export function PostComposer({
           />
         </div>
 
-        <div className="mt-3 rounded-[1.5rem] border border-dashed border-white/10 bg-slate-950/55 p-4">
+        <div
+          className={`mt-3 border border-dashed bg-slate-950/55 ${
+            isReplyComposer
+              ? 'rounded-[1.2rem] border-white/8 p-3'
+              : 'rounded-[1.5rem] border-white/10 p-4'
+          }`}
+        >
           <div
             aria-describedby={`${mediaInputHintId} ${mediaInputStatusId}`}
             aria-disabled={isMediaInputDisabled}
             aria-labelledby={mediaInputLabelId}
-            className={`rounded-[1.25rem] border border-dashed px-4 py-4 transition ${
+            className={`border border-dashed px-4 py-4 transition ${
               isDropZoneActive
                 ? 'border-sky-300/70 bg-sky-400/10'
                 : 'border-white/10 bg-white/[0.03]'
-            } ${isMediaInputDisabled ? 'opacity-60' : ''}`}
+            } ${isReplyComposer ? 'rounded-[1rem]' : 'rounded-[1.25rem]'} ${
+              isMediaInputDisabled ? 'opacity-60' : ''
+            }`}
             onDragEnter={handleDragEnter}
             onDragLeave={handleDragLeave}
             onDragOver={handleDragOver}
@@ -466,9 +486,9 @@ export function PostComposer({
                   className="mt-1 text-xs leading-6 text-slate-300"
                   id={mediaInputHintId}
                 >
-                  Drag images here or browse from the keyboard to preview them
-                  locally. Add alt text for each image so screen readers can
-                  describe the attachment before the upload flow is wired in.
+                  {isReplyComposer
+                    ? 'Drag images here or browse from the keyboard to preview them locally. Add alt text for each image so screen readers can describe the attachment before reply uploads are wired in.'
+                    : 'Drag images here or browse from the keyboard to preview them locally. Selected images upload directly to Blob Storage when you publish the post.'}
                 </p>
               </div>
 
@@ -535,7 +555,7 @@ export function PostComposer({
                 return (
                   <li
                     key={item.signature}
-                    className="overflow-hidden rounded-[1.25rem] border border-white/10 bg-slate-900/80 shadow-lg shadow-slate-950/30"
+                    className="overflow-hidden rounded-[1.1rem] border border-white/8 bg-slate-900/65"
                   >
                     {item.previewUrl ? (
                       <AppImage
@@ -608,9 +628,9 @@ export function PostComposer({
 
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-            Highlighting mirrors backend hashtag and mention parsing. Image
-            previews stay local until upload wiring lands, and attachment alt
-            text stays with the selected files.
+            {isReplyComposer
+              ? 'Highlighting mirrors backend hashtag and mention parsing. Image previews stay local until reply uploads are wired in, and attachment alt text stays with the selected files.'
+              : 'Highlighting mirrors backend hashtag and mention parsing. Selected post images upload when you publish, and attachment alt text stays with the selected files during composition.'}
           </p>
           <div className="flex items-center gap-3">
             <span

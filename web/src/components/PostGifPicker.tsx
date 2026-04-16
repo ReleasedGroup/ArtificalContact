@@ -10,7 +10,7 @@ function getBrowserLocale(): string | undefined {
   return undefined
 }
 
-export function ReplyGifPicker({
+export function PostGifPicker({
   disabled = false,
   onSelect,
 }: {
@@ -79,11 +79,11 @@ export function ReplyGifPicker({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-medium uppercase tracking-[0.24em] text-fuchsia-100/80">
-            GIF replies
+            GIF posts
           </p>
           <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-400">
-            Search GIPHY and select a result to publish a GIF-only reply to the
-            current post.
+            Search GIPHY and attach a GIF to your next post. You can publish it
+            on its own or combine it with text and image uploads.
           </p>
         </div>
         <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-300">
@@ -92,11 +92,11 @@ export function ReplyGifPicker({
       </div>
 
       <form className="mt-4 flex flex-wrap gap-3" onSubmit={handleSubmit}>
-        <label className="sr-only" htmlFor="reply-gif-search">
-          Search GIPHY
+        <label className="sr-only" htmlFor="post-gif-search">
+          Search GIPHY for a post GIF
         </label>
         <input
-          id="reply-gif-search"
+          id="post-gif-search"
           type="search"
           className="min-w-[16rem] flex-1 rounded-full border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/40"
           disabled={disabled}
@@ -142,7 +142,7 @@ export function ReplyGifPicker({
             <li key={gif.id}>
               <button
                 type="button"
-                aria-label={`Reply with GIF: ${gif.title ?? gif.id}`}
+                aria-label={`Attach GIF: ${gif.title ?? gif.id}`}
                 className="group flex h-full w-full flex-col overflow-hidden rounded-[1.25rem] border border-white/10 bg-slate-900/80 text-left shadow-lg shadow-slate-950/25 transition hover:border-cyan-300/35 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={disabled}
                 onClick={() => onSelect(gif)}
@@ -160,11 +160,11 @@ export function ReplyGifPicker({
                     <p className="mt-1 text-xs text-slate-400">
                       {gif.width && gif.height
                         ? `${gif.width} × ${gif.height}`
-                        : 'Tap to reply'}
+                        : 'Tap to attach'}
                     </p>
                   </div>
                   <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-cyan-100 transition group-hover:border-cyan-300/35 group-hover:bg-cyan-300/15">
-                    Reply
+                    Attach
                   </span>
                 </div>
               </button>

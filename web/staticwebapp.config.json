@@ -25,6 +25,18 @@
       "allowedRoles": ["anonymous"]
     },
     {
+      "route": "/manifest.json",
+      "allowedRoles": ["anonymous"]
+    },
+    {
+      "route": "/web-push-sw.js",
+      "allowedRoles": ["anonymous"]
+    },
+    {
+      "route": "/icons/*",
+      "allowedRoles": ["anonymous"]
+    },
+    {
       "route": "/",
       "allowedRoles": ["anonymous"]
     },
@@ -57,7 +69,10 @@
     "rewrite": "/index.html",
     "exclude": [
       "/assets/*",
+      "/icons/*",
       "/favicon.svg",
+      "/manifest.json",
+      "/web-push-sw.js",
       "/api/*"
     ]
   },

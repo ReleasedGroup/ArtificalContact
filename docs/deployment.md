@@ -110,8 +110,7 @@ For the Sprint 3 media upload pipeline, the Functions app also needs:
 - `MEDIA_BASE_URL` set to the eventual public media host when Front Door/CDN is in front of Blob Storage
 - Optional container overrides via `MEDIA_IMAGES_CONTAINER_NAME`, `MEDIA_GIF_CONTAINER_NAME`, `MEDIA_AUDIO_CONTAINER_NAME`, and `MEDIA_VIDEO_CONTAINER_NAME`
 - Optional `MEDIA_UPLOAD_SAS_TTL_MINUTES` between `1` and `15`; the default is `15`
-- `TENOR_API_KEY` set to a Tenor API key so authenticated users can search GIFs from the `/p/{id}` reply picker
-- Optional `TENOR_CLIENT_KEY` override for the Tenor integration identifier; defaults to `artificialcontact-web`
+- `GIPHY_API_KEY` set to a GIPHY API key so authenticated users can search GIFs from the `/p/{id}` reply picker and home composer
 - Optional `REACTION_NOTIFICATION_HOURLY_THRESHOLD` to control when same-actor reaction notifications coalesce within a UTC hour; the default is `3`
 - Optional `RATE_LIMITS_CONTAINER_NAME` override for the Cosmos container that stores per-user token buckets; defaults to `rateLimits`
 - Optional per-endpoint-class rate-limit overrides via `RATE_LIMIT_<CLASS>_CAPACITY` and `RATE_LIMIT_<CLASS>_REFILL_PER_MINUTE` for `PROFILE`, `POSTS`, `REACTIONS`, `FOLLOWS`, `NOTIFICATIONS`, `MEDIA`, `MODERATION`, and `REPORTS`
@@ -127,8 +126,7 @@ For the Sprint 3 media upload pipeline, the Functions app also needs:
 - `CONTENT_SAFETY_KEY` is optional for local development. In deployed environments, prefer leaving the key unset and granting the Functions managed identity the `Cognitive Services User` role on the Content Safety resource instead.
 - `CONTENT_SAFETY_THRESHOLD` controls the moderation sensitivity used for Azure AI Content Safety results. Supported values are `0` through `7`; the default is `4`.
 - `FFMPEG_PATH` or `MEDIA_FFMPEG_PATH` can be set to the `ffmpeg` executable path when no bundled `ffmpeg` binary is available. This is required for extracting video poster frames in environments that do not include the packaged binary.
-- `TENOR_API_KEY` enables the authenticated GIF reply picker on `/p/{id}` by letting the Functions app proxy Tenor search requests without exposing the provider key to the browser.
-- `TENOR_CLIENT_KEY` defaults to `artificialcontact-web` and can be overridden if Tenor usage needs to be segmented by environment or application.
+- `GIPHY_API_KEY` enables the authenticated GIF picker surfaces by letting the Functions app proxy GIPHY search requests without exposing the provider key to the browser.
 
 ## Front Door media delivery
 

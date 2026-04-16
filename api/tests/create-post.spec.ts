@@ -161,6 +161,132 @@ describe('createPostHandler', () => {
     })
   })
 
+  it('creates a media-only root post with uploaded images and GIF attachments', async () => {
+    const repository: PostRepository = {
+      create: vi.fn(async (post) => post),
+    }
+    const handler = buildCreatePostHandler({
+      idFactory: () => 'p_media_only',
+      maxTextLength: 280,
+      now: () => new Date('2026-04-15T04:15:00.000Z'),
+      repositoryFactory: () => repository,
+    })
+
+    const response = await handler(
+      createRequest({
+        media: [
+          {
+            id: 'github:abc123/2026/04/image-1.png',
+            kind: 'image',
+            url: 'https://media.example.com/images/image-1.png',
+          },
+          {
+            id: 'tenor-123',
+            kind: 'gif',
+            url: 'https://media.tenor.com/party-parrot-full.gif',
+            thumbUrl: 'https://media.tenor.com/party-parrot-tiny.gif',
+            width: 320,
+            height: 240,
+          },
+        ],
+      }),
+      createContext(),
+    )
+
+    expect(response.status).toBe(201)
+    expect(repository.create).toHaveBeenCalledWith({
+      id: 'p_media_only',
+      type: 'post',
+      kind: 'user',
+      threadId: 'p_media_only',
+      parentId: null,
+      authorId: 'github:abc123',
+      authorHandle: 'nick',
+      authorDisplayName: 'Nick Beaugeard',
+      authorAvatarUrl: 'https://cdn.example.com/nick.png',
+      text: '',
+      hashtags: [],
+      mentions: [],
+      media: [
+        {
+          id: 'github:abc123/2026/04/image-1.png',
+          kind: 'image',
+          url: 'https://media.example.com/images/image-1.png',
+          thumbUrl: 'https://media.example.com/images/image-1.png',
+          width: null,
+          height: null,
+        },
+        {
+          id: 'tenor-123',
+          kind: 'gif',
+          url: 'https://media.tenor.com/party-parrot-full.gif',
+          thumbUrl: 'https://media.tenor.com/party-parrot-tiny.gif',
+          width: 320,
+          height: 240,
+        },
+      ],
+      counters: {
+        likes: 0,
+        dislikes: 0,
+        emoji: 0,
+        replies: 0,
+      },
+      visibility: 'public',
+      moderationState: 'ok',
+      createdAt: '2026-04-15T04:15:00.000Z',
+      updatedAt: '2026-04-15T04:15:00.000Z',
+      deletedAt: null,
+    } satisfies PostDocument)
+    expect(response.jsonBody).toEqual({
+      data: {
+        post: {
+          id: 'p_media_only',
+          type: 'post',
+          kind: 'user',
+          threadId: 'p_media_only',
+          parentId: null,
+          authorId: 'github:abc123',
+          authorHandle: 'nick',
+          authorDisplayName: 'Nick Beaugeard',
+          authorAvatarUrl: 'https://cdn.example.com/nick.png',
+          text: '',
+          hashtags: [],
+          mentions: [],
+          media: [
+            {
+              id: 'github:abc123/2026/04/image-1.png',
+              kind: 'image',
+              url: 'https://media.example.com/images/image-1.png',
+              thumbUrl: 'https://media.example.com/images/image-1.png',
+              width: null,
+              height: null,
+            },
+            {
+              id: 'tenor-123',
+              kind: 'gif',
+              url: 'https://media.tenor.com/party-parrot-full.gif',
+              thumbUrl: 'https://media.tenor.com/party-parrot-tiny.gif',
+              width: 320,
+              height: 240,
+            },
+          ],
+          counters: {
+            likes: 0,
+            dislikes: 0,
+            emoji: 0,
+            replies: 0,
+          },
+          visibility: 'public',
+          moderationState: 'ok',
+          createdAt: '2026-04-15T04:15:00.000Z',
+          updatedAt: '2026-04-15T04:15:00.000Z',
+          deletedAt: null,
+        },
+      },
+      errors: [],
+    })
+  })
+
   it('returns 400 when the body is not valid JSON', async () => {
     const handler = buildCreatePostHandler({
       repositoryFactory: () => ({
@@ -207,6 +333,34 @@ describe('createPostHandler', () => {
         {
           code: 'invalid_post',
           message: 'Too big: expected string to have <=5 characters',
+          field: 'text',
+        },
+      ],
+    })
+  })
+
+  it('returns a validation error when the post has neither text nor media', async () => {
+    const handler = buildCreatePostHandler({
+      maxTextLength: 280,
+      repositoryFactory: () => ({
+        create: async (post) => post,
+      }),
+    })
+
+    const response = await handler(
+      createRequest({
+        text: '   ',
+      }),
+      createContext(),
+    )
+
+    expect(response.status).toBe(400)
+    expect(response.jsonBody).toEqual({
+      data: null,
+      errors: [
+        {
+          code: 'invalid_post',
+          message: 'A post must include text, image attachments, or a GIF.',
           field: 'text',
         },
       ],

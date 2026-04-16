@@ -2174,7 +2174,7 @@ describe('App', () => {
     })
   })
 
-  it('lets an authenticated viewer publish a GIF-only Tenor reply', async () => {
+  it('lets an authenticated viewer publish a GIF-only GIPHY reply', async () => {
     window.history.replaceState({}, '', '/p/post-1')
 
     const storedReplies: Array<Record<string, unknown>> = []
@@ -2221,10 +2221,10 @@ describe('App', () => {
               : '',
             results: [
               {
-                id: 'tenor-123',
+                id: 'giphy-123',
                 title: 'Party parrot celebration',
-                previewUrl: 'https://media.tenor.com/party-parrot-tiny.gif',
-                gifUrl: 'https://media.tenor.com/party-parrot-full.gif',
+                previewUrl: 'https://media4.giphy.com/media/party-parrot/200w.gif',
+                gifUrl: 'https://media4.giphy.com/media/party-parrot/giphy.gif',
                 width: 320,
                 height: 240,
               },
@@ -2283,7 +2283,7 @@ describe('App', () => {
       await screen.findByRole('heading', { name: 'Standalone post detail' }),
     ).toBeInTheDocument()
 
-    fireEvent.change(screen.getByPlaceholderText('Search Tenor'), {
+    fireEvent.change(screen.getByPlaceholderText('Search GIPHY'), {
       target: { value: 'party parrot' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Find GIFs' }))
@@ -2299,17 +2299,17 @@ describe('App', () => {
     ).toBeInTheDocument()
     expect(
       await screen.findByAltText('gif attachment from Ada Lovelace'),
-    ).toHaveAttribute('src', 'https://media.tenor.com/party-parrot-tiny.gif')
+    ).toHaveAttribute('src', 'https://media4.giphy.com/media/party-parrot/200w.gif')
 
     expect(storedReplies[0]).toMatchObject({
       id: 'reply-gif',
       text: '',
       media: [
         {
-          id: 'tenor-123',
+          id: 'giphy-123',
           kind: 'gif',
-          url: 'https://media.tenor.com/party-parrot-full.gif',
-          thumbUrl: 'https://media.tenor.com/party-parrot-tiny.gif',
+          url: 'https://media4.giphy.com/media/party-parrot/giphy.gif',
+          thumbUrl: 'https://media4.giphy.com/media/party-parrot/200w.gif',
           width: 320,
           height: 240,
         },

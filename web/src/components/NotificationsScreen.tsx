@@ -1,8 +1,19 @@
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { startTransition, useDeferredValue, useState } from 'react'
 import type { MeProfile } from '../lib/me'
 import {
   getNotificationsPage,
+  markAllNotificationsRead,
+  markAllNotificationsReadInCache,
+  markNotificationRead,
+  markNotificationReadInCache,
+  NOTIFICATION_FEED_QUERY_KEY,
+  NOTIFICATIONS_QUERY_KEY,
+  restoreNotificationsCache,
   type NotificationItem,
 } from '../lib/notifications'
 import { signOut } from '../lib/auth'
@@ -135,6 +146,10 @@ function getNotificationMessage(notification: NotificationItem): string {
     case 'replies':
       return 'replied to your post.'
     case 'reactions':
+      if (notification.coalesced || notification.eventCount > 1) {
+        return `reacted ${notification.eventCount} times across your posts.`
+      }
+
       return 'reacted to your post.'
     case 'follows':
       return 'started following you.'
@@ -250,7 +265,15 @@ function NotificationIcon({ eventType }: { eventType: string }) {
   }
 }
 
-function NotificationRow({ notification }: { notification: NotificationItem }) {
+function NotificationRow({
+  isMarkingRead,
+  notification,
+  onMarkRead,
+}: {
+  isMarkingRead: boolean
+  notification: NotificationItem
+  onMarkRead: (notificationId: string) => void
+}) {
   const actorName =
     notification.actor?.displayName?.trim() ||
     notification.actor?.handle?.trim() ||
@@ -302,6 +325,11 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
             getNotificationMessage(notification)
           )}
         </div>
+        {notification.excerpt?.trim() && (
+          <p className="mt-2 line-clamp-2 text-sm leading-7 text-slate-400">
+            {notification.excerpt}
+          </p>
+        )}
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
           {actorHandle && <span>@{actorHandle}</span>}
           {actorHandle && timestamp && <span>·</span>}
@@ -309,12 +337,26 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
         </div>
       </div>
 
-      {!notification.read && (
-        <span
-          aria-label="Unread notification"
-          className="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-cyan-300"
-        />
-      )}
+      <div className="flex shrink-0 items-start gap-3">
+        {!notification.read && (
+          <span
+            aria-label="Unread notification"
+            className="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-cyan-300"
+          />
+        )}
+        {!notification.read && (
+          <button
+            type="button"
+            onClick={() => {
+              onMarkRead(notification.id)
+            }}
+            disabled={isMarkingRead}
+            className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1.5 text-xs font-medium uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/35 hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-slate-400"
+          >
+            {isMarkingRead ? 'Saving' : 'Mark read'}
+          </button>
+        )}
+      </div>
     </li>
   )
 }
@@ -322,9 +364,10 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
 export function NotificationsScreen({ viewer }: NotificationsScreenProps) {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<NotificationTab>('all')
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const notificationsQuery = useInfiniteQuery({
-    queryKey: ['notifications'],
+    queryKey: NOTIFICATION_FEED_QUERY_KEY,
     queryFn: ({ pageParam, signal }) =>
       getNotificationsPage({ cursor: pageParam, signal }),
     initialPageParam: null as string | null,
@@ -332,6 +375,52 @@ export function NotificationsScreen({ viewer }: NotificationsScreenProps) {
     retry: false,
     staleTime: 15_000,
     refetchOnWindowFocus: false,
+  })
+  const markSingleReadMutation = useMutation({
+    mutationFn: (notificationId: string) => markNotificationRead(notificationId),
+    onMutate: async (notificationId) => {
+      setActionError(null)
+      return markNotificationReadInCache(queryClient, notificationId)
+    },
+    onError: (error, _variables, snapshot) => {
+      if (snapshot) {
+        restoreNotificationsCache(queryClient, snapshot)
+      }
+
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : 'Unable to mark this notification as read.',
+      )
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: NOTIFICATIONS_QUERY_KEY,
+      })
+    },
+  })
+  const markAllReadMutation = useMutation({
+    mutationFn: () => markAllNotificationsRead(),
+    onMutate: async () => {
+      setActionError(null)
+      return markAllNotificationsReadInCache(queryClient)
+    },
+    onError: (error, _variables, snapshot) => {
+      if (snapshot) {
+        restoreNotificationsCache(queryClient, snapshot)
+      }
+
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : 'Unable to mark notifications as read.',
+      )
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: NOTIFICATIONS_QUERY_KEY,
+      })
+    },
   })
 
   const loadedNotifications = useDeferredValue(
@@ -378,8 +467,8 @@ export function NotificationsScreen({ viewer }: NotificationsScreenProps) {
                 </h1>
                 <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300 sm:text-base">
                   In-app delivery via the Cosmos DB change-feed worker. Filter
-                  by the event you care about without leaving the notification
-                  feed.
+                  by the event you care about, open the target directly, and
+                  clear unread activity without leaving the feed.
                 </p>
               </div>
             </div>
@@ -406,6 +495,7 @@ export function NotificationsScreen({ viewer }: NotificationsScreenProps) {
               <button
                 type="button"
                 onClick={() => {
+                  setActionError(null)
                   void notificationsQuery.refetch()
                 }}
                 className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/35 hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-slate-400"
@@ -415,6 +505,16 @@ export function NotificationsScreen({ viewer }: NotificationsScreenProps) {
                 }
               >
                 Refresh notifications
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void markAllReadMutation.mutateAsync()
+                }}
+                className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/35 hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-slate-400"
+                disabled={unreadCount === 0 || markAllReadMutation.isPending}
+              >
+                {markAllReadMutation.isPending ? 'Saving…' : 'Mark all read'}
               </button>
               <button
                 type="button"
@@ -459,6 +559,12 @@ export function NotificationsScreen({ viewer }: NotificationsScreenProps) {
             })}
           </div>
 
+          {actionError && (
+            <article className="mt-5 rounded-[1.75rem] border border-rose-400/20 bg-rose-400/10 p-4 text-sm leading-7 text-rose-100">
+              {actionError}
+            </article>
+          )}
+
           {notificationsQuery.isPending && (
             <div className="space-y-4 py-5">
               {Array.from({ length: 4 }, (_, index) => (
@@ -491,12 +597,13 @@ export function NotificationsScreen({ viewer }: NotificationsScreenProps) {
                   : 'Unable to load the in-app notification feed.'}
               </p>
               <p className="mt-3 text-sm leading-7 text-rose-100/90">
-                The UI is wired to the documented `/api/notifications` contract
-                and will populate here once the API is available.
+                The UI is wired to the authenticated notifications API and will
+                populate here once the read model is available.
               </p>
               <button
                 type="button"
                 onClick={() => {
+                  setActionError(null)
                   void notificationsQuery.refetch()
                 }}
                 className="mt-5 rounded-full border border-rose-200/25 px-4 py-2 text-sm font-medium text-white transition hover:border-rose-100/40 hover:bg-white/6"
@@ -529,7 +636,14 @@ export function NotificationsScreen({ viewer }: NotificationsScreenProps) {
                 {visibleNotifications.map((notification) => (
                   <NotificationRow
                     key={notification.id}
+                    isMarkingRead={
+                      markSingleReadMutation.isPending &&
+                      markSingleReadMutation.variables === notification.id
+                    }
                     notification={notification}
+                    onMarkRead={(notificationId) => {
+                      void markSingleReadMutation.mutateAsync(notificationId)
+                    }}
                   />
                 ))}
               </ul>

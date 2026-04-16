@@ -2,9 +2,9 @@ import type { HttpRequest, InvocationContext } from '@azure/functions'
 import { describe, expect, it, vi } from 'vitest'
 import { buildSearchGifHandler } from '../src/functions/search-gifs.js'
 import {
-  TenorConfigurationError,
-  TenorUpstreamError,
-} from '../src/lib/tenor.js'
+  GiphyConfigurationError,
+  GiphyUpstreamError,
+} from '../src/lib/giphy.js'
 import type { UserDocument } from '../src/lib/users.js'
 
 function createStoredUser(overrides: Partial<UserDocument> = {}): UserDocument {
@@ -66,16 +66,16 @@ function createRequest(
 }
 
 describe('searchGifHandler', () => {
-  it('returns Tenor-backed GIF search results for an active user', async () => {
+  it('returns GIPHY-backed GIF search results for an active user', async () => {
     const searchGifs = vi.fn(async () => ({
       mode: 'search' as const,
       query: 'party parrot',
       results: [
         {
-          id: 'tenor-1',
+          id: 'giphy-1',
           title: 'Party parrot',
-          previewUrl: 'https://media.tenor.com/tiny.gif',
-          gifUrl: 'https://media.tenor.com/full.gif',
+          previewUrl: 'https://media4.giphy.com/media/party-parrot/200w.gif',
+          gifUrl: 'https://media4.giphy.com/media/party-parrot/giphy.gif',
           width: 320,
           height: 240,
         },
@@ -106,10 +106,10 @@ describe('searchGifHandler', () => {
         query: 'party parrot',
         results: [
           {
-            id: 'tenor-1',
+            id: 'giphy-1',
             title: 'Party parrot',
-            previewUrl: 'https://media.tenor.com/tiny.gif',
-            gifUrl: 'https://media.tenor.com/full.gif',
+            previewUrl: 'https://media4.giphy.com/media/party-parrot/200w.gif',
+            gifUrl: 'https://media4.giphy.com/media/party-parrot/giphy.gif',
             width: 320,
             height: 240,
           },
@@ -144,10 +144,10 @@ describe('searchGifHandler', () => {
     })
   })
 
-  it('surfaces Tenor configuration failures as 503 responses', async () => {
+  it('surfaces GIPHY configuration failures as 503 responses', async () => {
     const handler = buildSearchGifHandler({
       searchGifs: vi.fn(async () => {
-        throw new TenorConfigurationError()
+        throw new GiphyConfigurationError()
       }),
     })
 
@@ -165,10 +165,10 @@ describe('searchGifHandler', () => {
     })
   })
 
-  it('surfaces Tenor upstream failures as 502 responses', async () => {
+  it('surfaces GIPHY upstream failures as 502 responses', async () => {
     const handler = buildSearchGifHandler({
       searchGifs: vi.fn(async () => {
-        throw new TenorUpstreamError('Tenor GIF search failed with status 429.')
+        throw new GiphyUpstreamError('GIPHY GIF search failed with status 429.')
       }),
     })
 
@@ -180,7 +180,7 @@ describe('searchGifHandler', () => {
       errors: [
         {
           code: 'gif_picker_upstream_failed',
-          message: 'Tenor GIF search failed with status 429.',
+          message: 'GIPHY GIF search failed with status 429.',
         },
       ],
     })

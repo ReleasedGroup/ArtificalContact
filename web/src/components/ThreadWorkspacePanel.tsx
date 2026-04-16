@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import type { MeProfile } from '../lib/me'
 import { createPost } from '../lib/post-write'
+import type { GifSearchResult } from '../lib/gif-search'
+import { AppImage } from './AppImage'
 import {
   PostComposer,
   type PostComposerMediaFile,
   type PostComposerSubmission,
 } from './PostComposer'
+import { PostGifPicker } from './PostGifPicker'
 
 interface ThreadWorkspacePanelProps {
   authorBadge: string
@@ -40,6 +43,7 @@ export function ThreadWorkspacePanel({
   const [postMediaFiles, setPostMediaFiles] = useState<PostComposerMediaFile[]>(
     [],
   )
+  const [selectedGif, setSelectedGif] = useState<GifSearchResult | null>(null)
   const [publishState, setPublishState] = useState<PublishState>({
     status: 'idle',
   })
@@ -48,17 +52,33 @@ export function ThreadWorkspacePanel({
   const canPublish = user.status === 'active' && Boolean(user.handle)
   const isHomeMode = mode === 'home'
 
-  const handleSubmit = async ({ value }: PostComposerSubmission) => {
+  const handleSubmit = async ({ mediaFiles, value }: PostComposerSubmission) => {
     setPublishState({ status: 'publishing' })
 
     try {
       const response = await createPost({
-        text: value.trim(),
+        text: value,
+        mediaFiles,
+        ...(selectedGif === null
+          ? {}
+          : {
+              media: [
+                {
+                  id: selectedGif.id,
+                  kind: 'gif' as const,
+                  url: selectedGif.gifUrl,
+                  thumbUrl: selectedGif.previewUrl,
+                  width: selectedGif.width,
+                  height: selectedGif.height,
+                },
+              ],
+            }),
       })
 
       setPublishedPost(response.post)
       setPostDraft('')
       setPostMediaFiles([])
+      setSelectedGif(null)
       await onPublished?.(response.post)
       setPublishState({
         status: 'success',
@@ -78,7 +98,7 @@ export function ThreadWorkspacePanel({
   return (
     <section
       data-testid="thread-workspace"
-      className={`${isHomeMode ? 'mb-6' : 'mt-6'} rounded-[1.75rem] border border-white/10 bg-slate-900/70 p-6`}
+      className={`${isHomeMode ? 'mb-5' : 'mt-5'} rounded-[1.4rem] border border-white/8 bg-white/[0.04] p-5`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -111,8 +131,8 @@ export function ThreadWorkspacePanel({
         </div>
       )}
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/45 p-4">
+      <div className="mt-5 grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="rounded-[1.2rem] border border-white/8 bg-slate-950/35 p-4">
           <p className="text-sm font-medium text-white">
             {isHomeMode ? 'Publish post' : 'Publish root post'}
           </p>
@@ -127,6 +147,7 @@ export function ThreadWorkspacePanel({
               authorHandle={authorHandle}
               authorName={authorName}
               disabled={!canPublish}
+              hasExternalMedia={selectedGif !== null}
               label="Thread post body"
               mediaFiles={postMediaFiles}
               onChange={(nextValue) => {
@@ -151,14 +172,59 @@ export function ThreadWorkspacePanel({
               submitting={publishState.status === 'publishing'}
               value={postDraft}
             />
+
+            {selectedGif && (
+              <div className="mt-4 overflow-hidden rounded-[1rem] border border-white/8 bg-slate-900/65">
+                <AppImage
+                  alt={selectedGif.title ?? 'Selected post GIF'}
+                  className="h-48 w-full object-cover"
+                  src={selectedGif.previewUrl}
+                />
+                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-white">
+                      {selectedGif.title ?? 'Selected GIF'}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {selectedGif.width && selectedGif.height
+                        ? `${selectedGif.width} × ${selectedGif.height}`
+                        : 'Ready to publish'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedGif(null)
+                      if (publishState.status !== 'publishing') {
+                        setPublishState({ status: 'idle' })
+                      }
+                    }}
+                    className="rounded-full border border-rose-300/20 bg-rose-400/10 px-3 py-1.5 text-xs font-medium text-rose-100 transition hover:border-rose-300/35 hover:bg-rose-400/20"
+                    disabled={publishState.status === 'publishing'}
+                  >
+                    Remove GIF
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <PostGifPicker
+              disabled={!canPublish || publishState.status === 'publishing'}
+              onSelect={(gif) => {
+                setSelectedGif(gif)
+                if (publishState.status !== 'publishing') {
+                  setPublishState({ status: 'idle' })
+                }
+              }}
+            />
           </div>
         </div>
 
-        <aside className="rounded-[1.5rem] border border-white/10 bg-slate-950/45 p-4">
+        <aside className="rounded-[1.2rem] border border-white/8 bg-slate-950/35 p-4">
           <p className="text-sm font-medium text-white">Latest published post</p>
           {publishedPost ? (
             <div className="mt-4 space-y-4">
-              <div className="rounded-[1.35rem] border border-white/10 bg-slate-900/80 p-4">
+              <div className="rounded-[1rem] border border-white/8 bg-slate-900/65 p-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
                   Post id
                 </p>

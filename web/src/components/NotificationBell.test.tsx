@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   NOTIFICATION_POLL_INTERVAL_MS,
@@ -44,23 +44,25 @@ describe('NotificationBell', () => {
   it('shows the unread badge and renders notification details from the API payload', async () => {
     mockFetch.mockResolvedValue(
       createJsonResponse(200, {
-        data: [
-          {
-            id: 'notification-1',
-            eventType: 'reply',
-            actor: {
-              id: 'github:actor-1',
-              handle: 'grace',
-              displayName: 'Grace Hopper',
-              avatarUrl: null,
+        data: {
+          notifications: [
+            {
+              id: 'notification-1',
+              eventType: 'reply',
+              actor: {
+                id: 'github:actor-1',
+                handle: 'grace',
+                displayName: 'Grace Hopper',
+                avatarUrl: null,
+              },
+              excerpt: 'replied to your post in #evals.',
+              readAt: null,
+              createdAt: '2026-04-15T09:50:00.000Z',
+              postId: 'post-1',
             },
-            text: 'replied to your post in #evals.',
-            read: false,
-            createdAt: '2026-04-15T09:50:00.000Z',
-            postId: 'post-1',
-          },
-        ],
-        unreadCount: 2,
+          ],
+          unreadCount: 2,
+        },
         cursor: null,
         errors: [],
       }),
@@ -79,6 +81,9 @@ describe('NotificationBell', () => {
 
     expect(await screen.findByText('Grace Hopper')).toBeInTheDocument()
     expect(
+      screen.getByText('replied to your post.'),
+    ).toBeInTheDocument()
+    expect(
       screen.getByText('replied to your post in #evals.'),
     ).toBeInTheDocument()
     expect(screen.getByText(/ago/i)).toBeInTheDocument()
@@ -92,5 +97,63 @@ describe('NotificationBell', () => {
         },
       }),
     )
+  })
+
+  it('marks all notifications as read from the bell', async () => {
+    mockFetch.mockImplementation(async (_input, init) => {
+      if (!init?.method || init.method === 'GET') {
+        return createJsonResponse(200, {
+          data: {
+            notifications: [
+              {
+                id: 'notification-1',
+                eventType: 'reply',
+                excerpt: 'replied to your post in #evals.',
+                readAt: null,
+                createdAt: '2026-04-15T09:50:00.000Z',
+                actor: {
+                  handle: 'grace',
+                  displayName: 'Grace Hopper',
+                },
+              },
+            ],
+            unreadCount: 1,
+          },
+          cursor: null,
+          errors: [],
+        })
+      }
+
+      return createJsonResponse(200, {
+        data: {
+          read: {
+            scope: 'all',
+            notificationId: null,
+            updatedCount: 1,
+          },
+        },
+        errors: [],
+      })
+    })
+
+    renderNotificationBell()
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Notifications, 1 unread' }),
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Mark all read' }))
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/notifications/read',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            all: true,
+          }),
+        }),
+      )
+    })
   })
 })

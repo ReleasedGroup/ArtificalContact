@@ -136,8 +136,14 @@ function createReactionRepository(
 
 describe('createReactionHandler', () => {
   it('creates a new like reaction document for a public post', async () => {
-    const postStore: PostStore = {
+    const postStore = {
       getPostById: vi.fn(async () => createStoredPost()),
+      getReactionSummary: vi.fn(async () => ({
+        likes: 3,
+        dislikes: 0,
+        emoji: 1,
+      })),
+      setReactionCounts: vi.fn(async () => undefined),
     }
     const reactionRepository = createReactionRepository()
     const handler = buildCreateReactionHandler({
@@ -160,6 +166,13 @@ describe('createReactionHandler', () => {
         sentiment: 'like',
       }),
     )
+    expect(postStore.getReactionSummary).toHaveBeenCalledWith('post-1')
+    expect(postStore.setReactionCounts).toHaveBeenCalledWith('post-1', 'post-1', {
+      likes: 3,
+      dislikes: 0,
+      emoji: 1,
+      replies: 4,
+    })
     expect(response.status).toBe(201)
     expect(response.jsonBody).toEqual({
       data: {

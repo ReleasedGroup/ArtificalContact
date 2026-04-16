@@ -22,6 +22,7 @@ import {
   type ReactionPolicy,
   type ReactionRepository,
 } from '../lib/reactions.js'
+import type { ReactionCounterStore } from '../lib/reaction-counter.js'
 import { withRateLimit } from '../lib/rate-limit.js'
 
 export interface CreateReactionHandlerDependencies {
@@ -41,6 +42,23 @@ function getPostStore(): CosmosPostStore {
 function normalizeRoutePostId(postId: string | undefined): string | null {
   const trimmed = postId?.trim()
   return trimmed ? trimmed : null
+}
+
+function toNonNegativeInteger(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.trunc(value)
+    : 0
+}
+
+function supportsReactionCounterSync(
+  store: PostStore,
+): store is PostStore & ReactionCounterStore {
+  const candidate = store as Partial<ReactionCounterStore>
+
+  return (
+    typeof candidate.getReactionSummary === 'function' &&
+    typeof candidate.setReactionCounts === 'function'
+  )
 }
 
 export function buildCreateReactionHandler(
@@ -142,8 +160,10 @@ export function buildCreateReactionHandler(
       })
     }
 
+    let post: Awaited<ReturnType<PostStore['getPostById']>> = null
+
     try {
-      const post = await postStore.getPostById(postId)
+      post = await postStore.getPostById(postId)
       if (post === null || !isPubliclyVisiblePost(post)) {
         return createJsonEnvelopeResponse(404, {
           data: null,
@@ -225,6 +245,29 @@ export function buildCreateReactionHandler(
         storedReaction = await reactionRepository.upsert(mutation.reaction)
       } else if (existingReaction !== null) {
         storedReaction = existingReaction
+      }
+
+      if (post !== null && supportsReactionCounterSync(postStore)) {
+        try {
+          const nextCounts = await postStore.getReactionSummary(postId)
+          await postStore.setReactionCounts(
+            post.id,
+            post.threadId?.trim() || post.id,
+            {
+              ...nextCounts,
+              replies: toNonNegativeInteger(post.counters?.replies),
+            },
+          )
+        } catch (error) {
+          context.log('Failed to refresh post reaction counters.', {
+            actorId: authenticatedUser.id,
+            error:
+              error instanceof Error
+                ? error.message
+                : 'Unknown reaction counter sync error.',
+            postId,
+          })
+        }
       }
 
       context.log('Recorded post reaction.', {

@@ -9,14 +9,14 @@ import {
   createSuccessResponse,
 } from '../lib/api-envelope.js'
 import {
-  searchTenorGifs,
-  TenorConfigurationError,
-  TenorUpstreamError,
-} from '../lib/tenor.js'
+  GiphyConfigurationError,
+  GiphyUpstreamError,
+  searchGiphyGifs,
+} from '../lib/giphy.js'
 import { withHttpAuth } from '../lib/http-auth.js'
 
 export interface SearchGifHandlerDependencies {
-  searchGifs?: typeof searchTenorGifs
+  searchGifs?: typeof searchGiphyGifs
 }
 
 function resolveLimit(value: string | undefined): number | undefined {
@@ -31,7 +31,7 @@ function resolveLimit(value: string | undefined): number | undefined {
 export function buildSearchGifHandler(
   dependencies: SearchGifHandlerDependencies = {},
 ) {
-  const searchGifs = dependencies.searchGifs ?? searchTenorGifs
+  const searchGifs = dependencies.searchGifs ?? searchGiphyGifs
 
   return async function searchGifHandler(
     request: HttpRequest,
@@ -72,8 +72,8 @@ export function buildSearchGifHandler(
 
       return createSuccessResponse(results)
     } catch (error) {
-      if (error instanceof TenorConfigurationError) {
-        context.log('GIF picker search is unavailable because Tenor is not configured.', {
+      if (error instanceof GiphyConfigurationError) {
+        context.log('GIF picker search is unavailable because GIPHY is not configured.', {
           userId: authenticatedUser.id,
         })
 
@@ -83,8 +83,8 @@ export function buildSearchGifHandler(
         })
       }
 
-      if (error instanceof TenorUpstreamError) {
-        context.log('GIF picker search failed at the Tenor upstream.', {
+      if (error instanceof GiphyUpstreamError) {
+        context.log('GIF picker search failed at the GIPHY upstream.', {
           error: error.message,
           userId: authenticatedUser.id,
         })

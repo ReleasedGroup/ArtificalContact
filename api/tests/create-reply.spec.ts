@@ -107,9 +107,11 @@ function createContext(user: UserDocument | null = createStoredUser()) {
 describe('createReplyHandler', () => {
   it('creates a nested reply that inherits the root thread id', async () => {
     const parentPost = createStoredPost()
-    const repository: ReadablePostRepository = {
+    const repository = {
       getPostById: vi.fn(async () => parentPost),
       create: vi.fn(async (post) => post),
+      countActiveReplies: vi.fn(async () => 5),
+      setReplyCount: vi.fn(async () => undefined),
     }
     const handler = buildCreateReplyHandler({
       idFactory: () => 'reply-2',
@@ -152,6 +154,15 @@ describe('createReplyHandler', () => {
       updatedAt: '2026-04-15T04:00:00.000Z',
       deletedAt: null,
     } satisfies UserPostDocument)
+    expect(repository.countActiveReplies).toHaveBeenCalledWith(
+      'thread-root',
+      'reply-parent',
+    )
+    expect(repository.setReplyCount).toHaveBeenCalledWith(
+      'reply-parent',
+      'thread-root',
+      5,
+    )
     expect(response.status).toBe(201)
     expect(response.jsonBody).toEqual({
       data: {
@@ -191,7 +202,7 @@ describe('createReplyHandler', () => {
     })
   })
 
-  it('creates a GIF-only reply when the request includes a Tenor media payload', async () => {
+  it('creates a GIF-only reply when the request includes a GIPHY media payload', async () => {
     const parentPost = createStoredPost()
     const repository: ReadablePostRepository = {
       getPostById: vi.fn(async () => parentPost),
@@ -208,10 +219,10 @@ describe('createReplyHandler', () => {
       createRequest({
         media: [
           {
-            id: 'tenor-123',
+            id: 'giphy-123',
             kind: 'gif',
-            url: 'https://media.tenor.com/full.gif',
-            thumbUrl: 'https://media.tenor.com/tiny.gif',
+            url: 'https://media4.giphy.com/media/party/giphy.gif',
+            thumbUrl: 'https://media4.giphy.com/media/party/200w.gif',
             width: 320,
             height: 240,
           },
@@ -235,10 +246,10 @@ describe('createReplyHandler', () => {
       mentions: [],
       media: [
         {
-          id: 'tenor-123',
+          id: 'giphy-123',
           kind: 'gif',
-          url: 'https://media.tenor.com/full.gif',
-          thumbUrl: 'https://media.tenor.com/tiny.gif',
+          url: 'https://media4.giphy.com/media/party/giphy.gif',
+          thumbUrl: 'https://media4.giphy.com/media/party/200w.gif',
           width: 320,
           height: 240,
         },
@@ -273,10 +284,10 @@ describe('createReplyHandler', () => {
           mentions: [],
           media: [
             {
-              id: 'tenor-123',
+              id: 'giphy-123',
               kind: 'gif',
-              url: 'https://media.tenor.com/full.gif',
-              thumbUrl: 'https://media.tenor.com/tiny.gif',
+              url: 'https://media4.giphy.com/media/party/giphy.gif',
+              thumbUrl: 'https://media4.giphy.com/media/party/200w.gif',
               width: 320,
               height: 240,
             },
@@ -414,7 +425,7 @@ describe('createReplyHandler', () => {
     })
   })
 
-  it('returns validation errors when the reply GIF URL is outside the allowed Tenor hosts', async () => {
+  it('returns validation errors when the reply GIF URL is outside the allowed GIF provider hosts', async () => {
     const repository: ReadablePostRepository = {
       getPostById: vi.fn(async () => createStoredPost()),
       create: vi.fn(async (post) => post),
@@ -427,10 +438,10 @@ describe('createReplyHandler', () => {
       createRequest({
         media: [
           {
-            id: 'tenor-123',
+            id: 'giphy-123',
             kind: 'gif',
             url: 'https://example.com/full.gif',
-            thumbUrl: 'https://media.tenor.com/tiny.gif',
+            thumbUrl: 'https://media4.giphy.com/media/party/200w.gif',
           },
         ],
       }),
@@ -443,7 +454,7 @@ describe('createReplyHandler', () => {
       errors: [
         {
           code: 'invalid_post',
-          message: 'GIF URLs must use an https://*.tenor.com URL.',
+          message: 'GIF URLs must use an https GIF URL from GIPHY or Tenor.',
           field: 'media.0.url',
         },
       ],

@@ -20,6 +20,7 @@ import {
   resolvePostMaxLength,
   type ReadablePostRepository,
 } from '../lib/posts.js'
+import type { ReplyCounterStore } from '../lib/reply-counter.js'
 import { withRateLimit } from '../lib/rate-limit.js'
 
 export interface CreateReplyHandlerDependencies {
@@ -39,6 +40,17 @@ function getStore(): CosmosPostStore {
 function normalizeRoutePostId(postId: string | undefined): string | null {
   const trimmed = postId?.trim()
   return trimmed ? trimmed : null
+}
+
+function supportsReplyCounterSync(
+  repository: ReadablePostRepository,
+): repository is ReadablePostRepository & ReplyCounterStore {
+  const candidate = repository as Partial<ReplyCounterStore>
+
+  return (
+    typeof candidate.countActiveReplies === 'function' &&
+    typeof candidate.setReplyCount === 'function'
+  )
 }
 
 export function buildCreateReplyHandler(
@@ -161,6 +173,29 @@ export function buildCreateReplyHandler(
         idFactory,
       )
       const storedReply = await repository.create(reply)
+
+      if (supportsReplyCounterSync(repository)) {
+        try {
+          const activeReplyCount = await repository.countActiveReplies(
+            storedReply.threadId,
+            parentPost.id,
+          )
+          await repository.setReplyCount(
+            parentPost.id,
+            storedReply.threadId,
+            activeReplyCount,
+          )
+        } catch (error) {
+          context.log('Failed to refresh reply counters after reply creation.', {
+            authorId: authenticatedUser.id,
+            error:
+              error instanceof Error
+                ? error.message
+                : 'Unknown reply counter sync error.',
+            parentId: parentPostId,
+          })
+        }
+      }
 
       context.log('Created reply post.', {
         authorId: authenticatedUser.id,

@@ -67,9 +67,18 @@ describe('authMeHandler', () => {
       create: vi.fn(async (user) => user),
       upsert: vi.fn(async (user) => user),
     }
+    const followCounterStore = {
+      countActiveFollowers: vi.fn(async () => 8),
+      countActiveFollowing: vi.fn(async () => 5),
+    }
+    const postCounterStore = {
+      countActiveRootPostsByAuthorId: vi.fn(async () => 3),
+    }
 
     const handler = buildAuthMeHandler({
       emitSigninTelemetry,
+      followCounterStoreFactory: () => followCounterStore,
+      postCounterStoreFactory: () => postCounterStore,
       repositoryFactory: () => repository,
       now: () => new Date('2026-04-15T02:00:00.000Z'),
     })
@@ -102,6 +111,15 @@ describe('authMeHandler', () => {
       identityProvider: 'github',
       isNewUser: false,
     })
+    expect(postCounterStore.countActiveRootPostsByAuthorId).toHaveBeenCalledWith(
+      'github:abc123',
+    )
+    expect(followCounterStore.countActiveFollowers).toHaveBeenCalledWith(
+      'github:abc123',
+    )
+    expect(followCounterStore.countActiveFollowing).toHaveBeenCalledWith(
+      'github:abc123',
+    )
   })
 
   it('jit provisions a pending user on first sign-in', async () => {
@@ -111,9 +129,18 @@ describe('authMeHandler', () => {
       create: vi.fn(async (user) => user),
       upsert: vi.fn(async (user) => user),
     }
+    const followCounterStore = {
+      countActiveFollowers: vi.fn(async () => 0),
+      countActiveFollowing: vi.fn(async () => 0),
+    }
+    const postCounterStore = {
+      countActiveRootPostsByAuthorId: vi.fn(async () => 0),
+    }
 
     const handler = buildAuthMeHandler({
       emitSigninTelemetry,
+      followCounterStoreFactory: () => followCounterStore,
+      postCounterStoreFactory: () => postCounterStore,
       repositoryFactory: () => repository,
       now: () => new Date('2026-04-15T02:30:00.000Z'),
     })
@@ -179,8 +206,17 @@ describe('authMeHandler', () => {
       }),
       upsert: vi.fn(async (user) => user),
     }
+    const followCounterStore = {
+      countActiveFollowers: vi.fn(async () => 8),
+      countActiveFollowing: vi.fn(async () => 5),
+    }
+    const postCounterStore = {
+      countActiveRootPostsByAuthorId: vi.fn(async () => 3),
+    }
 
     const handler = buildAuthMeHandler({
+      followCounterStoreFactory: () => followCounterStore,
+      postCounterStoreFactory: () => postCounterStore,
       repositoryFactory: () => repository,
       now: () => new Date('2026-04-15T02:45:00.000Z'),
     })
@@ -242,11 +278,20 @@ describe('authMeHandler', () => {
       create: vi.fn(async (user) => user),
       upsert: vi.fn(async (user) => user),
     }
+    const followCounterStore = {
+      countActiveFollowers: vi.fn(async () => 8),
+      countActiveFollowing: vi.fn(async () => 5),
+    }
+    const postCounterStore = {
+      countActiveRootPostsByAuthorId: vi.fn(async () => 3),
+    }
 
     const handler = buildAuthMeHandler({
       emitSigninTelemetry: () => {
         throw new Error('Telemetry unavailable')
       },
+      followCounterStoreFactory: () => followCounterStore,
+      postCounterStoreFactory: () => postCounterStore,
       repositoryFactory: () => repository,
       now: () => new Date('2026-04-15T02:00:00.000Z'),
     })
@@ -267,6 +312,116 @@ describe('authMeHandler', () => {
       'Failed to emit auth.signin telemetry.',
       {
         error: 'Telemetry unavailable',
+      },
+    )
+  })
+
+  it('returns live counters when the stored profile counters are stale', async () => {
+    const repository: UserRepository = {
+      getById: vi.fn(async () =>
+        createStoredUser({
+          counters: {
+            posts: 0,
+            followers: 0,
+            following: 0,
+          },
+        }),
+      ),
+      create: vi.fn(async (user) => user),
+      upsert: vi.fn(async (user) => user),
+    }
+    const followCounterStore = {
+      countActiveFollowers: vi.fn(async () => 1),
+      countActiveFollowing: vi.fn(async () => 2),
+    }
+    const postCounterStore = {
+      countActiveRootPostsByAuthorId: vi.fn(async () => 4),
+    }
+
+    const handler = buildAuthMeHandler({
+      followCounterStoreFactory: () => followCounterStore,
+      postCounterStoreFactory: () => postCounterStore,
+      repositoryFactory: () => repository,
+    })
+
+    const response = await handler(
+      createPrincipalRequest({
+        identityProvider: 'github',
+        userId: 'abc123',
+        userDetails: 'nickbeau',
+        userRoles: ['anonymous', 'authenticated'],
+        claims: [{ typ: 'emails', val: 'nick@example.com' }],
+      }),
+      createContext(),
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.jsonBody).toMatchObject({
+      data: {
+        user: {
+          counters: {
+            posts: 4,
+            followers: 1,
+            following: 2,
+          },
+        },
+      },
+      errors: [],
+    })
+  })
+
+  it('falls back to the stored counters when live counter reconciliation fails', async () => {
+    const context = createContext()
+    const repository: UserRepository = {
+      getById: vi.fn(async () => createStoredUser()),
+      create: vi.fn(async (user) => user),
+      upsert: vi.fn(async (user) => user),
+    }
+    const followCounterStore = {
+      countActiveFollowers: vi.fn(async () => {
+        throw new Error('Followers unavailable')
+      }),
+      countActiveFollowing: vi.fn(async () => 5),
+    }
+    const postCounterStore = {
+      countActiveRootPostsByAuthorId: vi.fn(async () => 3),
+    }
+
+    const handler = buildAuthMeHandler({
+      followCounterStoreFactory: () => followCounterStore,
+      postCounterStoreFactory: () => postCounterStore,
+      repositoryFactory: () => repository,
+    })
+
+    const response = await handler(
+      createPrincipalRequest({
+        identityProvider: 'github',
+        userId: 'abc123',
+        userDetails: 'nickbeau',
+        userRoles: ['anonymous', 'authenticated'],
+        claims: [{ typ: 'emails', val: 'nick@example.com' }],
+      }),
+      context,
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.jsonBody).toMatchObject({
+      data: {
+        user: {
+          counters: {
+            posts: 3,
+            followers: 8,
+            following: 5,
+          },
+        },
+      },
+      errors: [],
+    })
+    expect(context.log).toHaveBeenCalledWith(
+      'Failed to reconcile authenticated profile counters.',
+      {
+        error: 'Followers unavailable',
+        userId: 'github:abc123',
       },
     )
   })
