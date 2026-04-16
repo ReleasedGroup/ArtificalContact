@@ -205,7 +205,7 @@ describe('App', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders the sign-in screen and exposes both SWA auth providers', async () => {
+  it('renders the sign-in screen and exposes the Microsoft SWA auth provider', async () => {
     mockFetch.mockImplementation(async (input) => {
       if (String(input) === '/api/me') {
         return createJsonResponse(403, {
@@ -251,15 +251,10 @@ describe('App', () => {
       screen.getByRole('link', { name: /continue with microsoft/i }),
     ).toHaveAttribute('href', '/.auth/login/aad?post_login_redirect_uri=%2F')
     expect(
-      screen.getByRole('link', { name: /continue with github/i }),
-    ).toHaveAttribute('href', '/.auth/login/github?post_login_redirect_uri=%2F')
-    expect(
-      screen.getByRole('button', { name: /sign out/i }),
-    ).toBeInTheDocument()
+      screen.queryByRole('link', { name: /continue with github/i }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument()
 
-    expect(await screen.findByText('Healthy')).toBeInTheDocument()
-    expect(screen.getByText(/sha-1234/)).toBeInTheDocument()
-    expect(screen.getByText(/Cosmos ping:/)).toBeInTheDocument()
   })
 
   it('renders the authenticated home feed on the root route when a session exists', async () => {
@@ -391,18 +386,14 @@ describe('App', () => {
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'agents ×' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'evals ×' })).toBeInTheDocument()
-    expect(screen.getByText('Composer preview')).toBeInTheDocument()
-    expect(screen.getByText('Direct upload pipeline')).toBeInTheDocument()
+    expect(screen.getByText('Public preview')).toBeInTheDocument()
+    expect(screen.getByText('Avatar upload')).toBeInTheDocument()
+    expect(screen.getByText('Banner upload')).toBeInTheDocument()
     expect(
-      screen.getByRole('textbox', {
-        name: 'Post body',
+      screen.getByRole('link', {
+        name: 'View public profile',
       }),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByRole('textbox', {
-        name: 'Reply body',
-      }),
-    ).toBeInTheDocument()
+    ).toHaveAttribute('href', '/u/nick')
   })
 
   it('renders the /notifications route with the in-app notification list view', async () => {
@@ -879,13 +870,53 @@ describe('App', () => {
     )
   })
 
-  it('publishes a root post from the /me thread workspace', async () => {
-    window.history.replaceState({}, '', '/me')
+  it('publishes a root post from the home feed composer', async () => {
+    window.history.replaceState({}, '', '/')
+
+    let feedRequestCount = 0
 
     mockFetch.mockImplementation(async (input, init) => {
       if (String(input) === '/api/me') {
         return createJsonResponse(200, {
           data: createResolvedMeProfile(),
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/feed') {
+        feedRequestCount += 1
+
+        return createJsonResponse(200, {
+          data:
+            feedRequestCount === 1
+              ? []
+              : [
+                  {
+                    id: 'feed-2',
+                    postId: 'post-2',
+                    authorId: 'github:abc123',
+                    authorHandle: 'nickbeau',
+                    authorDisplayName: 'Nick Beaugeard',
+                    authorAvatarUrl: null,
+                    excerpt: 'Publishing a real workflow post from the home route.',
+                    media: [],
+                    counters: {
+                      likes: 0,
+                      replies: 0,
+                    },
+                    createdAt: '2026-04-15T03:00:00.000Z',
+                  },
+                ],
+          cursor: null,
+          errors: [],
+        })
+      }
+
+      if (String(input) === '/api/notifications') {
+        return createJsonResponse(200, {
+          data: [],
+          unreadCount: 0,
+          cursor: null,
           errors: [],
         })
       }
@@ -908,13 +939,13 @@ describe('App', () => {
     renderApp()
 
     expect(
-      await screen.findByRole('heading', { name: 'Edit your profile' }),
+      await screen.findByRole('heading', { name: 'Home feed' }),
     ).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Thread post body'), {
-      target: { value: 'Publishing a real workflow post from the /me route.' },
+      target: { value: 'Publishing a real workflow post from the home route.' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Publish post' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Post to feed' }))
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
@@ -922,14 +953,14 @@ describe('App', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({
-            text: 'Publishing a real workflow post from the /me route.',
+            text: 'Publishing a real workflow post from the home route.',
           }),
         }),
       )
     })
 
     expect(
-      await screen.findByText('Post published to /p/post-2.'),
+      await screen.findByText('Post published. Your home feed is refreshing.'),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('link', { name: 'Open standalone page' }),
@@ -985,7 +1016,7 @@ describe('App', () => {
     expect(screen.getByText('@Ada')).toBeInTheDocument()
     expect(screen.getByText('Symbolic AI nerd.')).toBeInTheDocument()
     expect(screen.getByText('llm')).toBeInTheDocument()
-    expect(screen.getByText('Public identity is live.')).toBeInTheDocument()
+    expect(screen.getByText('Profile snapshot')).toBeInTheDocument()
     expect(mockFetch).toHaveBeenCalledTimes(2)
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/users/Ada',
@@ -1122,7 +1153,7 @@ describe('App', () => {
       screen.getByText('No public profile exists for the requested handle.'),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('link', { name: 'Back to sign-in' }),
+      screen.getByRole('link', { name: 'Home' }),
     ).toHaveAttribute('href', '/')
   })
 

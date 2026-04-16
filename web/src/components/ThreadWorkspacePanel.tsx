@@ -11,6 +11,8 @@ interface ThreadWorkspacePanelProps {
   authorBadge: string
   authorHandle: string | null
   authorName: string
+  mode?: 'profile' | 'home'
+  onPublished?: (post: PublishedPost) => Promise<void> | void
   user: MeProfile
 }
 
@@ -30,11 +32,11 @@ export function ThreadWorkspacePanel({
   authorBadge,
   authorHandle,
   authorName,
+  mode = 'profile',
+  onPublished,
   user,
 }: ThreadWorkspacePanelProps) {
-  const [postDraft, setPostDraft] = useState(
-    'Shipping a real thread workflow from /me so Playwright can exercise post, reply, and delete end to end.',
-  )
+  const [postDraft, setPostDraft] = useState('')
   const [postMediaFiles, setPostMediaFiles] = useState<PostComposerMediaFile[]>(
     [],
   )
@@ -44,6 +46,7 @@ export function ThreadWorkspacePanel({
   const [publishedPost, setPublishedPost] = useState<PublishedPost | null>(null)
 
   const canPublish = user.status === 'active' && Boolean(user.handle)
+  const isHomeMode = mode === 'home'
 
   const handleSubmit = async ({ value }: PostComposerSubmission) => {
     setPublishState({ status: 'publishing' })
@@ -56,9 +59,12 @@ export function ThreadWorkspacePanel({
       setPublishedPost(response.post)
       setPostDraft('')
       setPostMediaFiles([])
+      await onPublished?.(response.post)
       setPublishState({
         status: 'success',
-        message: `Post published to /p/${response.post.id}.`,
+        message: isHomeMode
+          ? 'Post published. Your home feed is refreshing.'
+          : `Post published to /p/${response.post.id}.`,
       })
     } catch (error) {
       setPublishState({
@@ -72,17 +78,17 @@ export function ThreadWorkspacePanel({
   return (
     <section
       data-testid="thread-workspace"
-      className="mt-6 rounded-[1.75rem] border border-white/10 bg-slate-900/70 p-6"
+      className={`${isHomeMode ? 'mb-6' : 'mt-6'} rounded-[1.75rem] border border-white/10 bg-slate-900/70 p-6`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-medium uppercase tracking-[0.24em] text-cyan-100/80">
-            Thread workspace
+            {isHomeMode ? 'Create post' : 'Thread workspace'}
           </p>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-400">
-            This panel uses the real post mutation endpoints so the standalone
-            thread page can be exercised with actual create, reply, and delete
-            flows.
+            {isHomeMode
+              ? 'Share something with the people who follow you.'
+              : 'Compose and publish a new post.'}
           </p>
         </div>
 
@@ -107,12 +113,13 @@ export function ThreadWorkspacePanel({
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/45 p-4">
-          <p className="text-sm font-medium text-white">Publish root post</p>
+          <p className="text-sm font-medium text-white">
+            {isHomeMode ? 'Publish post' : 'Publish root post'}
+          </p>
           <p className="mt-2 text-sm leading-7 text-slate-400">
-            The created post stays public at <code>/p/{'{id}'}</code>, where
-            authenticated users can continue the thread with replies. Attached
-            image previews stay local until the upload pipeline is wired into
-            this live mutation path.
+            {isHomeMode
+              ? 'Your post will appear in your feed and on its own page.'
+              : 'Your post will be published and available for replies.'}
           </p>
           <div className="mt-4">
             <PostComposer
@@ -135,8 +142,12 @@ export function ThreadWorkspacePanel({
                 }
               }}
               onSubmit={handleSubmit}
-              placeholder="Publish a root post for the thread workflow…"
-              submitLabel="Publish post"
+              placeholder={
+                isHomeMode
+                  ? 'Share an update with the people who follow you…'
+                  : 'Publish a root post for the thread workflow…'
+              }
+              submitLabel={isHomeMode ? 'Post to feed' : 'Publish post'}
               submitting={publishState.status === 'publishing'}
               value={postDraft}
             />
@@ -167,8 +178,9 @@ export function ThreadWorkspacePanel({
             </div>
           ) : (
             <p className="mt-4 text-sm leading-7 text-slate-400">
-              Publish a post here, then open its standalone page to validate
-              replies and delete behavior.
+              {isHomeMode
+                ? 'Publish a post here to seed your home feed and jump into its standalone thread page.'
+                : 'Publish a post here, then open its standalone page to validate replies and delete behavior.'}
             </p>
           )}
         </aside>

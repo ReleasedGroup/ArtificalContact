@@ -21,6 +21,16 @@ class InMemoryUserProfileStore implements UserProfileStore {
   async getUserById(userId: string): Promise<StoredUserDocument | null> {
     return this.users.get(userId) ?? null
   }
+
+  async findUserByHandle(handle: string): Promise<StoredUserDocument | null> {
+    for (const user of this.users.values()) {
+      if (user.handleLower === handle || user.handle === handle) {
+        return user
+      }
+    }
+
+    return null
+  }
 }
 
 function createStore(options?: {
@@ -110,6 +120,45 @@ describe('lookupPublicUserProfile', () => {
           field: 'handle',
         },
       ],
+    })
+  })
+
+  it('falls back to a direct user lookup when the mirror is missing', async () => {
+    const store = createStore({
+      users: [
+        {
+          id: 'u1',
+          handle: 'NickBeau',
+          handleLower: 'nickbeau',
+          displayName: 'Nick Beaugeard',
+          status: 'active',
+        },
+      ],
+    })
+
+    const result = await lookupPublicUserProfile('nickbeau', store)
+
+    expect(result).toEqual({
+      status: 200,
+      body: {
+        data: {
+          id: 'u1',
+          handle: 'NickBeau',
+          displayName: 'Nick Beaugeard',
+          bio: null,
+          avatarUrl: null,
+          bannerUrl: null,
+          expertise: [],
+          counters: {
+            posts: 0,
+            followers: 0,
+            following: 0,
+          },
+          createdAt: null,
+          updatedAt: null,
+        },
+        errors: [],
+      },
     })
   })
 

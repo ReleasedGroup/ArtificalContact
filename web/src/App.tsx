@@ -8,7 +8,6 @@ import {
   type ReactElement,
 } from 'react'
 import { AdminMetricsScreen } from './components/AdminMetricsScreen'
-import { ComposerPreviewPanel } from './components/ComposerPreviewPanel'
 import { AppImage } from './components/AppImage'
 import { DirectBlobUploadCard } from './components/DirectBlobUploadCard'
 import { HomeFeedScreen } from './components/HomeFeedScreen'
@@ -17,10 +16,7 @@ import { NotificationsScreen } from './components/NotificationsScreen'
 import { PostDetailScreen } from './components/PostDetailScreen'
 import { ReportDialog } from './components/ReportDialog'
 import { SearchResultsScreen } from './components/SearchResultsScreen'
-import { ThreadWorkspacePanel } from './components/ThreadWorkspacePanel'
-import { WEB_BUILD_SHA } from './build-meta.generated'
 import { signOut } from './lib/auth'
-import { getHealth, type HealthPayload } from './lib/health'
 import {
   getMe,
   getOptionalMe,
@@ -97,27 +93,13 @@ const authProviders = [
     label: 'Continue with Microsoft',
     href: getAuthLoginHref('aad'),
     description:
-      'Use Microsoft Entra ID through Static Web Apps built-in authentication.',
+      'Sign in with your Microsoft account to get started.',
     gradientClass: 'from-cyan-300/30 via-sky-300/15 to-transparent',
     badge: 'MS',
-    helperText: 'Returns to the home feed after Microsoft authentication.',
-  },
-  {
-    label: 'Continue with GitHub',
-    href: getAuthLoginHref('github'),
-    description:
-      'Use GitHub sign-in for the practitioner identity and repository-connected workflows.',
-    gradientClass: 'from-amber-300/30 via-orange-300/15 to-transparent',
-    badge: 'GH',
-    helperText: 'Returns to the home feed after GitHub authentication.',
+    helperText: 'You will be redirected back after signing in.',
   },
 ]
 
-const profileMilestones = [
-  'Land in the authenticated home feed after the Static Web Apps handshake.',
-  'Open /me to claim a unique public handle and complete your profile.',
-  'Follow people so their next posts materialise in your personalised feed.',
-]
 
 function decodePathSegment(segment: string): string {
   try {
@@ -498,58 +480,20 @@ function HomeRouteScreen() {
 }
 
 function SignInScreen() {
-  const queryClient = useQueryClient()
-  const healthQuery = useQuery<HealthPayload>({
-    queryKey: ['health'],
-    queryFn: ({ signal }) => getHealth(signal),
-    retry: false,
-    staleTime: Infinity,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-  })
-
-  const healthErrorMessage =
-    healthQuery.error instanceof Error
-      ? healthQuery.error.message
-      : 'Unable to reach /api/health.'
-
-  function handleSignOut() {
-    signOut({ queryClient })
-  }
-
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center px-6 py-8 sm:px-8 lg:px-12">
       <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/85 shadow-2xl shadow-cyan-950/30 backdrop-blur">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.22),transparent_32%),radial-gradient(circle_at_center_right,_rgba(251,191,36,0.18),transparent_28%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(2,6,23,0.86))]" />
-        <div className="absolute inset-y-0 right-0 hidden w-[38%] border-l border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0))] lg:block" />
 
-        <div className="relative grid gap-8 p-8 sm:p-12 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="relative p-8 sm:p-12">
           <section className="space-y-8">
-            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-300">
-              <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 font-medium text-cyan-100">
-                Sprint 1 identity
-              </span>
-              <span className="rounded-full border border-white/10 px-4 py-2">
-                Web build {WEB_BUILD_SHA}
-              </span>
-              <button
-                type="button"
-                onClick={handleSignOut}
-                className="ml-auto rounded-full border border-white/12 px-4 py-2 font-medium text-slate-100 transition hover:border-white/25 hover:bg-white/6 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/80"
-              >
-                Sign out
-              </button>
-            </div>
-
             <div className="max-w-3xl space-y-4">
               <h1 className="text-balance text-4xl font-semibold tracking-tight text-white sm:text-6xl">
                 Sign in to ArtificialContact.
               </h1>
               <p className="max-w-2xl text-lg leading-8 text-slate-300">
-                Choose the provider you already trust. Azure Static Web Apps
-                handles the authentication handshake, the app receives the
-                signed principal through the linked API, and your credentials
-                never touch browser code.
+                Continue with Microsoft to access your personalised feed,
+                profile, and the wider network.
               </p>
             </div>
 
@@ -587,100 +531,8 @@ function SignInScreen() {
               ))}
             </div>
 
-            <section className="rounded-[1.75rem] border border-white/10 bg-black/20 p-6">
-              <p className="text-sm font-medium uppercase tracking-[0.24em] text-cyan-100/80">
-                After sign-in
-              </p>
-              <ul className="mt-4 grid gap-3 text-sm leading-7 text-slate-300 sm:grid-cols-3">
-                {profileMilestones.map((milestone) => (
-                  <li
-                    key={milestone}
-                    className="rounded-2xl border border-white/8 bg-white/4 px-4 py-3"
-                  >
-                    {milestone}
-                  </li>
-                ))}
-              </ul>
-            </section>
           </section>
 
-          <section className="flex flex-col gap-4">
-            <article className="rounded-[1.75rem] border border-white/10 bg-slate-900/70 p-6 text-left">
-              <p className="text-sm font-medium uppercase tracking-[0.24em] text-amber-100/80">
-                Identity notes
-              </p>
-              <div className="mt-4 space-y-3 text-sm leading-7 text-slate-300">
-                <p>
-                  Anonymous routes stay public, while the personalised home feed
-                  and profile editor stay behind the Static Web Apps auth gate.
-                </p>
-                <p>
-                  Both providers return to the authenticated home route after
-                  successful authentication so the sign-in handoff is
-                  predictable in every preview environment.
-                </p>
-              </div>
-            </article>
-
-            <article className="rounded-[1.75rem] border border-white/10 bg-slate-900/80 p-6 text-left">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium uppercase tracking-[0.24em] text-cyan-100/80">
-                    API health
-                  </p>
-                  <h2 className="mt-3 text-2xl font-semibold text-white">
-                    /api/health
-                  </h2>
-                </div>
-                <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-200">
-                  {healthQuery.isPending && 'Checking'}
-                  {healthQuery.isSuccess && 'Healthy'}
-                  {healthQuery.isError && 'Needs attention'}
-                </span>
-              </div>
-
-              <div className="mt-6 space-y-3 text-sm leading-7 text-slate-300">
-                {healthQuery.isPending && (
-                  <p>Requesting the linked Functions health check.</p>
-                )}
-
-                {healthQuery.isError && <p>{healthErrorMessage}</p>}
-
-                {healthQuery.isSuccess && (
-                  <>
-                    <p>
-                      Build{' '}
-                      <span className="font-medium text-white">
-                        {healthQuery.data.buildSha}
-                      </span>{' '}
-                      in{' '}
-                      <span className="font-medium text-white">
-                        {healthQuery.data.region}
-                      </span>
-                    </p>
-                    <p>
-                      Cosmos ping:{' '}
-                      <span className="font-medium text-white">
-                        {healthQuery.data.cosmos.status}
-                      </span>
-                      {healthQuery.data.cosmos.databaseName
-                        ? ` (${healthQuery.data.cosmos.databaseName})`
-                        : ''}
-                    </p>
-                    {healthQuery.data.cosmos.details && (
-                      <p className="text-slate-400">
-                        {healthQuery.data.cosmos.details}
-                      </p>
-                    )}
-                    <p className="text-slate-400">
-                      Timestamp{' '}
-                      {new Date(healthQuery.data.timestamp).toLocaleString()}
-                    </p>
-                  </>
-                )}
-              </div>
-            </article>
-          </section>
         </div>
       </section>
     </main>
@@ -937,7 +789,7 @@ function ProfileEditorScreen() {
               className="rounded-full bg-sky-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-300"
               href="/me"
             >
-              Retry /me
+              Retry
             </a>
             <button
               type="button"
@@ -992,17 +844,11 @@ function ProfileEditorScreen() {
               src={draft.bannerUrl}
             />
           ) : (
-            <>
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.22),transparent_35%),linear-gradient(135deg,rgba(15,23,42,0.14),transparent_55%)]" />
-              <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/20 bg-slate-950/25 px-4 py-3 text-sm text-slate-100 backdrop-blur">
-                Upload a banner from the profile media panel to replace this
-                gradient preview.
-              </div>
-            </>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.22),transparent_35%),linear-gradient(135deg,rgba(15,23,42,0.14),transparent_55%)]" />
           )}
         </div>
 
-        <div className="px-4 pb-8 sm:px-6 lg:px-8">
+        <div className="relative z-10 px-4 pb-8 sm:px-6 lg:px-8">
           <div className="-mt-14 flex flex-wrap items-end justify-between gap-4">
             <div className="flex items-end gap-4">
               <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[1.75rem] border border-white/20 bg-gradient-to-br from-fuchsia-500 to-indigo-500 text-2xl font-semibold text-white shadow-xl shadow-fuchsia-950/30 ring-4 ring-slate-950 sm:h-28 sm:w-28 sm:text-3xl">
@@ -1018,19 +864,19 @@ function ProfileEditorScreen() {
                 )}
               </div>
               <div className="pb-2">
-                <p className="text-sm uppercase tracking-[0.24em] text-sky-200/75">
-                  /me profile
-                </p>
-                <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
                   Edit your profile
                 </h1>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3 pb-2 text-sm">
-              <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-slate-200">
-                Web build {WEB_BUILD_SHA}
-              </span>
+              <a
+                href="/"
+                className="rounded-full border border-white/10 px-4 py-2 font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/5"
+              >
+                Home
+              </a>
               <button
                 type="button"
                 onClick={handleSignOut}
@@ -1081,9 +927,7 @@ function ProfileEditorScreen() {
           {(currentUser.status === 'pending' ||
             profileState.data.isNewUser) && (
             <div className="mt-6 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-              Choose a public handle and finish the rest of the public-facing
-              profile fields here. Avatar and banner uploads save immediately
-              once each file finishes uploading.
+              Choose a public handle and complete your profile to get started.
             </div>
           )}
 
@@ -1098,10 +942,8 @@ function ProfileEditorScreen() {
                     Profile fields
                   </p>
                   <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-400">
-                    Claim the handle visitors will use at{' '}
-                    <code>/u/{'{handle}'}</code>, then update your display name,
-                    public bio, and expertise tags. The save action writes to{' '}
-                    <code>/api/me</code>.
+                    Choose your public handle, display name, bio, and expertise
+                    tags.
                   </p>
                 </div>
                 <button
@@ -1135,9 +977,8 @@ function ProfileEditorScreen() {
                     value={draft.handle}
                   />
                   <span className="text-sm leading-7 text-slate-400">
-                    Choose the handle people will use to open your public
-                    profile. Saving a handle promotes pending profiles to
-                    active.
+                    Choose the handle people will use to find your public
+                    profile.
                   </span>
                 </label>
 
@@ -1284,9 +1125,8 @@ function ProfileEditorScreen() {
                   Profile media
                 </p>
                 <p className="mt-3 text-sm leading-7 text-slate-400">
-                  Avatar and banner uploads reuse the shared signed SAS pipeline
-                  from the composer preview, then persist the resulting Blob URL
-                  into <code>/api/me</code> as soon as the upload completes.
+                  Upload an avatar and banner image. Changes save automatically
+                  once the upload completes.
                 </p>
                 <div className="mt-5 grid gap-4">
                   <DirectBlobUploadCard
@@ -1361,17 +1201,6 @@ function ProfileEditorScreen() {
             </aside>
           </div>
 
-          <ComposerPreviewPanel
-            authorBadge={getEditorInitials(draft.displayName)}
-            authorHandle={previewHandle}
-            authorName={draft.displayName.trim() || 'Display name'}
-          />
-          <ThreadWorkspacePanel
-            authorBadge={getEditorInitials(draft.displayName)}
-            authorHandle={previewHandle}
-            authorName={draft.displayName.trim() || 'Display name'}
-            user={currentUser}
-          />
         </div>
       </section>
     </main>
@@ -1453,28 +1282,17 @@ function PublicProfileScreen({ handle }: { handle: string }) {
           )}
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.15),rgba(2,6,23,0.68))]" />
 
-          <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-3 p-5 sm:p-6">
-            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-200">
-              <a
-                href="/"
-                className="rounded-full border border-white/15 bg-slate-950/55 px-4 py-2 font-medium hover:bg-slate-900/75"
-              >
-                ArtificialContact
-              </a>
-              <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-4 py-2 font-medium text-emerald-100">
-                Public profile
-              </span>
-            </div>
-            <span className="rounded-full border border-white/15 bg-slate-950/55 px-4 py-2 text-xs font-medium uppercase tracking-[0.2em] text-slate-200">
-              {profileState.status === 'loading' && 'Loading'}
-              {profileState.status === 'ready' && 'Live'}
-              {profileState.status === 'not-found' && 'Missing'}
-              {profileState.status === 'error' && 'Retry needed'}
-            </span>
+          <div className="absolute inset-x-0 top-0 p-5 sm:p-6">
+            <a
+              href="/"
+              className="rounded-full border border-white/15 bg-slate-950/55 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-900/75"
+            >
+              ArtificialContact
+            </a>
           </div>
         </div>
 
-        <div className="relative px-5 pb-6 sm:px-6 sm:pb-8 lg:px-10">
+        <div className="relative z-10 px-5 pb-6 sm:px-6 sm:pb-8 lg:px-10">
           {profileState.status === 'ready' ? (
             <ReadyPublicProfile profile={profileState.data} viewer={viewer} />
           ) : (
@@ -1534,8 +1352,7 @@ function ReadyPublicProfile({
                 {profile.displayName ?? `@${profile.handle}`}
               </h1>
               <p className="max-w-3xl text-sm leading-7 text-slate-300 sm:text-base">
-                {profile.bio ??
-                  'This practitioner has not added a bio yet, but their public handle is now reachable from the SPA.'}
+                {profile.bio ?? 'This person has not added a bio yet.'}
               </p>
             </div>
           </div>
@@ -1546,7 +1363,7 @@ function ReadyPublicProfile({
             href="/"
             className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white hover:bg-white/10"
           >
-            Back to sign-in
+            Home
           </a>
           {canReportProfile && (
             <ReportDialog
@@ -1561,9 +1378,6 @@ function ReadyPublicProfile({
               }}
             />
           )}
-          <span className="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-2.5 text-sm font-medium text-cyan-100">
-            Routed from {'/u/{handle}'}
-          </span>
         </div>
       </div>
 
@@ -1613,17 +1427,9 @@ function ReadyPublicProfile({
                 Media
               </span>
             </div>
-            <div className="mt-5 rounded-[1.5rem] border border-dashed border-white/12 bg-slate-950/35 p-5">
-              <h2 className="text-xl font-semibold text-white">
-                Public identity is live.
-              </h2>
-              <p className="mt-3 text-sm leading-7 text-slate-300">
-                This route now resolves <code>GET /api/users/{'{handle}'}</code>{' '}
-                and renders the profile shell. Profile posts and richer social
-                graph views arrive in later slices once those read models are in
-                place.
-              </p>
-            </div>
+            <p className="mt-5 text-center text-sm text-slate-400">
+              No posts to show yet.
+            </p>
           </article>
         </section>
 
@@ -1650,27 +1456,6 @@ function ReadyPublicProfile({
             </div>
           </article>
 
-          <article className="rounded-[1.75rem] border border-white/10 bg-slate-900/70 p-6">
-            <p className="text-sm font-medium uppercase tracking-[0.24em] text-emerald-100/80">
-              Routing notes
-            </p>
-            <div className="mt-4 space-y-3 text-sm leading-7 text-slate-300">
-              <p>Anonymous visitors can open this route without signing in.</p>
-              <p>
-                The SPA uses the canonical handle returned by the API for the
-                profile display and count summary.
-              </p>
-              {profile.updatedAt && (
-                <p className="text-slate-400">
-                  Last updated{' '}
-                  {new Date(profile.updatedAt).toLocaleString(undefined, {
-                    dateStyle: 'medium',
-                    timeStyle: 'short',
-                  })}
-                </p>
-              )}
-            </div>
-          </article>
         </aside>
       </div>
     </>
@@ -1711,7 +1496,7 @@ function PublicProfileStatusCard({
               href="/"
               className="rounded-2xl bg-cyan-300/12 px-4 py-2.5 text-sm font-medium text-cyan-100 ring-1 ring-cyan-300/25 hover:bg-cyan-300/18"
             >
-              Back to sign-in
+              Home
             </a>
             {state.status !== 'loading' && (
               <button

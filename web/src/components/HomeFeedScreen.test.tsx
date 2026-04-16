@@ -188,6 +188,92 @@ describe('HomeFeedScreen', () => {
     )
   })
 
+  it('publishes a post from the home feed and refreshes the feed entries', async () => {
+    let feedRequestCount = 0
+
+    mockFetch.mockImplementation(async (input, init) => {
+      const requestUrl = String(input)
+
+      if (requestUrl === '/api/feed') {
+        feedRequestCount += 1
+
+        return createJsonResponse(200, {
+          data:
+            feedRequestCount === 1
+              ? []
+              : [
+                  createFeedEntry('one', {
+                    authorId: 'github:viewer-1',
+                    authorHandle: 'ada',
+                    authorDisplayName: 'Ada Lovelace',
+                    excerpt: 'Published from home feed',
+                  }),
+                ],
+          cursor: null,
+          errors: [],
+        })
+      }
+
+      if (requestUrl === '/api/posts') {
+        expect(init).toMatchObject({
+          method: 'POST',
+        })
+        expect(JSON.parse(String(init?.body ?? '{}'))).toEqual({
+          text: 'Published from home feed',
+        })
+
+        return createJsonResponse(201, {
+          data: {
+            post: {
+              id: 'post-home-created',
+              type: 'post',
+              kind: 'user',
+              threadId: 'post-home-created',
+              parentId: null,
+              authorId: 'github:viewer-1',
+              authorHandle: 'ada',
+              authorDisplayName: 'Ada Lovelace',
+              authorAvatarUrl: null,
+              text: 'Published from home feed',
+              hashtags: [],
+              mentions: [],
+              media: [],
+              counters: {
+                likes: 0,
+                dislikes: 0,
+                emoji: 0,
+                replies: 0,
+              },
+              visibility: 'public',
+              createdAt: '2026-04-16T08:00:00.000Z',
+              updatedAt: '2026-04-16T08:00:00.000Z',
+              github: null,
+            },
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${requestUrl}`)
+    })
+
+    renderHomeFeedScreen()
+
+    expect(
+      await screen.findByText('No posts have landed in your home feed yet'),
+    ).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Thread post body'), {
+      target: { value: 'Published from home feed' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Post to feed' }))
+
+    expect(await screen.findByText('Published from home feed')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Post published. Your home feed is refreshing.'),
+    ).toBeInTheDocument()
+  })
+
   it('refetches the feed when the user performs a pull-to-refresh gesture', async () => {
     let feedRequestCount = 0
 

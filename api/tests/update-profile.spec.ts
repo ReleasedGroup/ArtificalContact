@@ -2,7 +2,12 @@ import type { HttpRequest, InvocationContext } from '@azure/functions'
 import { describe, expect, it, vi } from 'vitest'
 import { buildUpdateProfileHandler } from '../src/functions/update-profile.js'
 import { CLIENT_PRINCIPAL_HEADER } from '../src/lib/auth.js'
-import type { ExistingMirrorRecord } from '../src/lib/users-by-handle-mirror.js'
+import type {
+  ExistingMirrorRecord,
+  ExistingUserHandleState,
+  UsersByHandleMirrorDocument,
+  UsersByHandleMirrorStateDocument,
+} from '../src/lib/users-by-handle-mirror.js'
 import type {
   MeProfile,
   UserDocument,
@@ -12,23 +17,41 @@ import type {
 class InMemoryHandleStore {
   constructor(
     private readonly mirrors = new Map<string, ExistingMirrorRecord>(),
+    private readonly states = new Map<string, ExistingUserHandleState>(),
   ) {}
 
   async getByHandle(handle: string): Promise<ExistingMirrorRecord | null> {
     return this.mirrors.get(handle) ?? null
   }
 
-  async getStateByUserId(): Promise<null> {
-    return null
+  async getStateByUserId(userId: string): Promise<ExistingUserHandleState | null> {
+    return this.states.get(userId) ?? null
   }
 
-  async upsertMirror(): Promise<void> {}
+  async upsertMirror(document: UsersByHandleMirrorDocument): Promise<void> {
+    this.mirrors.set(document.handle, {
+      id: document.id,
+      handle: document.handle,
+      userId: document.userId,
+    })
+  }
 
-  async upsertState(): Promise<void> {}
+  async upsertState(document: UsersByHandleMirrorStateDocument): Promise<void> {
+    this.states.set(document.userId, {
+      id: document.id,
+      handle: document.handle,
+      userId: document.userId,
+      currentHandle: document.currentHandle,
+    })
+  }
 
-  async deleteByHandle(): Promise<void> {}
+  async deleteByHandle(handle: string): Promise<void> {
+    this.mirrors.delete(handle)
+  }
 
-  async deleteStateByUserId(): Promise<void> {}
+  async deleteStateByUserId(userId: string): Promise<void> {
+    this.states.delete(userId)
+  }
 }
 
 function createPrincipalRequest(
@@ -243,9 +266,13 @@ describe('updateProfileHandler', () => {
       upsert: vi.fn(async (user) => user),
     }
 
+    const handleStore = new InMemoryHandleStore(
+      new Map([['nick', { id: 'nick', handle: 'nick', userId: 'github:abc123' }]]),
+    )
+
     const handler = buildUpdateProfileHandler({
       repositoryFactory: () => repository,
-      handleStoreFactory: () => new InMemoryHandleStore(),
+      handleStoreFactory: () => handleStore,
       now: () => new Date('2026-04-15T02:00:00.000Z'),
     })
 
@@ -296,6 +323,18 @@ describe('updateProfileHandler', () => {
         },
       },
       errors: [],
+    })
+    await expect(handleStore.getByHandle('ada')).resolves.toEqual({
+      id: 'ada',
+      handle: 'ada',
+      userId: 'github:abc123',
+    })
+    await expect(handleStore.getByHandle('nick')).resolves.toBeNull()
+    await expect(handleStore.getStateByUserId('github:abc123')).resolves.toEqual({
+      id: '__usersByHandleState__:github:abc123',
+      handle: '__usersByHandleState__:github:abc123',
+      userId: 'github:abc123',
+      currentHandle: 'ada',
     })
   })
 
@@ -379,6 +418,51 @@ describe('updateProfileHandler', () => {
         status: 'active',
       }),
     )
+  })
+
+  it('creates the public-profile mirror immediately when a new profile claims a handle', async () => {
+    const repository: UserRepository = {
+      getById: vi.fn(async () => null),
+      create: vi.fn(async (user) => user),
+      upsert: vi.fn(async (user) => user),
+    }
+    const handleStore = new InMemoryHandleStore()
+
+    const handler = buildUpdateProfileHandler({
+      repositoryFactory: () => repository,
+      handleStoreFactory: () => handleStore,
+      now: () => new Date('2026-04-15T03:00:00.000Z'),
+    })
+
+    const response = await handler(
+      createPrincipalRequest(
+        {
+          identityProvider: 'github',
+          userId: 'abc123',
+          userDetails: 'nickbeau',
+          userRoles: ['anonymous', 'authenticated'],
+          claims: [{ typ: 'name', val: 'Nick Beaugeard' }],
+        },
+        {
+          handle: 'NickBeau',
+          displayName: 'Nick Beaugeard',
+        },
+      ),
+      createContext(),
+    )
+
+    expect(response.status).toBe(200)
+    await expect(handleStore.getByHandle('nickbeau')).resolves.toEqual({
+      id: 'nickbeau',
+      handle: 'nickbeau',
+      userId: 'github:abc123',
+    })
+    await expect(handleStore.getStateByUserId('github:abc123')).resolves.toEqual({
+      id: '__usersByHandleState__:github:abc123',
+      handle: '__usersByHandleState__:github:abc123',
+      userId: 'github:abc123',
+      currentHandle: 'nickbeau',
+    })
   })
 
   it('retries against a concurrently provisioned user after a create conflict', async () => {

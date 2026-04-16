@@ -14,6 +14,7 @@ import { getFeedPage, type FeedEntry } from '../lib/feed'
 import { signOut } from '../lib/auth'
 import { HeaderSearchBox } from './HeaderSearchBox'
 import { ReportDialog } from './ReportDialog'
+import { ThreadWorkspacePanel } from './ThreadWorkspacePanel'
 
 interface HomeFeedScreenProps {
   viewer: MeProfile
@@ -145,7 +146,7 @@ function FeedCard({ entry, viewer }: { entry: FeedEntry; viewer: MeProfile }) {
             href={getPostHref(entry.postId)}
             className="mt-4 block rounded-[1.4rem] border border-transparent bg-white/0 px-1 py-1 transition hover:border-white/8 hover:bg-white/4"
           >
-            <p className="text-sm leading-7 text-slate-200 sm:text-[15px]">
+            <p className="line-clamp-4 text-sm leading-7 text-slate-200 sm:text-[15px]">
               {entry.excerpt?.trim() ||
                 'This feed item does not include an excerpt yet.'}
             </p>
@@ -405,33 +406,20 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
     signOut({ queryClient })
   }
 
+  const handlePostPublished = async () => {
+    await handleRefresh()
+  }
+
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.18),transparent_22%),radial-gradient(circle_at_top_right,_rgba(244,114,182,0.14),transparent_18%),linear-gradient(180deg,rgba(2,6,23,1),rgba(15,23,42,1))] px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <header className="rounded-[2rem] border border-white/10 bg-slate-950/70 px-6 py-5 shadow-2xl shadow-slate-950/30 backdrop-blur sm:px-8">
+        <header className="relative z-40 rounded-[2rem] border border-white/10 bg-slate-950/70 px-6 py-5 shadow-2xl shadow-slate-950/30 backdrop-blur sm:px-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-3 text-xs font-medium uppercase tracking-[0.24em] text-slate-300">
-                <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1.5 text-cyan-100">
-                  Personal feed
-                </span>
-                <span className="rounded-full border border-white/10 px-3 py-1.5">
-                  Infinite scroll active
-                </span>
-                <span className="rounded-full border border-white/10 px-3 py-1.5">
-                  Pull to refresh ready
-                </span>
-              </div>
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
                   Home feed
                 </h1>
-                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300 sm:text-base">
-                  New posts from the people you follow appear here from the
-                  denormalised `feeds` read model. Pull down on touch devices to
-                  refresh the list or keep scrolling to page deeper into the
-                  backlog.
-                </p>
               </div>
             </div>
 
@@ -509,12 +497,23 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                       : undefined,
                 }}
               >
-                <div
-                  aria-live="polite"
-                  className="mb-4 rounded-[1.5rem] border border-white/8 bg-white/5 px-4 py-3 text-sm text-slate-300"
-                >
-                  {refreshMessage}
-                </div>
+                {pullRefreshState !== 'idle' && (
+                  <div
+                    aria-live="polite"
+                    className="mb-4 rounded-[1.5rem] border border-white/8 bg-white/5 px-4 py-3 text-center text-sm text-slate-300"
+                  >
+                    {refreshMessage}
+                  </div>
+                )}
+
+                <ThreadWorkspacePanel
+                  authorBadge={viewerMonogram}
+                  authorHandle={viewer.handle}
+                  authorName={viewer.displayName}
+                  mode="home"
+                  onPublished={handlePostPublished}
+                  user={viewer}
+                />
 
                 {isPending && (
                   <div className="space-y-4">
@@ -568,9 +567,8 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                       No posts have landed in your home feed yet
                     </h2>
                     <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-300">
-                      Follow more practitioners and their next posts will
-                      materialise here through the Cosmos-backed feed fan-out
-                      pipeline.
+                      Publish your first post above or follow more people and
+                      their posts will appear here.
                     </p>
                     <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                       <a
@@ -612,8 +610,7 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
 
                     {!hasNextPage && (
                       <p className="mt-4 text-center text-sm text-slate-500">
-                        You&apos;ve reached the end of the currently
-                        materialised feed.
+                        You&apos;ve reached the end of your feed.
                       </p>
                     )}
 
@@ -649,32 +646,32 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                   <p className="mt-1 text-sm text-slate-400">
                     {viewer.handle ? `@${viewer.handle}` : 'Handle pending'}
                   </p>
-                  <p className="mt-3 text-sm leading-7 text-slate-300">
+                  <p className="mt-3 line-clamp-3 text-sm leading-7 text-slate-300">
                     {viewer.bio?.trim() ||
-                      'Complete the /me editor to add a public bio for the home feed and profile surfaces.'}
+                      'Add a bio in your profile to show it here.'}
                   </p>
                 </div>
               </div>
 
-              <div className="mt-5 grid grid-cols-3 gap-3">
-                <div className="rounded-[1.4rem] border border-white/8 bg-white/5 px-3 py-4 text-center">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+              <div className="mt-5 grid grid-cols-3 gap-2">
+                <div className="overflow-hidden rounded-[1.4rem] border border-white/8 bg-white/5 px-2 py-4 text-center">
+                  <p className="truncate text-[10px] uppercase tracking-wide text-slate-400">
                     Posts
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-white">
                     {formatCount(viewer.counters.posts)}
                   </p>
                 </div>
-                <div className="rounded-[1.4rem] border border-white/8 bg-white/5 px-3 py-4 text-center">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                <div className="overflow-hidden rounded-[1.4rem] border border-white/8 bg-white/5 px-2 py-4 text-center">
+                  <p className="truncate text-[10px] uppercase tracking-wide text-slate-400">
                     Following
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-white">
                     {formatCount(viewer.counters.following)}
                   </p>
                 </div>
-                <div className="rounded-[1.4rem] border border-white/8 bg-white/5 px-3 py-4 text-center">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                <div className="overflow-hidden rounded-[1.4rem] border border-white/8 bg-white/5 px-2 py-4 text-center">
+                  <p className="truncate text-[10px] uppercase tracking-wide text-slate-400">
                     Followers
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-white">
@@ -684,25 +681,6 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
               </div>
             </article>
 
-            <article className="rounded-[2rem] border border-white/10 bg-slate-950/70 p-6 shadow-2xl shadow-slate-950/30 backdrop-blur">
-              <p className="text-sm font-medium uppercase tracking-[0.24em] text-cyan-100/80">
-                Feed behaviour
-              </p>
-              <ul className="mt-4 space-y-3 text-sm leading-7 text-slate-300">
-                <li className="rounded-[1.3rem] border border-white/8 bg-white/5 px-4 py-3">
-                  New pages load automatically when the sentinel nears the
-                  bottom of the scroll region.
-                </li>
-                <li className="rounded-[1.3rem] border border-white/8 bg-white/5 px-4 py-3">
-                  Touch gestures at the top of the list refetch the feed without
-                  leaving the route.
-                </li>
-                <li className="rounded-[1.3rem] border border-white/8 bg-white/5 px-4 py-3">
-                  Each card links directly into the public post detail route and
-                  author profile when a handle is present.
-                </li>
-              </ul>
-            </article>
           </aside>
         </div>
       </div>

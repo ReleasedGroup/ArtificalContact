@@ -21,6 +21,16 @@ import { readOptionalValue } from './strings.js'
 import type { UserProfileStore } from './user-profile.js'
 import { DEFAULT_COSMOS_DATABASE_NAME } from './users-by-handle-mirror.js'
 
+function isCosmosNotFound(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  const statusCode = (error as Error & { statusCode?: number }).statusCode
+  const code = (error as Error & { code?: number | string }).code
+  return statusCode === 404 || code === 404
+}
+
 const FOLLOWEE_LOOKUP_BATCH_SIZE = 100
 const FOLLOWEE_PROFILE_LOOKUP_CONCURRENCY = 10
 
@@ -89,30 +99,40 @@ export class CosmosFeedStore implements FeedFanOutStore, FeedReadStore {
     entries: StoredFeedDocument[]
     cursor?: string
   }> {
-    const queryIterator = this.container.items.query<StoredFeedDocument>(
-      {
-        query: `
-          SELECT * FROM c
-          WHERE c.feedOwnerId = @feedOwnerId
-          ORDER BY c.createdAt DESC
-        `,
-        parameters: [{ name: '@feedOwnerId', value: feedOwnerId }],
-      },
-      {
-        partitionKey: feedOwnerId,
-        maxItemCount: options.limit || DEFAULT_FEED_PAGE_SIZE,
-        enableQueryControl: true,
-        ...(options.cursor === undefined
+    try {
+      const queryIterator = this.container.items.query<StoredFeedDocument>(
+        {
+          query: `
+            SELECT * FROM c
+            WHERE c.feedOwnerId = @feedOwnerId
+            ORDER BY c.createdAt DESC
+          `,
+          parameters: [{ name: '@feedOwnerId', value: feedOwnerId }],
+        },
+        {
+          partitionKey: feedOwnerId,
+          maxItemCount: options.limit || DEFAULT_FEED_PAGE_SIZE,
+          enableQueryControl: true,
+          ...(options.cursor === undefined
+            ? {}
+            : { continuationToken: options.cursor }),
+        },
+      )
+
+      const { resources, continuationToken } = await queryIterator.fetchNext()
+
+      return {
+        entries: resources ?? [],
+        ...(continuationToken === undefined
           ? {}
-          : { continuationToken: options.cursor }),
-      },
-    )
+          : { cursor: continuationToken }),
+      }
+    } catch (error) {
+      if (isCosmosNotFound(error)) {
+        return { entries: [] }
+      }
 
-    const { resources, continuationToken } = await queryIterator.fetchNext()
-
-    return {
-      entries: resources ?? [],
-      ...(continuationToken === undefined ? {} : { cursor: continuationToken }),
+      throw error
     }
   }
 
@@ -126,30 +146,33 @@ export class CosmosFeedStore implements FeedFanOutStore, FeedReadStore {
     entries: StoredFeedDocument[]
     cursor?: string
   }> {
-    const celebrityFolloweeIds =
-      await this.listCelebrityFolloweeIdsByFeedOwnerId(feedOwnerId)
+    try {
+      const celebrityFolloweeIds =
+        await this.listCelebrityFolloweeIdsByFeedOwnerId(feedOwnerId)
+      const authorIds = [...new Set([feedOwnerId, ...celebrityFolloweeIds])]
 
-    if (celebrityFolloweeIds.length === 0) {
+      const page = await this.postStore.listRootPostsByAuthorIds(
+        authorIds,
+        options,
+      )
+
       return {
-        entries: [],
+        entries: page.posts
+          .map((post) => {
+            const source = buildFeedEntrySource(post)
+            return source === null
+              ? null
+              : buildFeedEntryDocument(feedOwnerId, source)
+          })
+          .filter((entry): entry is FeedEntryDocument => entry !== null),
+        ...(page.cursor === undefined ? {} : { cursor: page.cursor }),
       }
-    }
+    } catch (error) {
+      if (isCosmosNotFound(error)) {
+        return { entries: [] }
+      }
 
-    const page = await this.postStore.listRootPostsByAuthorIds(
-      celebrityFolloweeIds,
-      options,
-    )
-
-    return {
-      entries: page.posts
-        .map((post) => {
-          const source = buildFeedEntrySource(post)
-          return source === null
-            ? null
-            : buildFeedEntryDocument(feedOwnerId, source)
-        })
-        .filter((entry): entry is FeedEntryDocument => entry !== null),
-      ...(page.cursor === undefined ? {} : { cursor: page.cursor }),
+      throw error
     }
   }
 

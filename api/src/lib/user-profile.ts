@@ -43,6 +43,7 @@ export interface PublicUserProfile {
 export interface UserProfileStore {
   getByHandle(handle: string): Promise<ExistingMirrorRecord | null>
   getUserById(userId: string): Promise<StoredUserDocument | null>
+  findUserByHandle(handle: string): Promise<StoredUserDocument | null>
 }
 
 export interface UserProfileLookupResult {
@@ -154,61 +155,47 @@ export async function lookupPublicUserProfile(
   }
 
   const mirror = await store.getByHandle(normalizedHandle)
-  if (mirror === null) {
-    return {
-      status: 404,
-      body: {
-        data: null,
-        errors: [
-          {
-            code: 'user_not_found',
-            message: 'No public profile exists for the requested handle.',
-            field: 'handle',
+  if (mirror !== null) {
+    const user = await store.getUserById(mirror.userId)
+    if (user !== null && isPubliclyVisibleUser(user)) {
+      const currentHandle = normalizeHandleLower(user)
+      if (currentHandle === mirror.handle) {
+        return {
+          status: 200,
+          body: {
+            data: buildPublicUserProfile(user, mirror),
+            errors: [],
           },
-        ],
-      },
+        }
+      }
     }
   }
 
-  const user = await store.getUserById(mirror.userId)
-  if (user === null || !isPubliclyVisibleUser(user)) {
-    return {
-      status: 404,
-      body: {
-        data: null,
-        errors: [
-          {
-            code: 'user_not_found',
-            message: 'No public profile exists for the requested handle.',
-            field: 'handle',
-          },
-        ],
-      },
-    }
-  }
+  const fallbackUser = await store.findUserByHandle(normalizedHandle)
+  const fallbackProfile =
+    fallbackUser === null ? null : buildPublicUserProfileFromUser(fallbackUser)
 
-  const currentHandle = normalizeHandleLower(user)
-  if (currentHandle !== mirror.handle) {
+  if (fallbackProfile !== null) {
     return {
-      status: 404,
+      status: 200,
       body: {
-        data: null,
-        errors: [
-          {
-            code: 'user_not_found',
-            message: 'No public profile exists for the requested handle.',
-            field: 'handle',
-          },
-        ],
+        data: fallbackProfile,
+        errors: [],
       },
     }
   }
 
   return {
-    status: 200,
+    status: 404,
     body: {
-      data: buildPublicUserProfile(user, mirror),
-      errors: [],
+      data: null,
+      errors: [
+        {
+          code: 'user_not_found',
+          message: 'No public profile exists for the requested handle.',
+          field: 'handle',
+        },
+      ],
     },
   }
 }

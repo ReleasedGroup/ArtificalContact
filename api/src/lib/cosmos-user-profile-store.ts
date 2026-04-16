@@ -83,6 +83,24 @@ export class CosmosUserProfileStore implements UserProfileStore {
     return this.readItem<StoredUserDocument>(this.usersContainer, userId, userId)
   }
 
+  async findUserByHandle(handle: string): Promise<StoredUserDocument | null> {
+    const queryIterator = this.usersContainer.items.query<StoredUserDocument>(
+      {
+        query: `
+          SELECT TOP 1 *
+          FROM c
+          WHERE c.type = 'user' AND c.handleLower = @handle
+        `,
+        parameters: [{ name: '@handle', value: handle }],
+      },
+      {
+        maxItemCount: 1,
+      },
+    )
+    const { resources } = await queryIterator.fetchAll()
+    return resources[0] ?? null
+  }
+
   private async readItem<T extends ItemDefinition>(
     container: Container,
     id: string,

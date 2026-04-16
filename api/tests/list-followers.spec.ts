@@ -25,6 +25,16 @@ class InMemoryUserProfileStore implements UserProfileStore {
   async getUserById(userId: string): Promise<StoredUserDocument | null> {
     return this.users.get(userId) ?? null
   }
+
+  async findUserByHandle(handle: string): Promise<StoredUserDocument | null> {
+    for (const user of this.users.values()) {
+      if (user.handleLower === handle || user.handle === handle) {
+        return user
+      }
+    }
+
+    return null
+  }
 }
 
 function createProfileStore(options?: {
@@ -242,6 +252,7 @@ describe('lookupFollowersPage', () => {
     const profileStore: UserProfileStore = {
       getByHandle: vi.fn(async () => null),
       getUserById: vi.fn(async () => null),
+      findUserByHandle: vi.fn(async () => null),
     }
     const followersStore = createFollowersStore({
       follows: [],

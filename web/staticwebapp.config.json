@@ -6,7 +6,7 @@
     },
     {
       "route": "/login/github",
-      "redirect": "/.auth/login/github"
+      "redirect": "/login"
     },
     {
       "route": "/logout",
@@ -67,6 +67,17 @@
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY"
+  },
+  "auth": {
+    "identityProviders": {
+      "azureActiveDirectory": {
+        "registration": {
+          "openIdIssuer": "https://login.microsoftonline.com/common/v2.0",
+          "clientIdSettingName": "AZURE_CLIENT_ID",
+          "clientSecretSettingName": "AZURE_CLIENT_SECRET"
+        }
+      }
+    }
   },
   "responseOverrides": {
     "401": {

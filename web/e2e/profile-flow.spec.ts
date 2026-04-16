@@ -5,8 +5,8 @@ test('sign in, claim a handle, and open the public profile', async ({
   baseURL,
 }) => {
   const pendingProfile = {
-    id: 'github:abc123',
-    identityProvider: 'github',
+    id: 'aad:abc123',
+    identityProvider: 'aad',
     identityProviderUserId: 'abc123',
     email: 'nick@example.com',
     handle: null,
@@ -40,7 +40,7 @@ test('sign in, claim a handle, and open the public profile', async ({
   let savedPayload: Record<string, unknown> | null = null
   let sessionEstablished = false
 
-  await page.route('**/.auth/login/github**', async (route) => {
+  await page.route('**/.auth/login/aad**', async (route) => {
     sessionEstablished = true
     await route.fulfill({
       status: 302,
@@ -150,7 +150,7 @@ test('sign in, claim a handle, and open the public profile', async ({
     page.getByRole('heading', { name: 'Sign in to ArtificialContact.' }),
   ).toBeVisible()
 
-  await page.getByRole('link', { name: /continue with github/i }).click()
+  await page.getByRole('link', { name: /continue with microsoft/i }).click()
 
   await expect(page).toHaveURL(/\/me$/)
   await expect(
