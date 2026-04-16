@@ -48,7 +48,7 @@ The k6 thresholds are derived from `docs/technical.md` §11:
 ### `web`
 
 - Vitest + Testing Library validate that the sign-in screen renders both Static Web Apps auth provider links, clears the TanStack Query cache on sign-out, and displays a successful `/api/health` response
-- Vitest + Testing Library validate that the authenticated `/` home route renders the personalised feed, loads additional pages through infinite scroll, and supports touch pull-to-refresh
+- Vitest + Testing Library validate that the authenticated `/` home route renders the personalised feed, loads additional pages through infinite scroll, supports touch pull-to-refresh, and can publish media-backed posts through the compact home composer
 - Vitest + Testing Library validate the in-product report dialog on feed cards, standalone posts/replies, media attachments, and public profiles
 - Vitest + Testing Library validate that `/u/{handle}` renders the public profile shell, surfaces the API-backed not-found state, and returns to loading immediately when the handle changes
 - Vitest + Testing Library validate that `/p/{id}` loads the standalone post detail view, fetches thread context, and handles missing-post states safely

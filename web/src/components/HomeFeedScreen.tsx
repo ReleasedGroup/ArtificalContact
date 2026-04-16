@@ -5,14 +5,13 @@ import {
   useEffect,
   useRef,
   useState,
-  type FormEvent,
   type TouchEvent,
 } from 'react'
 import { AppImage } from './AppImage'
+import { HomeFeedComposer } from './HomeFeedComposer'
 import { NotificationBell } from './NotificationBell'
 import { hasRole, type MeProfile } from '../lib/me'
 import { getFeedPage, type FeedEntry } from '../lib/feed'
-import { createPost } from '../lib/post-write'
 import { signOut } from '../lib/auth'
 import { HeaderSearchBox } from './HeaderSearchBox'
 import { ReportDialog } from './ReportDialog'
@@ -149,7 +148,9 @@ function FeedCard({ entry, viewer }: { entry: FeedEntry; viewer: MeProfile }) {
           >
             <p className="line-clamp-4 text-sm leading-7 text-slate-200 sm:text-[15px]">
               {entry.excerpt?.trim() ||
-                'This feed item does not include an excerpt yet.'}
+                (entry.media.length > 0
+                  ? 'Media-only post.'
+                  : 'This feed item does not include an excerpt yet.')}
             </p>
           </a>
 
@@ -396,47 +397,15 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
     })
   }
 
-  const [composerText, setComposerText] = useState('')
-  const [composerPublishing, setComposerPublishing] = useState(false)
-  const [composerError, setComposerError] = useState<string | null>(null)
-  const composerSubmittingRef = useRef(false)
-
   const viewerMonogram = buildMonogram(
     viewer.displayName.trim() || viewer.handle?.trim(),
     'ME',
   )
   const refreshMessage = getRefreshMessage(pullRefreshState)
   const viewerIsAdmin = hasRole(viewer.roles, 'admin')
-  const canPublish =
-    viewer.status === 'active' &&
-    Boolean(viewer.handle) &&
-    composerText.trim().length > 0 &&
-    !composerPublishing
 
   function handleSignOut() {
     signOut({ queryClient })
-  }
-
-  const handleComposerSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!canPublish || composerSubmittingRef.current) return
-
-    composerSubmittingRef.current = true
-    setComposerPublishing(true)
-    setComposerError(null)
-
-    try {
-      await createPost({ text: composerText.trim() })
-      setComposerText('')
-      await handleRefresh()
-    } catch (error) {
-      setComposerError(
-        error instanceof Error ? error.message : 'Unable to publish the post.',
-      )
-    } finally {
-      composerSubmittingRef.current = false
-      setComposerPublishing(false)
-    }
   }
 
   return (
@@ -535,99 +504,7 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                   </div>
                 )}
 
-                <form
-                  className="mb-6 flex items-start gap-3 rounded-[1.75rem] border border-white/10 bg-slate-900/72 p-4 shadow-lg shadow-slate-950/20"
-                  onSubmit={handleComposerSubmit}
-                >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[1.2rem] bg-gradient-to-br from-fuchsia-500 to-sky-500 text-xs font-semibold tracking-[0.08em] text-white">
-                    {viewerMonogram}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <textarea
-                      aria-label="Post body"
-                      className="block w-full resize-none rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-300/50 focus:ring-2 focus:ring-sky-300/30"
-                      disabled={
-                        composerPublishing ||
-                        !viewer.handle ||
-                        viewer.status !== 'active'
-                      }
-                      maxLength={280}
-                      onChange={(event) => {
-                        setComposerText(event.target.value)
-                        setComposerError(null)
-                      }}
-                      placeholder={
-                        !viewer.handle
-                          ? 'Set a handle in your profile to start posting.'
-                          : viewer.status !== 'active'
-                            ? 'Activate your profile to start posting.'
-                            : 'Share an update...'
-                      }
-                      rows={2}
-                      value={composerText}
-                    />
-                    {composerError && (
-                      <p className="mt-2 text-sm text-rose-300">
-                        {composerError}
-                      </p>
-                    )}
-                    <div className="mt-3 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <button
-                          aria-label="Browse images"
-                          className="cursor-not-allowed rounded-full border border-white/10 p-2 text-slate-600 opacity-60"
-                          disabled
-                          title="Image attachments coming soon"
-                          type="button"
-                        >
-                          <svg
-                            aria-hidden="true"
-                            className="h-4 w-4"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            viewBox="0 0 24 24"
-                          >
-                            <rect
-                              x="3"
-                              y="3"
-                              width="18"
-                              height="18"
-                              rx="3"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                            <circle cx="8.5" cy="8.5" r="1.5" />
-                            <path
-                              d="M21 15l-5-5L5 21"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        </button>
-                        <button
-                          aria-label="Browse GIFs"
-                          className="cursor-not-allowed rounded-full border border-white/10 px-2.5 py-1.5 text-[11px] font-bold text-slate-600 opacity-60"
-                          disabled
-                          title="GIF replies coming soon"
-                          type="button"
-                        >
-                          GIF
-                        </button>
-                        <span className="text-xs text-slate-500">
-                          {composerText.length}/280
-                        </span>
-                      </div>
-                      <button
-                        className="rounded-full bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 transition enabled:hover:bg-sky-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-300"
-                        disabled={!canPublish}
-                        type="submit"
-                      >
-                        {composerPublishing ? 'Posting...' : 'Post'}
-                      </button>
-                    </div>
-                  </div>
-                </form>
+                <HomeFeedComposer onPublished={handleRefresh} viewer={viewer} />
 
                 {isPending && (
                   <div className="space-y-4">

@@ -30,6 +30,7 @@ npm run test:e2e --workspace @artificialcontact/web
 ## Current Preview Surfaces
 
 - The authenticated home feed header includes a debounced quick-search box backed by `GET /api/search`, surfacing grouped people and post matches without leaving the route.
+- The authenticated home feed keeps its compact inline composer, but now opens modal flows for direct-to-blob image uploads and GIF attachments before publishing root posts through `POST /api/posts`.
 - The authenticated `/me` route keeps profile media uploads behind modal dialogs so avatar and banner updates can still use the direct-to-blob pipeline without overwhelming the editor surface.
 - The anonymous `/p/{id}` route resolves a standalone post detail page by combining `GET /api/posts/{id}` with `GET /api/threads/{threadId}` for a root-plus-replies thread view. Reply indentation caps after depth 3, deeper replies show a `Replying to …` context line instead of nesting further, and mixed-media posts render inline image, GIF, video, and audio attachments.
 - When `/p/{id}` resolves for an authenticated active user, the page exposes a text reply composer backed by `POST /api/posts/{id}/replies`, a modal-based Tenor GIF picker for GIF-only replies through the same endpoint, and owner-only delete actions backed by `DELETE /api/posts/{id}`.
