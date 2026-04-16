@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NotificationsScreen } from './NotificationsScreen'
 import { createQueryClient } from '../lib/query-client'
@@ -39,15 +39,46 @@ function createNotificationPreferencesResponse() {
   })
 }
 
+function wrapNotifications(notificationPayload: unknown) {
+  return {
+    data: {
+      notifications: notificationPayload,
+      unreadCount: Array.isArray(notificationPayload)
+        ? notificationPayload.filter((notification) => notification.readAt == null).length
+        : 0,
+    },
+    cursor: null,
+    errors: [],
+  }
+}
+
 function mockNotificationRequests(notificationPayload: unknown) {
-  mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
+  mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
     const requestUrl = typeof input === 'string' ? input : input.toString()
 
     if (requestUrl.includes('/api/me/notifications')) {
       return createNotificationPreferencesResponse()
     }
 
-    return createJsonResponse(200, notificationPayload)
+    if (requestUrl === '/api/notifications/read') {
+      const body = JSON.parse(String(init?.body ?? '{}')) as {
+        all?: boolean
+        notificationId?: string
+      }
+
+      return createJsonResponse(200, {
+        data: {
+          read: {
+            scope: body.all ? 'all' : 'single',
+            notificationId: body.notificationId ?? null,
+            updatedCount: 1,
+          },
+        },
+        errors: [],
+      })
+    }
+
+    return createJsonResponse(200, wrapNotifications(notificationPayload))
   })
 }
 
@@ -91,12 +122,7 @@ describe('NotificationsScreen', () => {
   beforeEach(() => {
     mockFetch.mockReset()
     vi.stubGlobal('fetch', mockFetch)
-    mockNotificationRequests({
-      data: [],
-      cursor: null,
-      unreadCount: 0,
-      errors: [],
-    })
+    mockNotificationRequests([])
   })
 
   afterEach(() => {
@@ -105,35 +131,30 @@ describe('NotificationsScreen', () => {
   })
 
   it('filters the loaded notification feed by the selected tab', async () => {
-    mockNotificationRequests({
-      data: [
-        {
-          id: 'notif-mention',
-          eventType: 'mention',
-          text: 'mentioned you in a thread about evals.',
-          read: false,
-          createdAt: '2026-04-15T08:00:00.000Z',
-          actor: {
-            handle: 'grace',
-            displayName: 'Grace Hopper',
-          },
+    mockNotificationRequests([
+      {
+        id: 'notif-mention',
+        eventType: 'mention',
+        excerpt: 'mentioned you in a thread about evals.',
+        readAt: null,
+        createdAt: '2026-04-15T08:00:00.000Z',
+        actor: {
+          handle: 'grace',
+          displayName: 'Grace Hopper',
         },
-        {
-          id: 'notif-reply',
-          eventType: 'reply',
-          text: 'replied to your post.',
-          read: false,
-          createdAt: '2026-04-15T07:30:00.000Z',
-          actor: {
-            handle: 'linus',
-            displayName: 'Linus Torvalds',
-          },
+      },
+      {
+        id: 'notif-reply',
+        eventType: 'reply',
+        excerpt: 'replied to your post.',
+        readAt: null,
+        createdAt: '2026-04-15T07:30:00.000Z',
+        actor: {
+          handle: 'linus',
+          displayName: 'Linus Torvalds',
         },
-      ],
-      cursor: null,
-      unreadCount: 2,
-      errors: [],
-    })
+      },
+    ])
 
     renderNotificationsScreen()
 
@@ -156,24 +177,19 @@ describe('NotificationsScreen', () => {
   })
 
   it('shows a focused empty state when a tab has no matching notifications', async () => {
-    mockNotificationRequests({
-      data: [
-        {
-          id: 'notif-follow',
-          eventType: 'follow',
-          text: 'started following you.',
-          read: false,
-          createdAt: '2026-04-15T06:30:00.000Z',
-          actor: {
-            handle: 'sora',
-            displayName: 'Sora',
-          },
+    mockNotificationRequests([
+      {
+        id: 'notif-follow',
+        eventType: 'follow',
+        excerpt: 'started following you.',
+        readAt: null,
+        createdAt: '2026-04-15T06:30:00.000Z',
+        actor: {
+          handle: 'sora',
+          displayName: 'Sora',
         },
-      ],
-      cursor: null,
-      unreadCount: 1,
-      errors: [],
-    })
+      },
+    ])
 
     renderNotificationsScreen()
 
@@ -191,31 +207,92 @@ describe('NotificationsScreen', () => {
   })
 
   it('falls back to derived in-app links when targetUrl is not a safe relative path', async () => {
-    mockNotificationRequests({
-      data: [
-        {
-          id: 'notif-reaction',
-          eventType: 'reaction',
-          text: 'reacted to your post.',
-          read: false,
-          createdAt: '2026-04-15T06:30:00.000Z',
-          targetUrl: 'javascript:alert(1)',
-          postId: 'post-safe',
-          actor: {
-            handle: 'sora',
-            displayName: 'Sora',
-          },
+    mockNotificationRequests([
+      {
+        id: 'notif-reaction',
+        eventType: 'reaction',
+        excerpt: 'reacted to your post.',
+        readAt: null,
+        createdAt: '2026-04-15T06:30:00.000Z',
+        targetUrl: 'javascript:alert(1)',
+        postId: 'post-safe',
+        actor: {
+          handle: 'sora',
+          displayName: 'Sora',
         },
-      ],
-      cursor: null,
-      unreadCount: 1,
-      errors: [],
-    })
+      },
+    ])
 
     renderNotificationsScreen()
 
     expect(
       await screen.findByRole('link', { name: 'reacted to your post.' }),
     ).toHaveAttribute('href', '/p/post-safe')
+  })
+
+  it('marks a single notification as read from the list', async () => {
+    mockNotificationRequests([
+      {
+        id: 'notif-reply',
+        eventType: 'reply',
+        excerpt: 'replied to your post.',
+        readAt: null,
+        createdAt: '2026-04-15T07:30:00.000Z',
+        actor: {
+          handle: 'linus',
+          displayName: 'Linus Torvalds',
+        },
+      },
+    ])
+
+    renderNotificationsScreen()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Mark read' }))
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/notifications/read',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            notificationId: 'notif-reply',
+          }),
+        }),
+      )
+    })
+  })
+
+  it('marks all notifications as read from the header', async () => {
+    mockNotificationRequests([
+      {
+        id: 'notif-reply',
+        eventType: 'reply',
+        excerpt: 'replied to your post.',
+        readAt: null,
+        createdAt: '2026-04-15T07:30:00.000Z',
+        actor: {
+          handle: 'linus',
+          displayName: 'Linus Torvalds',
+        },
+      },
+    ])
+
+    renderNotificationsScreen()
+
+    await screen.findByText('1 unread')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Mark all read' }))
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/notifications/read',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            all: true,
+          }),
+        }),
+      )
+    })
   })
 })

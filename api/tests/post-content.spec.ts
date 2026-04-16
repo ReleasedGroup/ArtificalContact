@@ -73,6 +73,7 @@ describe('buildPostContentSchema', () => {
       text: 'Shipping #Azure with @Ada today. Contact ada@example.com and revisit #azure.',
       hashtags: ['azure'],
       mentions: ['ada'],
+      media: [],
     })
   })
 
@@ -96,10 +97,10 @@ describe('buildCreateReplyRequestSchema', () => {
     const result = buildCreateReplyRequestSchema(280).parse({
       media: [
         {
-          id: 'tenor-123',
+          id: 'giphy-123',
           kind: 'gif',
-          url: 'https://media.tenor.com/full.gif',
-          thumbUrl: 'https://media.tenor.com/tiny.gif',
+          url: 'https://media4.giphy.com/media/party/giphy.gif',
+          thumbUrl: 'https://media4.giphy.com/media/party/200w.gif',
           width: 320,
           height: 240,
         },
@@ -112,10 +113,10 @@ describe('buildCreateReplyRequestSchema', () => {
       mentions: [],
       media: [
         {
-          id: 'tenor-123',
+          id: 'giphy-123',
           kind: 'gif',
-          url: 'https://media.tenor.com/full.gif',
-          thumbUrl: 'https://media.tenor.com/tiny.gif',
+          url: 'https://media4.giphy.com/media/party/giphy.gif',
+          thumbUrl: 'https://media4.giphy.com/media/party/200w.gif',
           width: 320,
           height: 240,
         },
@@ -124,20 +125,20 @@ describe('buildCreateReplyRequestSchema', () => {
   })
 
   it.each([
-    ['url', 'http://media.tenor.com/full.gif'],
+    ['url', 'http://media4.giphy.com/media/party/giphy.gif'],
     ['url', 'https://example.com/full.gif'],
-    ['thumbUrl', 'http://media.tenor.com/tiny.gif'],
+    ['thumbUrl', 'http://media4.giphy.com/media/party/200w.gif'],
     ['thumbUrl', 'https://example.com/tiny.gif'],
   ])(
-    'rejects reply GIF %s values outside HTTPS Tenor hosts',
+    'rejects reply GIF %s values outside approved HTTPS GIF hosts',
     (field, invalidUrl) => {
       const result = buildCreateReplyRequestSchema(280).safeParse({
         media: [
           {
-            id: 'tenor-123',
+            id: 'giphy-123',
             kind: 'gif',
-            url: 'https://media.tenor.com/full.gif',
-            thumbUrl: 'https://media.tenor.com/tiny.gif',
+            url: 'https://media4.giphy.com/media/party/giphy.gif',
+            thumbUrl: 'https://media4.giphy.com/media/party/200w.gif',
             [field]: invalidUrl,
           },
         ],
@@ -150,7 +151,7 @@ describe('buildCreateReplyRequestSchema', () => {
 
       expect(result.error.issues[0]?.path).toEqual(['media', 0, field])
       expect(result.error.issues[0]?.message).toContain(
-        'must use an https://*.tenor.com URL.',
+        'must use an https GIF URL from GIPHY or Tenor.',
       )
     },
   )

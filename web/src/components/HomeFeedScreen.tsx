@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   startTransition,
   useDeferredValue,
@@ -10,12 +10,25 @@ import {
 } from 'react'
 import { AppImage } from './AppImage'
 import { NotificationBell } from './NotificationBell'
-import { hasRole, type MeProfile } from '../lib/me'
+import { hasRole, type MeProfile, type ResolvedMeProfile } from '../lib/me'
 import { getFeedPage, type FeedEntry } from '../lib/feed'
-import { createPost } from '../lib/post-write'
+import { createPost, createReply } from '../lib/post-write'
 import { signOut } from '../lib/auth'
 import { HeaderSearchBox } from './HeaderSearchBox'
 import { ReportDialog } from './ReportDialog'
+import { createReaction, deleteReaction } from '../lib/reactions'
+import type { GifSearchResult } from '../lib/gif-search'
+import {
+  createResolvedMeProfileSnapshot,
+  OPTIONAL_ME_QUERY_KEY,
+  updateCachedOptionalMe,
+} from '../lib/optional-me-cache'
+import {
+  PostComposer,
+  type PostComposerMediaFile,
+  type PostComposerSubmission,
+} from './PostComposer'
+import { PostGifPicker } from './PostGifPicker'
 
 interface HomeFeedScreenProps {
   viewer: MeProfile
@@ -98,20 +111,104 @@ function FeedCard({ entry, viewer }: { entry: FeedEntry; viewer: MeProfile }) {
   const timestamp = formatTimestamp(entry.createdAt)
   const viewerCanReport =
     viewer.status === 'active' && Boolean(viewer.handle?.trim())
+  const canEngage =
+    viewer.status === 'active' && Boolean(viewer.handle?.trim())
   const canReport =
     viewerCanReport && entry.authorId !== null && entry.authorId !== viewer.id
+  const [likeCount, setLikeCount] = useState(entry.counters.likes)
+  const [replyCount, setReplyCount] = useState(entry.counters.replies)
+  const [liked, setLiked] = useState(false)
+  const [likePending, setLikePending] = useState(false)
+  const [replyExpanded, setReplyExpanded] = useState(false)
+  const [replyDraft, setReplyDraft] = useState('')
+  const [replyPending, setReplyPending] = useState(false)
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLikeCount(entry.counters.likes)
+    setReplyCount(entry.counters.replies)
+    setLiked(false)
+    setLikePending(false)
+    setReplyExpanded(false)
+    setReplyDraft('')
+    setReplyPending(false)
+    setFeedbackMessage(null)
+  }, [entry.counters.likes, entry.counters.replies, entry.id])
+
+  const handleLikeToggle = async () => {
+    if (!canEngage || likePending || replyPending) {
+      return
+    }
+
+    const nextLiked = !liked
+    const nextLikeCount = Math.max(0, likeCount + (nextLiked ? 1 : -1))
+
+    setFeedbackMessage(null)
+    setLikePending(true)
+    setLiked(nextLiked)
+    setLikeCount(nextLikeCount)
+
+    try {
+      if (nextLiked) {
+        await createReaction(entry.postId, { type: 'like' })
+      } else {
+        await deleteReaction(entry.postId)
+      }
+    } catch (error) {
+      setLiked(!nextLiked)
+      setLikeCount(likeCount)
+      setFeedbackMessage(
+        error instanceof Error
+          ? error.message
+          : 'Unable to update the like right now.',
+      )
+    } finally {
+      setLikePending(false)
+    }
+  }
+
+  const handleReplySubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    const normalizedReply = replyDraft.trim()
+    if (!canEngage || replyPending || normalizedReply.length === 0) {
+      return
+    }
+
+    setFeedbackMessage(null)
+    setReplyPending(true)
+
+    try {
+      await createReply(entry.postId, {
+        text: normalizedReply,
+      })
+
+      setReplyCount((currentCount) => currentCount + 1)
+      setReplyDraft('')
+      setReplyExpanded(false)
+      setFeedbackMessage('Reply published.')
+    } catch (error) {
+      setFeedbackMessage(
+        error instanceof Error
+          ? error.message
+          : 'Unable to publish the reply.',
+      )
+    } finally {
+      setReplyPending(false)
+    }
+  }
 
   return (
-    <article className="rounded-[1.75rem] border border-white/10 bg-slate-900/72 p-5 shadow-lg shadow-slate-950/20 transition hover:border-white/15 hover:bg-slate-900/80">
-      <div className="flex items-start gap-4">
+    <article className="rounded-[1.35rem] border border-white/8 bg-white/[0.035] p-4 transition hover:border-white/12 hover:bg-white/[0.05]">
+      <div className="flex items-start gap-3.5">
         {entry.authorAvatarUrl ? (
           <AppImage
             src={entry.authorAvatarUrl}
             alt={`${authorName} avatar`}
-            className="h-12 w-12 rounded-[1.2rem] object-cover ring-1 ring-white/10"
+            className="h-11 w-11 rounded-[1rem] object-cover ring-1 ring-white/10"
           />
         ) : (
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.2rem] bg-gradient-to-br from-fuchsia-500 to-sky-500 text-sm font-semibold tracking-[0.08em] text-white shadow-lg shadow-sky-950/25">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[1rem] bg-gradient-to-br from-fuchsia-500 to-sky-500 text-sm font-semibold tracking-[0.08em] text-white shadow-lg shadow-sky-950/25">
             {buildMonogram(entry.authorDisplayName || entry.authorHandle, 'AI')}
           </div>
         )}
@@ -145,7 +242,7 @@ function FeedCard({ entry, viewer }: { entry: FeedEntry; viewer: MeProfile }) {
 
           <a
             href={getPostHref(entry.postId)}
-            className="mt-4 block rounded-[1.4rem] border border-transparent bg-white/0 px-1 py-1 transition hover:border-white/8 hover:bg-white/4"
+            className="mt-3 block rounded-[1rem] px-0.5 py-0.5 transition hover:bg-white/[0.03]"
           >
             <p className="line-clamp-4 text-sm leading-7 text-slate-200 sm:text-[15px]">
               {entry.excerpt?.trim() ||
@@ -163,8 +260,8 @@ function FeedCard({ entry, viewer }: { entry: FeedEntry; viewer: MeProfile }) {
                     <a
                       key={mediaKey}
                       href={getPostHref(entry.postId)}
-                      className="overflow-hidden rounded-[1.4rem] border border-white/10 bg-slate-950/60"
-                    >
+                    className="overflow-hidden rounded-[1rem] border border-white/8 bg-slate-950/45"
+                  >
                       <AppImage
                         src={media.thumbUrl}
                         alt={
@@ -180,7 +277,7 @@ function FeedCard({ entry, viewer }: { entry: FeedEntry; viewer: MeProfile }) {
                   <a
                     key={mediaKey}
                     href={getPostHref(entry.postId)}
-                    className="flex h-40 items-center justify-center rounded-[1.4rem] border border-dashed border-white/12 bg-slate-950/55 px-4 text-center text-xs font-medium uppercase tracking-[0.18em] text-slate-400"
+                    className="flex h-40 items-center justify-center rounded-[1rem] border border-dashed border-white/10 bg-slate-950/45 px-4 text-center text-xs font-medium uppercase tracking-[0.18em] text-slate-400"
                   >
                     {media.kind ?? 'Media'}
                   </a>
@@ -189,36 +286,145 @@ function FeedCard({ entry, viewer }: { entry: FeedEntry; viewer: MeProfile }) {
             </div>
           )}
 
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-300">
-              <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-cyan-100">
-                {formatCount(entry.counters.likes)} likes
+              <span className="rounded-full border border-cyan-300/15 bg-cyan-300/8 px-3 py-1 text-cyan-100">
+                {formatCount(likeCount)} likes
               </span>
-              <span className="rounded-full border border-fuchsia-300/20 bg-fuchsia-300/10 px-3 py-1 text-fuchsia-100">
-                {formatCount(entry.counters.replies)} replies
+              <span className="rounded-full border border-fuchsia-300/15 bg-fuchsia-300/8 px-3 py-1 text-fuchsia-100">
+                {formatCount(replyCount)} replies
               </span>
             </div>
 
-            <a
-              href={getPostHref(entry.postId)}
-              className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
-            >
-              Open thread
-            </a>
-            {canReport && (
-              <ReportDialog
-                actionLabel="Report post"
-                dialogDescription={`Flag ${authorName}'s post for moderator review.`}
-                dialogTitle="Report this post"
-                successMessage="Post report submitted."
-                target={{
-                  targetType: 'post',
-                  targetId: entry.postId,
-                  targetProfileHandle: authorHandle,
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  void handleLikeToggle()
                 }}
-              />
-            )}
+                disabled={!canEngage || likePending || replyPending}
+              className={`rounded-full border px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-slate-400 ${
+                  liked
+                    ? 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100 hover:border-emerald-300/30 hover:bg-emerald-300/14'
+                    : 'border-white/10 text-white hover:border-white/16 hover:bg-white/[0.06]'
+                }`}
+                aria-label="Like post"
+              >
+                {likePending
+                  ? liked
+                    ? 'Liking...'
+                    : 'Updating like...'
+                  : `Like (${formatCount(likeCount)})`}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setReplyExpanded((currentValue) => !currentValue)
+                  setFeedbackMessage(null)
+                }}
+                disabled={!canEngage || replyPending || likePending}
+                className="rounded-full border border-white/10 px-4 py-2 text-sm font-medium text-white transition hover:border-white/16 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-slate-400"
+                aria-label="Reply to post"
+              >
+                {replyExpanded
+                  ? 'Cancel reply'
+                  : `Reply (${formatCount(replyCount)})`}
+              </button>
+              <a
+                href={getPostHref(entry.postId)}
+                className="rounded-full border border-white/10 px-4 py-2 text-sm font-medium text-white transition hover:border-white/16 hover:bg-white/[0.06]"
+              >
+                Open thread
+              </a>
+              {canReport && (
+                <ReportDialog
+                  actionLabel="Report post"
+                  dialogDescription={`Flag ${authorName}'s post for moderator review.`}
+                  dialogTitle="Report this post"
+                  successMessage="Post report submitted."
+                  target={{
+                    targetType: 'post',
+                    targetId: entry.postId,
+                    targetProfileHandle: authorHandle,
+                  }}
+                />
+              )}
+            </div>
           </div>
+
+          {feedbackMessage && (
+            <p
+              className={`mt-3 text-sm ${
+                feedbackMessage === 'Reply published.'
+                  ? 'text-emerald-200'
+                  : 'text-rose-200'
+              }`}
+              role="status"
+            >
+              {feedbackMessage}
+            </p>
+          )}
+
+          {!canEngage && (
+            <p className="mt-4 text-sm text-slate-400">
+              Activate your profile with a public handle to like and reply from
+              the feed.
+            </p>
+          )}
+
+          {replyExpanded && canEngage && (
+            <form
+              className="mt-4 border-l border-white/10 pl-4"
+              onSubmit={handleReplySubmit}
+            >
+              <label
+                className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400"
+                htmlFor={`reply-${entry.id}`}
+              >
+                Quick reply
+              </label>
+              <textarea
+                id={`reply-${entry.id}`}
+                aria-label="Reply to feed post"
+                className="mt-2 block min-h-20 w-full resize-none rounded-[1rem] border border-white/8 bg-white/[0.035] px-3.5 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-300/50 focus:ring-2 focus:ring-sky-300/20"
+                disabled={replyPending}
+                maxLength={280}
+                onChange={(event) => {
+                  setReplyDraft(event.target.value)
+                  setFeedbackMessage(null)
+                }}
+                placeholder={`Reply to ${authorHandle ? `@${authorHandle}` : authorName}...`}
+                rows={3}
+                value={replyDraft}
+              />
+              <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3">
+                <span className="text-xs text-slate-500">
+                  {replyDraft.length}/280
+                </span>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReplyExpanded(false)
+                      setReplyDraft('')
+                      setFeedbackMessage(null)
+                    }}
+                    className="rounded-full border border-white/10 px-4 py-2 text-sm font-medium text-white transition hover:border-white/16 hover:bg-white/[0.06]"
+                    disabled={replyPending}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="rounded-full bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 transition enabled:hover:bg-sky-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-300"
+                    disabled={replyPending || replyDraft.trim().length === 0}
+                  >
+                    {replyPending ? 'Replying...' : 'Reply'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     </article>
@@ -227,6 +433,12 @@ function FeedCard({ entry, viewer }: { entry: FeedEntry; viewer: MeProfile }) {
 
 export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
   const queryClient = useQueryClient()
+  const viewerState = useQuery<ResolvedMeProfile | null>({
+    queryKey: OPTIONAL_ME_QUERY_KEY,
+    queryFn: async () => createResolvedMeProfileSnapshot(viewer),
+    initialData: createResolvedMeProfileSnapshot(viewer),
+    enabled: false,
+  })
   const scrollRegionRef = useRef<HTMLDivElement | null>(null)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const touchStartYRef = useRef<number | null>(null)
@@ -397,28 +609,38 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
   }
 
   const [composerText, setComposerText] = useState('')
+  const [composerMediaFiles, setComposerMediaFiles] = useState<
+    PostComposerMediaFile[]
+  >([])
+  const [selectedComposerGif, setSelectedComposerGif] =
+    useState<GifSearchResult | null>(null)
   const [composerPublishing, setComposerPublishing] = useState(false)
   const [composerError, setComposerError] = useState<string | null>(null)
   const composerSubmittingRef = useRef(false)
+  const resolvedViewer = viewerState.data?.user ?? viewer
 
   const viewerMonogram = buildMonogram(
-    viewer.displayName.trim() || viewer.handle?.trim(),
+    resolvedViewer.displayName.trim() || resolvedViewer.handle?.trim(),
     'ME',
   )
   const refreshMessage = getRefreshMessage(pullRefreshState)
-  const viewerIsAdmin = hasRole(viewer.roles, 'admin')
+  const viewerIsAdmin = hasRole(resolvedViewer.roles, 'admin')
   const canPublish =
-    viewer.status === 'active' &&
-    Boolean(viewer.handle) &&
-    composerText.trim().length > 0 &&
+    resolvedViewer.status === 'active' &&
+    Boolean(resolvedViewer.handle) &&
+    (composerText.trim().length > 0 ||
+      composerMediaFiles.length > 0 ||
+      selectedComposerGif !== null) &&
     !composerPublishing
 
   function handleSignOut() {
     signOut({ queryClient })
   }
 
-  const handleComposerSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const handleComposerSubmit = async ({
+    mediaFiles,
+    value,
+  }: PostComposerSubmission) => {
     if (!canPublish || composerSubmittingRef.current) return
 
     composerSubmittingRef.current = true
@@ -426,8 +648,34 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
     setComposerError(null)
 
     try {
-      await createPost({ text: composerText.trim() })
+      await createPost({
+        text: value,
+        mediaFiles,
+        ...(selectedComposerGif === null
+          ? {}
+          : {
+              media: [
+                {
+                  id: selectedComposerGif.id,
+                  kind: 'gif' as const,
+                  url: selectedComposerGif.gifUrl,
+                  thumbUrl: selectedComposerGif.previewUrl,
+                  width: selectedComposerGif.width,
+                  height: selectedComposerGif.height,
+                },
+              ],
+            }),
+      })
+      updateCachedOptionalMe(queryClient, resolvedViewer, (currentViewer) => ({
+        ...currentViewer,
+        counters: {
+          ...currentViewer.counters,
+          posts: currentViewer.counters.posts + 1,
+        },
+      }))
       setComposerText('')
+      setComposerMediaFiles([])
+      setSelectedComposerGif(null)
       await handleRefresh()
     } catch (error) {
       setComposerError(
@@ -469,9 +717,9 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                 >
                   Edit profile
                 </a>
-                {viewer.handle && (
+                {resolvedViewer.handle && (
                   <a
-                    href={getProfileHref(viewer.handle)}
+                    href={getProfileHref(resolvedViewer.handle)}
                     className="rounded-full border border-white/12 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/6"
                   >
                     View public profile
@@ -535,99 +783,94 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                   </div>
                 )}
 
-                <form
-                  className="mb-6 flex items-start gap-3 rounded-[1.75rem] border border-white/10 bg-slate-900/72 p-4 shadow-lg shadow-slate-950/20"
-                  onSubmit={handleComposerSubmit}
-                >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[1.2rem] bg-gradient-to-br from-fuchsia-500 to-sky-500 text-xs font-semibold tracking-[0.08em] text-white">
-                    {viewerMonogram}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <textarea
-                      aria-label="Post body"
-                      className="block w-full resize-none rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-300/50 focus:ring-2 focus:ring-sky-300/30"
-                      disabled={
-                        composerPublishing ||
-                        !viewer.handle ||
-                        viewer.status !== 'active'
-                      }
-                      maxLength={280}
-                      onChange={(event) => {
-                        setComposerText(event.target.value)
-                        setComposerError(null)
-                      }}
-                      placeholder={
-                        !viewer.handle
-                          ? 'Set a handle in your profile to start posting.'
-                          : viewer.status !== 'active'
-                            ? 'Activate your profile to start posting.'
-                            : 'Share an update...'
-                      }
-                      rows={2}
-                      value={composerText}
-                    />
-                    {composerError && (
-                      <p className="mt-2 text-sm text-rose-300">
-                        {composerError}
-                      </p>
-                    )}
-                    <div className="mt-3 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
+                <div className="mb-5 rounded-[1.4rem] border border-white/8 bg-white/[0.04] p-4">
+                  <PostComposer
+                    authorBadge={viewerMonogram}
+                    authorHandle={resolvedViewer.handle}
+                    authorName={resolvedViewer.displayName}
+                    disabled={
+                      composerPublishing ||
+                      !resolvedViewer.handle ||
+                      resolvedViewer.status !== 'active'
+                    }
+                    hasExternalMedia={selectedComposerGif !== null}
+                    label="Post body"
+                    mediaFiles={composerMediaFiles}
+                    onChange={(nextValue) => {
+                      setComposerText(nextValue)
+                      setComposerError(null)
+                    }}
+                    onMediaFilesChange={(nextFiles) => {
+                      setComposerMediaFiles(nextFiles)
+                      setComposerError(null)
+                    }}
+                    onSubmit={(submission) => {
+                      void handleComposerSubmit(submission)
+                    }}
+                    placeholder={
+                      !resolvedViewer.handle
+                        ? 'Set a handle in your profile to start posting.'
+                        : resolvedViewer.status !== 'active'
+                          ? 'Activate your profile to start posting.'
+                          : 'Share an update...'
+                    }
+                    submitLabel="Post"
+                    submitting={composerPublishing}
+                    value={composerText}
+                  />
+
+                  {selectedComposerGif && (
+                    <div className="mt-4 overflow-hidden rounded-[1.35rem] border border-white/10 bg-slate-950/60">
+                      <AppImage
+                        alt={selectedComposerGif.title ?? 'Selected post GIF'}
+                        className="h-48 w-full object-cover"
+                        src={selectedComposerGif.previewUrl}
+                      />
+                      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                        <div>
+                          <p className="text-sm font-medium text-white">
+                            {selectedComposerGif.title ?? 'Selected GIF'}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-400">
+                            {selectedComposerGif.width &&
+                            selectedComposerGif.height
+                              ? `${selectedComposerGif.width} × ${selectedComposerGif.height}`
+                              : 'Ready to publish'}
+                          </p>
+                        </div>
                         <button
-                          aria-label="Browse images"
-                          className="cursor-not-allowed rounded-full border border-white/10 p-2 text-slate-600 opacity-60"
-                          disabled
-                          title="Image attachments coming soon"
                           type="button"
+                          onClick={() => {
+                            setSelectedComposerGif(null)
+                            setComposerError(null)
+                          }}
+                          className="rounded-full border border-rose-300/20 bg-rose-400/10 px-3 py-1.5 text-xs font-medium text-rose-100 transition hover:border-rose-300/35 hover:bg-rose-400/20"
+                          disabled={composerPublishing}
                         >
-                          <svg
-                            aria-hidden="true"
-                            className="h-4 w-4"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            viewBox="0 0 24 24"
-                          >
-                            <rect
-                              x="3"
-                              y="3"
-                              width="18"
-                              height="18"
-                              rx="3"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                            <circle cx="8.5" cy="8.5" r="1.5" />
-                            <path
-                              d="M21 15l-5-5L5 21"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
+                          Remove GIF
                         </button>
-                        <button
-                          aria-label="Browse GIFs"
-                          className="cursor-not-allowed rounded-full border border-white/10 px-2.5 py-1.5 text-[11px] font-bold text-slate-600 opacity-60"
-                          disabled
-                          title="GIF replies coming soon"
-                          type="button"
-                        >
-                          GIF
-                        </button>
-                        <span className="text-xs text-slate-500">
-                          {composerText.length}/280
-                        </span>
                       </div>
-                      <button
-                        className="rounded-full bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 transition enabled:hover:bg-sky-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-300"
-                        disabled={!canPublish}
-                        type="submit"
-                      >
-                        {composerPublishing ? 'Posting...' : 'Post'}
-                      </button>
                     </div>
-                  </div>
-                </form>
+                  )}
+
+                  <PostGifPicker
+                    disabled={
+                      composerPublishing ||
+                      !resolvedViewer.handle ||
+                      resolvedViewer.status !== 'active'
+                    }
+                    onSelect={(gif) => {
+                      setSelectedComposerGif(gif)
+                      setComposerError(null)
+                    }}
+                  />
+
+                  {composerError && (
+                    <p className="mt-4 text-sm text-rose-300">
+                      {composerError}
+                    </p>
+                  )}
+                </div>
 
                 {isPending && (
                   <div className="space-y-4">
@@ -707,7 +950,11 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                 {!isPending && !isError && feedEntries.length > 0 && (
                   <div className="space-y-4">
                     {feedEntries.map((entry) => (
-                      <FeedCard key={entry.id} entry={entry} viewer={viewer} />
+                      <FeedCard
+                        key={entry.id}
+                        entry={entry}
+                        viewer={resolvedViewer}
+                      />
                     ))}
                   </div>
                 )}
@@ -755,13 +1002,15 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                 </div>
                 <div className="min-w-0">
                   <p className="text-lg font-semibold text-white">
-                    {viewer.displayName}
+                    {resolvedViewer.displayName}
                   </p>
                   <p className="mt-1 text-sm text-slate-400">
-                    {viewer.handle ? `@${viewer.handle}` : 'Handle pending'}
+                    {resolvedViewer.handle
+                      ? `@${resolvedViewer.handle}`
+                      : 'Handle pending'}
                   </p>
                   <p className="mt-3 line-clamp-3 text-sm leading-7 text-slate-300">
-                    {viewer.bio?.trim() ||
+                    {resolvedViewer.bio?.trim() ||
                       'Add a bio in your profile to show it here.'}
                   </p>
                 </div>
@@ -773,7 +1022,7 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                     Posts
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-white">
-                    {formatCount(viewer.counters.posts)}
+                    {formatCount(resolvedViewer.counters.posts)}
                   </p>
                 </div>
                 <div className="overflow-hidden rounded-[1.4rem] border border-white/8 bg-white/5 px-2 py-4 text-center">
@@ -781,7 +1030,7 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                     Following
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-white">
-                    {formatCount(viewer.counters.following)}
+                    {formatCount(resolvedViewer.counters.following)}
                   </p>
                 </div>
                 <div className="overflow-hidden rounded-[1.4rem] border border-white/8 bg-white/5 px-2 py-4 text-center">
@@ -789,7 +1038,7 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                     Followers
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-white">
-                    {formatCount(viewer.counters.followers)}
+                    {formatCount(resolvedViewer.counters.followers)}
                   </p>
                 </div>
               </div>

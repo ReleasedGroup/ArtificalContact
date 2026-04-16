@@ -2,10 +2,8 @@ import { CosmosClient, type Container } from '@azure/cosmos'
 import { getEnvironmentConfig } from './config.js'
 import { createCosmosClient } from './cosmos-client.js'
 import { CosmosPostStore } from './cosmos-post-store.js'
-import { CosmosUserProfileStore } from './cosmos-user-profile-store.js'
 import {
   DEFAULT_FEEDS_CONTAINER_NAME,
-  MAX_FANOUT_FOLLOWERS,
   buildFeedEntryDocument,
   buildFeedEntrySource,
   type FeedEntryDocument,
@@ -22,7 +20,6 @@ import {
   type KeysetCursorState,
 } from './keyset-pagination.js'
 import { readOptionalValue } from './strings.js'
-import type { UserProfileStore } from './user-profile.js'
 import { DEFAULT_COSMOS_DATABASE_NAME } from './users-by-handle-mirror.js'
 
 function isCosmosNotFound(error: unknown): boolean {
@@ -36,40 +33,13 @@ function isCosmosNotFound(error: unknown): boolean {
 }
 
 const FOLLOWEE_LOOKUP_BATCH_SIZE = 100
-const FOLLOWEE_PROFILE_LOOKUP_CONCURRENCY = 10
+export const MAX_PULL_ON_READ_FOLLOWEES = 250
 const FEED_ENTRY_CURSOR_PREFIX = 'ac.feed.entries.v1:'
-
-async function mapWithConcurrencyLimit<TInput, TOutput>(
-  items: readonly TInput[],
-  concurrencyLimit: number,
-  mapper: (item: TInput) => Promise<TOutput>,
-): Promise<TOutput[]> {
-  if (items.length === 0) {
-    return []
-  }
-
-  const results = new Array<TOutput>(items.length)
-  let nextIndex = 0
-  const workerCount = Math.min(concurrencyLimit, items.length)
-
-  await Promise.all(
-    Array.from({ length: workerCount }, async () => {
-      while (nextIndex < items.length) {
-        const currentIndex = nextIndex
-        nextIndex += 1
-        results[currentIndex] = await mapper(items[currentIndex]!)
-      }
-    }),
-  )
-
-  return results
-}
 
 export class CosmosFeedStore implements FeedFanOutStore, FeedReadStore {
   constructor(
     private readonly container: Container,
     private readonly followingRepository: FollowingListRepository,
-    private readonly userProfileStore: UserProfileStore,
     private readonly postStore: CosmosPostStore,
   ) {}
 
@@ -85,7 +55,6 @@ export class CosmosFeedStore implements FeedFanOutStore, FeedReadStore {
     return new CosmosFeedStore(
       resolvedClient.database(databaseName).container(feedsContainerName),
       createFollowingListRepository(),
-      CosmosUserProfileStore.fromEnvironment(resolvedClient),
       CosmosPostStore.fromEnvironment(resolvedClient),
     )
   }
@@ -146,9 +115,8 @@ export class CosmosFeedStore implements FeedFanOutStore, FeedReadStore {
     cursor?: string
   }> {
     try {
-      const celebrityFolloweeIds =
-        await this.listCelebrityFolloweeIdsByFeedOwnerId(feedOwnerId)
-      const authorIds = [...new Set([feedOwnerId, ...celebrityFolloweeIds])]
+      const followeeIds = await this.listFolloweeIdsByFeedOwnerId(feedOwnerId)
+      const authorIds = [...new Set([feedOwnerId, ...followeeIds])]
 
       const page = await this.postStore.listRootPostsByAuthorIds(
         authorIds,
@@ -175,10 +143,51 @@ export class CosmosFeedStore implements FeedFanOutStore, FeedReadStore {
     }
   }
 
-  private async listCelebrityFolloweeIdsByFeedOwnerId(
+  async hydrateFeedEntries(
+    entries: readonly StoredFeedDocument[],
+  ): Promise<StoredFeedDocument[]> {
+    const postIds = [
+      ...new Set(
+        entries
+          .map((entry) => readOptionalValue(entry.postId))
+          .filter((postId): postId is string => postId !== undefined),
+      ),
+    ]
+
+    if (postIds.length === 0) {
+      return [...entries]
+    }
+
+    const canonicalPosts = await this.postStore.listPostsByIds(postIds)
+    const canonicalPostsById = new Map(
+      canonicalPosts.map((post) => [post.id, post] as const),
+    )
+
+    return entries.flatMap((entry) => {
+      const canonicalPost = canonicalPostsById.get(entry.postId)
+      if (canonicalPost === undefined) {
+        return [entry]
+      }
+
+      const source = buildFeedEntrySource(canonicalPost)
+      if (source === null) {
+        return []
+      }
+
+      return [buildFeedEntryDocument(entry.feedOwnerId, source)]
+    })
+  }
+
+  private async listFolloweeIdsByFeedOwnerId(
     feedOwnerId: string,
+    maxFollowees = MAX_PULL_ON_READ_FOLLOWEES,
   ): Promise<string[]> {
+    if (maxFollowees <= 0) {
+      return []
+    }
+
     const followedIds: string[] = []
+    const seenFollowedIds = new Set<string>()
     let continuationToken: string | undefined
 
     do {
@@ -187,28 +196,30 @@ export class CosmosFeedStore implements FeedFanOutStore, FeedReadStore {
         ...(continuationToken === undefined ? {} : { continuationToken }),
       })
 
-      followedIds.push(...page.follows.map((follow) => follow.followedId))
+      for (const follow of page.follows) {
+        if (seenFollowedIds.has(follow.followedId)) {
+          continue
+        }
+
+        seenFollowedIds.add(follow.followedId)
+        followedIds.push(follow.followedId)
+
+        if (followedIds.length >= maxFollowees) {
+          break
+        }
+      }
+
       continuationToken = page.continuationToken
-    } while (continuationToken !== undefined)
+    } while (
+      continuationToken !== undefined &&
+      followedIds.length < maxFollowees
+    )
 
     if (followedIds.length === 0) {
       return []
     }
 
-    const profiles = await mapWithConcurrencyLimit(
-      followedIds,
-      FOLLOWEE_PROFILE_LOOKUP_CONCURRENCY,
-      async (followedId) => this.userProfileStore.getUserById(followedId),
-    )
-
-    return followedIds.filter((_followedId, index) => {
-      const followerCount = profiles[index]?.counters?.followers
-      return (
-        typeof followerCount === 'number' &&
-        Number.isFinite(followerCount) &&
-        followerCount > MAX_FANOUT_FOLLOWERS
-      )
-    })
+    return followedIds
   }
 }
 

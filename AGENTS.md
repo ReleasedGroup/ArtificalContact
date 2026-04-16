@@ -11,3 +11,5 @@ The documentation will be maintained in a version-controlled manner to ensure th
 The project will be developed in a collaborative environment, with contributions from various developers. All contributions will be reviewed and tested to ensure they meet the project's standards and do not introduce any regressions.
 
 The project will be deployed using best practices to ensure a smooth deployment process. This will include environment setup, configuration, and deployment steps that are clearly documented in the deployment guide.
+
+Every release that changes the web application must explicitly invalidate client-side caches so updates are pushed through reliably. This includes bumping any service worker cache version, manifest/app-shell cache identifier, or equivalent release cache key as part of the release change set.

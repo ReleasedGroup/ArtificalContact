@@ -185,6 +185,34 @@ describe('PostComposer', () => {
     ).toBeInTheDocument()
   })
 
+  it('allows media-only post submission when text is blank', () => {
+    const handleSubmit = vi.fn()
+
+    render(<ComposerHarness onSubmit={handleSubmit} initialValue="   " />)
+
+    const dropZone = screen.getByRole('group', {
+      name: 'Post image attachments',
+    })
+    const image = new File(['diagram'], 'media-only.png', {
+      type: 'image/png',
+    })
+
+    fireEvent.drop(dropZone, {
+      dataTransfer: { files: [image] },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+
+    expect(handleSubmit).toHaveBeenCalledWith({
+      mediaFiles: [
+        {
+          altText: '',
+          file: image,
+        },
+      ],
+      value: '   ',
+    })
+  })
+
   it('disables reply submission when the text is blank', () => {
     render(<ComposerHarness variant="reply" initialValue="   " />)
 

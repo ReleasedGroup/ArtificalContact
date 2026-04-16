@@ -111,6 +111,7 @@ function buildFunctionAppSettings(
       'applicationInsightsConnectionString',
     ),
     AZURE_REGION: readRequiredEnv('AZURE_LOCATION'),
+    BLOB_SERVICE_URL: buildStorageServiceUri(storageAccountName, 'blob'),
     AzureWebJobsStorage__blobServiceUri: buildStorageServiceUri(
       storageAccountName,
       'blob',
@@ -133,8 +134,13 @@ function buildFunctionAppSettings(
     ),
     COSMOS_ENDPOINT: readRequiredEnv('cosmosEndpoint'),
     FUNCTIONS_EXTENSION_VERSION: '~4',
+    GIPHY_API_KEY: readOptionalEnv('GIPHY_API_KEY', ''),
+    MEDIA_AUDIO_CONTAINER_NAME: 'audio',
     MEDIA_BASE_URL: frontDoorHostName ? `https://${frontDoorHostName}` : '',
     MEDIA_CONTAINER_NAME: readOptionalEnv('cosmosMediaContainerName', 'media'),
+    MEDIA_GIF_CONTAINER_NAME: 'gif',
+    MEDIA_IMAGES_CONTAINER_NAME: 'images',
+    MEDIA_VIDEO_CONTAINER_NAME: 'video',
     NOTIFICATIONS_CONTAINER_NAME: readOptionalEnv(
       'cosmosNotificationsContainerName',
       'notifications',

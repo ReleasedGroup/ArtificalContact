@@ -539,20 +539,20 @@ function PostCard({
     (typeof github?.number === 'number' ? `#${github.number}` : null)
   const cardClassName =
     emphasis === 'selected'
-      ? 'border-cyan-300/25 bg-slate-900/82 shadow-xl shadow-cyan-950/20'
-      : 'border-white/10 bg-slate-900/62'
+      ? 'border-cyan-300/20 bg-white/[0.055]'
+      : 'border-white/8 bg-white/[0.03]'
 
   return (
-    <article className={`rounded-[1.6rem] border p-5 ${cardClassName}`}>
-      <div className="flex gap-4">
+    <article className={`rounded-[1.25rem] border p-4 ${cardClassName}`}>
+      <div className="flex gap-3.5">
         {post.authorAvatarUrl ? (
           <AppImage
             src={post.authorAvatarUrl}
             alt={`${authorName} avatar`}
-            className="h-12 w-12 rounded-2xl border border-white/10 bg-slate-900 object-cover"
+            className="h-11 w-11 rounded-[1rem] border border-white/10 bg-slate-900 object-cover"
           />
         ) : (
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgba(45,212,191,0.34),rgba(59,130,246,0.28),rgba(249,115,22,0.3))] text-sm font-semibold tracking-[0.12em] text-white">
+          <div className="flex h-11 w-11 items-center justify-center rounded-[1rem] bg-[linear-gradient(135deg,rgba(45,212,191,0.34),rgba(59,130,246,0.28),rgba(249,115,22,0.3))] text-sm font-semibold tracking-[0.12em] text-white">
             {buildAuthorMonogram(post)}
           </div>
         )}
@@ -568,18 +568,18 @@ function PostCard({
               </div>
 
               {contextLabel && (
-                <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-400">
+                <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-slate-400">
                   {contextLabel}
                 </p>
               )}
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-2 text-xs font-medium uppercase tracking-[0.18em]">
+            <div className="flex flex-wrap items-center justify-end gap-2 text-[11px] font-medium uppercase tracking-[0.16em]">
               <span
                 className={`rounded-full border px-3 py-1 ${
                   emphasis === 'selected'
-                    ? 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100'
-                    : 'border-white/10 bg-white/5 text-slate-300'
+                    ? 'border-cyan-300/15 bg-cyan-300/8 text-cyan-100'
+                    : 'border-white/8 bg-white/[0.04] text-slate-300'
                 }`}
               >
                 {emphasis === 'selected' ? 'Selected post' : post.type}
@@ -603,14 +603,14 @@ function PostCard({
           </div>
 
           {github && (
-            <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
               {githubLabel && (
                 <span className="rounded-full border border-fuchsia-300/20 bg-fuchsia-300/10 px-3 py-1 font-medium uppercase tracking-[0.18em] text-fuchsia-100">
                   {githubLabel}
                 </span>
               )}
               {(github.owner || github.name || githubRef) && (
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-300">
+                <span className="rounded-full border border-white/8 bg-white/[0.04] px-3 py-1 text-slate-300">
                   {[github.owner, github.name].filter(Boolean).join('/')}
                   {githubRef ? ` ${githubRef}` : ''}
                 </span>
@@ -618,7 +618,7 @@ function PostCard({
               {github.labels.slice(0, 3).map((label) => (
                 <span
                   key={label}
-                  className="rounded-full border border-white/10 bg-slate-950/55 px-3 py-1 text-slate-400"
+                  className="rounded-full border border-white/8 bg-slate-950/40 px-3 py-1 text-slate-400"
                 >
                   {label}
                 </span>
@@ -636,8 +636,8 @@ function PostCard({
             viewer={viewer}
           />
 
-          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+            <span className="rounded-full border border-white/8 bg-white/[0.04] px-3 py-1">
               {formatCount(post.counters.replies)} replies
             </span>
             <ReactionBar
@@ -651,11 +651,11 @@ function PostCard({
             {timestamp && <span className="ml-auto">{timestamp}</span>}
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
             {showOpenLink && (
               <a
                 href={getPostRouteHref(post.id)}
-                className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-cyan-100 transition hover:border-cyan-300/35 hover:bg-cyan-300/15"
+                className="rounded-full border border-cyan-300/15 bg-cyan-300/8 px-4 py-2 text-cyan-100 transition hover:border-cyan-300/25 hover:bg-cyan-300/12"
               >
                 Open standalone page
               </a>
@@ -663,7 +663,7 @@ function PostCard({
             {authorHandle && (
               <a
                 href={getPublicProfileHref(authorHandle)}
-                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-slate-200 transition hover:border-white/20 hover:bg-white/10"
+                className="rounded-full border border-white/8 bg-white/[0.04] px-4 py-2 text-slate-200 transition hover:border-white/14 hover:bg-white/[0.06]"
               >
                 Author profile
               </a>
@@ -708,23 +708,23 @@ function ThreadConversationSection({
   }
 
   return (
-    <article className="rounded-[1.75rem] border border-white/10 bg-slate-900/65 p-6">
-      <div className="flex items-center justify-between gap-3 border-b border-white/8 pb-4">
+    <article className="rounded-[1.35rem] border border-white/8 bg-white/[0.03] p-4">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-medium uppercase tracking-[0.24em] text-cyan-100/80">
+          <p className="text-xs font-medium uppercase tracking-[0.22em] text-cyan-100/80">
             Thread conversation
           </p>
-          <p className="mt-2 text-sm leading-7 text-slate-400">
+          <p className="mt-1.5 text-sm leading-6 text-slate-400">
             Root post plus nested replies. Indentation caps after level{' '}
             {maxVisibleThreadDepth} so deep branches stay readable.
           </p>
         </div>
-        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-300">
+        <span className="rounded-full border border-white/8 bg-white/[0.04] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-300">
           {entries.length} item{entries.length === 1 ? '' : 's'}
         </span>
       </div>
 
-      <div className="mt-5 space-y-4">
+      <div className="mt-4 space-y-3">
         {entries.map((entry) => {
           const contextLabel = getReplyContextLabel(entry.post, postsById)
           const indentRem = entry.visualDepth * 1.25
@@ -740,12 +740,12 @@ function ThreadConversationSection({
               }
               className={
                 entry.visualDepth > 0
-                  ? 'border-l border-white/8 pl-4'
+                  ? 'border-l border-white/6 pl-3'
                   : undefined
               }
             >
               {entry.isFlattened && contextLabel && (
-                <p className="mb-2 pl-1 text-xs font-medium tracking-[0.12em] text-slate-400">
+                <p className="mb-2 pl-1 text-[11px] font-medium tracking-[0.1em] text-slate-400">
                   {contextLabel}
                 </p>
               )}
@@ -873,20 +873,20 @@ function ReadyPostDetail({
         </div>
       </div>
 
-      <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(18rem,0.82fr)]">
+      <div className="mt-7 grid gap-5 xl:grid-cols-[minmax(0,1.18fr)_minmax(18rem,0.82fr)]">
         <section className="space-y-6">
           {viewer && (
-            <article className="rounded-[1.75rem] border border-white/10 bg-slate-900/72 p-6">
-              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/8 pb-4">
+            <article className="rounded-[1.35rem] border border-white/8 bg-white/[0.035] p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium uppercase tracking-[0.24em] text-emerald-100/80">
+                  <p className="text-xs font-medium uppercase tracking-[0.22em] text-emerald-100/80">
                     Join this thread
                   </p>
-                  <p className="mt-2 text-sm leading-7 text-slate-400">
+                  <p className="mt-1.5 text-sm leading-6 text-slate-400">
                     Publish a reply to the currently selected post and refresh
                     the public thread view in place. Attached image previews
                     stay local until the reply upload path is available, while
-                    Tenor GIF replies publish immediately.
+                    GIPHY GIF replies publish immediately.
                   </p>
                 </div>
 
@@ -916,12 +916,12 @@ function ReadyPostDetail({
               </div>
 
               {!canReply && (
-                <div className="mt-5 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+                <div className="mt-4 rounded-[1rem] border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
                   Activate this profile with a public handle before replying.
                 </div>
               )}
 
-              <div className="mt-5">
+              <div className="mt-4">
                 <PostComposer
                   authorBadge={buildViewerBadge(viewer)}
                   authorHandle={viewer.handle}
@@ -953,23 +953,23 @@ function ReadyPostDetail({
           )}
 
           {!selectedInThread && (
-            <article className="rounded-[1.75rem] border border-white/10 bg-slate-900/72 p-6">
-              <div className="flex items-center justify-between gap-3 border-b border-white/8 pb-4">
+            <article className="rounded-[1.35rem] border border-white/8 bg-white/[0.035] p-5">
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium uppercase tracking-[0.24em] text-fuchsia-200/75">
+                  <p className="text-xs font-medium uppercase tracking-[0.22em] text-fuchsia-200/75">
                     Selected post
                   </p>
-                  <p className="mt-2 text-sm leading-7 text-slate-400">
+                  <p className="mt-1.5 text-sm leading-6 text-slate-400">
                     The standalone payload loaded, but this item was not present
                     in the returned thread page.
                   </p>
                 </div>
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-300">
+                <span className="rounded-full border border-white/8 bg-white/[0.04] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-300">
                   {data.post.type}
                 </span>
               </div>
 
-              <div className="mt-5">
+              <div className="mt-4">
                 <PostCard
                   actionSlot={getActionSlot({
                     ...data.post,
@@ -1005,7 +1005,7 @@ function ReadyPostDetail({
           />
 
           {threadEntries.length === 0 && !selectedInThread && (
-            <article className="rounded-[1.75rem] border border-dashed border-white/12 bg-slate-950/35 p-6">
+            <article className="rounded-[1.35rem] border border-dashed border-white/10 bg-slate-950/25 p-5">
               <h2 className="text-xl font-semibold text-white">
                 This post currently stands alone.
               </h2>
@@ -1018,12 +1018,12 @@ function ReadyPostDetail({
         </section>
 
         <aside className="space-y-6">
-          <article className="rounded-[1.75rem] border border-white/10 bg-slate-900/70 p-6">
-            <p className="text-sm font-medium uppercase tracking-[0.24em] text-cyan-100/80">
+          <article className="rounded-[1.35rem] border border-white/8 bg-white/[0.035] p-5">
+            <p className="text-xs font-medium uppercase tracking-[0.22em] text-cyan-100/80">
               Thread summary
             </p>
             <div className="mt-4 grid gap-3">
-              <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-4">
+              <div className="rounded-[1rem] border border-white/8 bg-white/[0.04] px-4 py-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                   Posts loaded
                 </p>
@@ -1031,7 +1031,7 @@ function ReadyPostDetail({
                   {orderedPosts.length}
                 </p>
               </div>
-              <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-4">
+              <div className="rounded-[1rem] border border-white/8 bg-white/[0.04] px-4 py-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                   Replies in thread
                 </p>
@@ -1039,7 +1039,7 @@ function ReadyPostDetail({
                   {totalReplies}
                 </p>
               </div>
-              <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-4">
+              <div className="rounded-[1rem] border border-white/8 bg-white/[0.04] px-4 py-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                   Selected position
                 </p>

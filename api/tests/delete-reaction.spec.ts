@@ -129,8 +129,14 @@ function createReactionRepository(
 
 describe('deleteReactionHandler', () => {
   it('deletes the caller reaction document when no emoji selector is provided', async () => {
-    const postStore: PostStore = {
+    const postStore = {
       getPostById: vi.fn(async () => createStoredPost()),
+      getReactionSummary: vi.fn(async () => ({
+        likes: 1,
+        dislikes: 0,
+        emoji: 0,
+      })),
+      setReactionCounts: vi.fn(async () => undefined),
     }
     const reactionRepository = createReactionRepository({
       getByPostAndUser: vi.fn(async () =>
@@ -154,6 +160,13 @@ describe('deleteReactionHandler', () => {
       'post-1',
       'github:abc123',
     )
+    expect(postStore.getReactionSummary).toHaveBeenCalledWith('post-1')
+    expect(postStore.setReactionCounts).toHaveBeenCalledWith('post-1', 'post-1', {
+      likes: 1,
+      dislikes: 0,
+      emoji: 0,
+      replies: 4,
+    })
     expect(reactionRepository.upsert).not.toHaveBeenCalled()
     expect(response.status).toBe(200)
     expect(response.jsonBody).toEqual({

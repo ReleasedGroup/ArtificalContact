@@ -1,7 +1,12 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import {
   getNotificationsPage,
+  markAllNotificationsRead,
+  markAllNotificationsReadInCache,
+  NOTIFICATION_BELL_QUERY_KEY,
+  NOTIFICATIONS_QUERY_KEY,
+  restoreNotificationsCache,
   type NotificationItem,
 } from '../lib/notifications'
 import { AppImage } from './AppImage'
@@ -90,6 +95,10 @@ function getNotificationMessage(notification: NotificationItem): string {
     case 'likes':
     case 'emoji':
     case 'gif':
+      if (notification.coalesced || notification.eventCount > 1) {
+        return `reacted ${notification.eventCount} times across your posts.`
+      }
+
       return 'reacted to your post.'
     case 'follow':
     case 'follows':
@@ -152,6 +161,11 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
             <span className="font-semibold text-white">{actorLabel}</span>{' '}
             {getNotificationMessage(notification)}
           </p>
+          {notification.excerpt?.trim() && (
+            <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">
+              {notification.excerpt}
+            </p>
+          )}
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-500">
             <span>{formatRelativeTime(notification.createdAt)}</span>
             <span className="rounded-full border border-white/10 px-2 py-1">
@@ -191,15 +205,40 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
 }
 
 export function NotificationBell() {
+  const queryClient = useQueryClient()
   const [isOpen, setIsOpen] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const dialogRef = useRef<HTMLElement | null>(null)
   const notificationsQuery = useQuery({
-    queryKey: ['notifications', 'bell'],
+    queryKey: NOTIFICATION_BELL_QUERY_KEY,
     queryFn: ({ signal }) => getNotificationsPage({ signal }),
     retry: false,
     staleTime: 15_000,
     refetchInterval: NOTIFICATION_POLL_INTERVAL_MS,
     refetchIntervalInBackground: false,
+  })
+  const markAllReadMutation = useMutation({
+    mutationFn: () => markAllNotificationsRead(),
+    onMutate: async () => {
+      setActionError(null)
+      return markAllNotificationsReadInCache(queryClient)
+    },
+    onError: (error, _variables, snapshot) => {
+      if (snapshot) {
+        restoreNotificationsCache(queryClient, snapshot)
+      }
+
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : 'Unable to mark notifications as read.',
+      )
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: NOTIFICATIONS_QUERY_KEY,
+      })
+    },
   })
 
   const unreadCount = notificationsQuery.data?.unreadCount ?? 0
@@ -225,6 +264,7 @@ export function NotificationBell() {
         aria-label={buttonLabel}
         data-testid="notification-bell-button"
         onClick={() => {
+          setActionError(null)
           setIsOpen((currentValue) => !currentValue)
         }}
         className="relative inline-flex items-center gap-3 rounded-full border border-white/12 bg-white/4 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/7 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/80"
@@ -273,13 +313,32 @@ export function NotificationBell() {
                   {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
                 </p>
               </div>
-              <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-slate-400">
-                {notificationsQuery.isFetching ? 'Syncing' : 'Live'}
-              </span>
+              <div className="flex items-center gap-2">
+                {unreadCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void markAllReadMutation.mutateAsync()
+                    }}
+                    disabled={markAllReadMutation.isPending}
+                    className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-300/35 hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-slate-400"
+                  >
+                    {markAllReadMutation.isPending ? 'Saving' : 'Mark all read'}
+                  </button>
+                )}
+                <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                  {notificationsQuery.isFetching ? 'Syncing' : 'Live'}
+                </span>
+              </div>
             </div>
           </div>
 
           <div className="max-h-[28rem] overflow-y-auto px-4 py-4">
+            {actionError && (
+              <article className="mb-4 rounded-[1.4rem] border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm leading-7 text-rose-100">
+                {actionError}
+              </article>
+            )}
             {notificationsQuery.isPending && (
               <div className="space-y-3">
                 {Array.from({ length: 3 }, (_, index) => (

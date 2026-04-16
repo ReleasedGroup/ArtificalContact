@@ -73,7 +73,28 @@ export interface PostContent {
   text: string
   hashtags: string[]
   mentions: string[]
+  media: RootPostMedia[]
 }
+
+export interface RootPostImageMedia {
+  id: string
+  kind: 'image'
+  url: string
+  thumbUrl: string | null
+  width: number | null
+  height: number | null
+}
+
+export interface RootPostGifMedia {
+  id: string
+  kind: 'gif'
+  url: string
+  thumbUrl: string | null
+  width: number | null
+  height: number | null
+}
+
+export type RootPostMedia = RootPostImageMedia | RootPostGifMedia
 
 export interface ReplyGifMedia {
   id: string
@@ -261,20 +282,39 @@ function normalizePostText(value: unknown): unknown {
   return value.trim()
 }
 
-function isAllowedTenorMediaUrl(value: string): boolean {
+function isAllowedGifProviderMediaUrl(value: string): boolean {
   try {
     const url = new URL(value)
     const hostname = url.hostname.trim().toLowerCase()
 
-    return url.protocol === 'https:' && hostname.endsWith('.tenor.com')
+    if (url.protocol !== 'https:') {
+      return false
+    }
+
+    return hostname.endsWith('.giphy.com') || hostname.endsWith('.tenor.com')
   } catch {
     return false
   }
 }
 
-function buildTenorMediaUrlSchema(label: string) {
-  return z.string().url().refine(isAllowedTenorMediaUrl, {
-    message: `${label} must use an https://*.tenor.com URL.`,
+function buildGifProviderMediaUrlSchema(label: string) {
+  return z.string().url().refine(isAllowedGifProviderMediaUrl, {
+    message: `${label} must use an https GIF URL from GIPHY or Tenor.`,
+  })
+}
+
+function isAllowedHttpsMediaUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+function buildHttpsMediaUrlSchema(label: string) {
+  return z.string().url().refine(isAllowedHttpsMediaUrl, {
+    message: `${label} must use an https URL.`,
   })
 }
 
@@ -457,12 +497,102 @@ export function buildPostContentSchema(
         text: value.text,
         hashtags: extractHashtags(value.text),
         mentions: extractMentions(value.text),
+        media: [],
+      }),
+    )
+}
+
+function buildRootPostImageMediaSchema() {
+  return z
+    .object({
+      id: z.preprocess(normalizePostText, z.string().min(1)),
+      kind: z.literal('image'),
+      url: buildHttpsMediaUrlSchema('Image URLs'),
+      thumbUrl: buildHttpsMediaUrlSchema('Image thumbnail URLs')
+        .nullable()
+        .optional(),
+      width: z.number().int().positive().nullable().optional(),
+      height: z.number().int().positive().nullable().optional(),
+    })
+    .strict()
+    .transform(
+      (value): RootPostImageMedia => ({
+        id: value.id,
+        kind: 'image',
+        url: value.url,
+        thumbUrl: value.thumbUrl ?? value.url,
+        width: value.width ?? null,
+        height: value.height ?? null,
+      }),
+    )
+}
+
+function buildRootPostGifMediaSchema() {
+  return z
+    .object({
+      id: z.preprocess(normalizePostText, z.string().min(1)),
+      kind: z.literal('gif'),
+      url: buildHttpsMediaUrlSchema('GIF URLs'),
+      thumbUrl: buildHttpsMediaUrlSchema('GIF thumbnail URLs')
+        .nullable()
+        .optional(),
+      width: z.number().int().positive().nullable().optional(),
+      height: z.number().int().positive().nullable().optional(),
+    })
+    .strict()
+    .transform(
+      (value): RootPostGifMedia => ({
+        id: value.id,
+        kind: 'gif',
+        url: value.url,
+        thumbUrl: value.thumbUrl ?? value.url,
+        width: value.width ?? null,
+        height: value.height ?? null,
       }),
     )
 }
 
 export function buildCreatePostRequestSchema(maxTextLength: number) {
-  return buildPostContentSchema(maxTextLength)
+  return z
+    .object({
+      text: z.preprocess(
+        normalizePostText,
+        z.string().max(maxTextLength).optional(),
+      ),
+      media: z
+        .array(
+          z.union([
+            buildRootPostImageMediaSchema(),
+            buildRootPostGifMediaSchema(),
+          ]),
+        )
+        .optional(),
+    })
+    .strict()
+    .superRefine((value, context) => {
+      const text = value.text ?? ''
+      const mediaCount = value.media?.length ?? 0
+
+      if (text.length === 0 && mediaCount === 0) {
+        context.addIssue({
+          code: 'custom',
+          message: 'A post must include text, image attachments, or a GIF.',
+          path: ['text'],
+        })
+      }
+    })
+    .transform(
+      (value): PostContent => {
+        const text = value.text ?? ''
+
+        return {
+          text,
+          hashtags: extractHashtags(text),
+          mentions: extractMentions(text),
+          media: value.media ?? [],
+        }
+      },
+    )
 }
 
 export type CreatePostRequest = PostContent
@@ -472,8 +602,8 @@ function buildReplyGifMediaSchema() {
     .object({
       id: z.preprocess(normalizePostText, z.string().min(1)),
       kind: z.literal('gif'),
-      url: buildTenorMediaUrlSchema('GIF URLs'),
-      thumbUrl: buildTenorMediaUrlSchema('GIF thumbnail URLs')
+      url: buildGifProviderMediaUrlSchema('GIF URLs'),
+      thumbUrl: buildGifProviderMediaUrlSchema('GIF thumbnail URLs')
         .nullable()
         .optional(),
       width: z.number().int().positive().nullable().optional(),
@@ -773,6 +903,7 @@ export function createUserPostDocument(
     text: request.text,
     hashtags: request.hashtags,
     mentions: request.mentions,
+    ...(request.media.length > 0 ? { media: request.media } : {}),
     counters: {
       likes: 0,
       dislikes: 0,

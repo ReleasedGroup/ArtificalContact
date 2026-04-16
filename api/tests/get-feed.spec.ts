@@ -333,6 +333,67 @@ describe('lookupFeed', () => {
     })
   })
 
+  it('prefers hydrated canonical feed counters over stale materialized counters', async () => {
+    const staleEntry = createStoredFeedEntry({
+      counters: {
+        likes: 1,
+        replies: 0,
+      },
+    })
+    const store: FeedStore = {
+      listFeedEntries: vi.fn(async () => ({
+        entries: [staleEntry],
+      })),
+      hydrateFeedEntries: vi.fn(async () => [
+        {
+          ...staleEntry,
+          counters: {
+            likes: 7,
+            replies: 2,
+          },
+        },
+      ]),
+    }
+
+    const result = await lookupFeed(
+      {
+        feedOwnerId: 'user-1',
+      },
+      store,
+    )
+
+    expect(store.hydrateFeedEntries).toHaveBeenCalledWith([staleEntry])
+    expect(result).toEqual({
+      status: 200,
+      body: {
+        data: [
+          {
+            id: 'f_user-1_post-1',
+            postId: 'post-1',
+            authorId: 'user-2',
+            authorHandle: 'ada',
+            authorDisplayName: 'Ada Lovelace',
+            authorAvatarUrl: 'https://cdn.example.com/ada.png',
+            excerpt: 'Trying out a new eval harness...',
+            media: [
+              {
+                kind: 'image',
+                thumbUrl: 'https://cdn.example.com/thumb.png',
+              },
+            ],
+            counters: {
+              likes: 7,
+              replies: 2,
+            },
+            createdAt: '2026-04-15T09:00:00.000Z',
+          },
+        ],
+        cursor: null,
+        errors: [],
+      },
+    })
+  })
+
   it('merges pull-on-read celebrity entries with the materialized feed and drops duplicates', async () => {
     const result = await lookupFeed(
       {

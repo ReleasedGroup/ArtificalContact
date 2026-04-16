@@ -189,6 +189,72 @@ export class CosmosPostStore
     }
   }
 
+  async listPostsByIds(postIds: readonly string[]): Promise<StoredPostDocument[]> {
+    const normalizedPostIds: string[] = [
+      ...new Set(
+        postIds.filter(
+          (postId): postId is string => readOptionalValue(postId) !== undefined,
+        ),
+      ),
+    ]
+
+    if (normalizedPostIds.length === 0) {
+      return []
+    }
+
+    const querySpec: SqlQuerySpec = {
+      query: 'SELECT * FROM c WHERE ARRAY_CONTAINS(@postIds, c.id)',
+      parameters: [{ name: '@postIds', value: normalizedPostIds }],
+    }
+    const { resources } = await this.postsContainer.items
+      .query<StoredPostDocument>(querySpec)
+      .fetchAll()
+
+    return resources ?? []
+  }
+
+  async countActiveRootPostsByAuthorId(authorId: string): Promise<number> {
+    const querySpec: SqlQuerySpec = {
+      query: `
+        SELECT VALUE COUNT(1) FROM c
+        WHERE c.authorId = @authorId
+          AND c.type = @type
+          AND c.kind = @kind
+          AND c.threadId = c.id
+          AND (NOT IS_DEFINED(c.parentId) OR IS_NULL(c.parentId))
+          AND (NOT IS_DEFINED(c.deletedAt) OR IS_NULL(c.deletedAt))
+          AND (
+            NOT IS_DEFINED(c.visibility)
+            OR IS_NULL(c.visibility)
+            OR c.visibility = @visibility
+          )
+          AND (
+            NOT IS_DEFINED(c.moderationState)
+            OR IS_NULL(c.moderationState)
+            OR (
+              c.moderationState != @hiddenModerationState
+              AND c.moderationState != @removedModerationState
+            )
+          )
+      `,
+      parameters: [
+        { name: '@authorId', value: authorId },
+        { name: '@type', value: 'post' },
+        { name: '@kind', value: 'user' },
+        { name: '@visibility', value: 'public' },
+        { name: '@hiddenModerationState', value: 'hidden' },
+        { name: '@removedModerationState', value: 'removed' },
+      ],
+    }
+    const { resources } = await this.postsContainer.items
+      .query<number>(querySpec, {
+        maxItemCount: 1,
+      })
+      .fetchAll()
+
+    return resources[0] ?? 0
+  }
+
   async upsertPost(post: StoredPostDocument): Promise<StoredPostDocument> {
     const { resource } =
       await this.postsContainer.items.upsert<StoredPostDocument>(post)

@@ -1,3 +1,88 @@
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches
+      .open('artificialcontact-shell-v1')
+      .then((cache) =>
+        cache.addAll([
+          '/',
+          '/manifest.json',
+          '/favicon.svg',
+          '/icons/icon-192.png',
+          '/icons/icon-512.png',
+          '/icons/icon-maskable-512.png',
+        ]),
+      )
+      .then(() => self.skipWaiting()),
+  )
+})
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key !== 'artificialcontact-shell-v1')
+            .map((key) => caches.delete(key)),
+        ),
+      )
+      .then(() => self.clients.claim()),
+  )
+})
+
+self.addEventListener('fetch', (event) => {
+  const { request } = event
+
+  if (request.method !== 'GET') {
+    return
+  }
+
+  const url = new URL(request.url)
+
+  if (url.origin !== self.location.origin) {
+    return
+  }
+
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(request))
+    return
+  }
+
+  const isStaticAsset =
+    url.pathname.startsWith('/assets/') ||
+    url.pathname.startsWith('/icons/') ||
+    url.pathname === '/favicon.svg' ||
+    url.pathname === '/manifest.json'
+
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request).catch(async () => {
+        const cachedResponse = await caches.match('/')
+        return cachedResponse ?? Response.error()
+      }),
+    )
+    return
+  }
+
+  if (!isStaticAsset) {
+    return
+  }
+
+  event.respondWith(
+    caches.match(request).then(async (cachedResponse) => {
+      if (cachedResponse) {
+        return cachedResponse
+      }
+
+      const networkResponse = await fetch(request)
+      const cache = await caches.open('artificialcontact-shell-v1')
+      cache.put(request, networkResponse.clone())
+      return networkResponse
+    }),
+  )
+})
+
 self.addEventListener('push', (event) => {
   const fallbackPayload = {
     title: 'ArtificialContact',
@@ -30,8 +115,8 @@ self.addEventListener('push', (event) => {
             ? payload.url
             : '/notifications',
       },
-      icon: '/favicon.svg',
-      badge: '/favicon.svg',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
       tag: payload.tag,
     }),
   )

@@ -52,7 +52,10 @@ export interface FeedStore {
   ): Promise<{
     entries: StoredFeedDocument[]
     cursor?: string
-  }>
+    }>
+  hydrateFeedEntries?(
+    entries: readonly StoredFeedDocument[],
+  ): Promise<StoredFeedDocument[]>
 }
 
 export interface FeedLookupResult {
@@ -372,11 +375,15 @@ export async function lookupFeed(
       }),
     ),
   ])
+  const hydratedEntries =
+    typeof store.hydrateFeedEntries === 'function'
+      ? await store.hydrateFeedEntries(mergedPage.entries)
+      : mergedPage.entries
 
   return {
     status: 200,
     body: {
-      data: mergedPage.entries
+      data: hydratedEntries
         .map((entry) => buildFeedEntry(entry))
         .filter((entry): entry is FeedEntry => entry !== null),
       cursor:

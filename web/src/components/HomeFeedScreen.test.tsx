@@ -259,6 +259,7 @@ describe('HomeFeedScreen', () => {
 
     renderHomeFeedScreen()
 
+    expect(screen.getByText('4')).toBeInTheDocument()
     expect(
       await screen.findByText('No posts have landed in your home feed yet'),
     ).toBeInTheDocument()
@@ -269,6 +270,146 @@ describe('HomeFeedScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Post' }))
 
     expect(await screen.findByText('Published from home feed')).toBeInTheDocument()
+    expect(screen.getByText('5')).toBeInTheDocument()
+  })
+
+  it('likes a feed post inline without opening the thread', async () => {
+    mockFetch.mockImplementation(async (input, init) => {
+      const requestUrl = String(input)
+
+      if (requestUrl === '/api/feed') {
+        return createJsonResponse(200, {
+          data: [
+            createFeedEntry('one', {
+              postId: 'post-one',
+              excerpt: 'Inline like target',
+              counters: {
+                likes: 3,
+                replies: 1,
+              },
+            }),
+          ],
+          cursor: null,
+          errors: [],
+        })
+      }
+
+      if (requestUrl === '/api/posts/post-one/reactions') {
+        expect(init).toMatchObject({
+          method: 'POST',
+        })
+        expect(JSON.parse(String(init?.body ?? '{}'))).toEqual({
+          type: 'like',
+        })
+
+        return createJsonResponse(200, {
+          data: {
+            reaction: {
+              sentiment: 'like',
+              emojiValues: [],
+              gifValue: null,
+            },
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${requestUrl}`)
+    })
+
+    renderHomeFeedScreen()
+
+    expect(await screen.findByText('Inline like target')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Like post' }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Like post' }),
+      ).toHaveTextContent('Like (4)')
+    })
+  })
+
+  it('replies to a feed post inline without opening the thread', async () => {
+    mockFetch.mockImplementation(async (input, init) => {
+      const requestUrl = String(input)
+
+      if (requestUrl === '/api/feed') {
+        return createJsonResponse(200, {
+          data: [
+            createFeedEntry('one', {
+              postId: 'post-one',
+              excerpt: 'Inline reply target',
+              counters: {
+                likes: 3,
+                replies: 1,
+              },
+            }),
+          ],
+          cursor: null,
+          errors: [],
+        })
+      }
+
+      if (requestUrl === '/api/posts/post-one/replies') {
+        expect(init).toMatchObject({
+          method: 'POST',
+        })
+        expect(JSON.parse(String(init?.body ?? '{}'))).toEqual({
+          text: 'Reply from the home feed',
+        })
+
+        return createJsonResponse(201, {
+          data: {
+            post: {
+              id: 'reply-one',
+              type: 'reply',
+              kind: 'user',
+              threadId: 'post-one',
+              parentId: 'post-one',
+              authorId: 'github:viewer-1',
+              authorHandle: 'ada',
+              authorDisplayName: 'Ada Lovelace',
+              authorAvatarUrl: null,
+              text: 'Reply from the home feed',
+              hashtags: [],
+              mentions: [],
+              media: [],
+              counters: {
+                likes: 0,
+                dislikes: 0,
+                emoji: 0,
+                replies: 0,
+              },
+              visibility: 'public',
+              createdAt: '2026-04-16T08:00:00.000Z',
+              updatedAt: '2026-04-16T08:00:00.000Z',
+              github: null,
+            },
+          },
+          errors: [],
+        })
+      }
+
+      throw new Error(`Unexpected fetch request: ${requestUrl}`)
+    })
+
+    renderHomeFeedScreen()
+
+    expect(await screen.findByText('Inline reply target')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reply to post' }))
+    fireEvent.change(await screen.findByLabelText('Reply to feed post'), {
+      target: { value: 'Reply from the home feed' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
+
+    expect(await screen.findByText('Reply published.')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Reply to post' }),
+      ).toHaveTextContent('Reply (2)')
+    })
   })
 
   it('refetches the feed when the user performs a pull-to-refresh gesture', async () => {
@@ -333,7 +474,7 @@ describe('HomeFeedScreen', () => {
     expect(await screen.findByText('Refreshed feed entry')).toBeInTheDocument()
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(3)
+      expect(mockFetch).toHaveBeenCalledTimes(4)
     })
   })
 

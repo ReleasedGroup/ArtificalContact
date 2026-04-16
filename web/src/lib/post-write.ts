@@ -1,4 +1,5 @@
 import type { PublicPost } from './public-post'
+import { uploadMediaFile } from './media-upload'
 
 interface ApiError {
   code: string
@@ -25,8 +26,37 @@ interface DeletePostPayload {
   alreadyDeleted: boolean
 }
 
+export interface CreatePostMediaFileInput {
+  altText?: string
+  file: File
+}
+
+export interface CreatePostImageMediaInput {
+  id: string
+  kind: 'image'
+  url: string
+  thumbUrl?: string | null
+  width?: number | null
+  height?: number | null
+}
+
+export interface CreatePostGifMediaInput {
+  id: string
+  kind: 'gif'
+  url: string
+  thumbUrl?: string | null
+  width?: number | null
+  height?: number | null
+}
+
+export type CreatePostMediaInput =
+  | CreatePostImageMediaInput
+  | CreatePostGifMediaInput
+
 interface CreatePostInput {
-  text: string
+  text?: string
+  media?: CreatePostMediaInput[]
+  mediaFiles?: CreatePostMediaFileInput[]
 }
 
 export interface ReplyGifMediaInput {
@@ -72,17 +102,62 @@ async function readEnvelope<TData>(
   return payload
 }
 
+function normalizePostText(value: string | undefined): string {
+  return value?.trim() ?? ''
+}
+
+function resolvePostMediaKind(file: File): 'image' | 'gif' {
+  return file.type.trim().toLowerCase() === 'image/gif' ? 'gif' : 'image'
+}
+
+async function uploadPostMediaFiles(
+  mediaFiles: readonly CreatePostMediaFileInput[],
+  signal?: AbortSignal,
+): Promise<CreatePostMediaInput[]> {
+  const uploadedMedia = await Promise.all(
+    mediaFiles.map(async ({ file }) => {
+      const mediaKind = resolvePostMediaKind(file)
+      const uploadedBlob = await uploadMediaFile({
+        file,
+        kind: mediaKind,
+        signal,
+      })
+
+      return {
+        id: uploadedBlob.blobName,
+        kind: mediaKind,
+        url: uploadedBlob.blobUrl,
+        thumbUrl: uploadedBlob.blobUrl,
+        width: null,
+        height: null,
+      } satisfies CreatePostMediaInput
+    }),
+  )
+
+  return uploadedMedia
+}
+
 export async function createPost(
   input: CreatePostInput,
   signal?: AbortSignal,
 ): Promise<PostMutationPayload> {
+  const normalizedText = normalizePostText(input.text)
+  const uploadedMedia =
+    input.mediaFiles && input.mediaFiles.length > 0
+      ? await uploadPostMediaFiles(input.mediaFiles, signal)
+      : []
+  const resolvedMedia = [...(input.media ?? []), ...uploadedMedia]
+
   const response = await fetch('/api/posts', {
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      ...(normalizedText.length > 0 ? { text: normalizedText } : {}),
+      ...(resolvedMedia.length > 0 ? { media: resolvedMedia } : {}),
+    }),
     signal,
   })
 
