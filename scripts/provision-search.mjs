@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { pathToFileURL } from 'node:url'
 import {
   AzureKeyCredential,
   SearchIndexClient,
@@ -519,7 +520,12 @@ function buildHashtagsIndex() {
   }
 }
 
-function buildPostsDataSource(cosmosEndpoint, cosmosReadonlyKey, databaseName, postsContainerName) {
+export function buildPostsDataSource(
+  cosmosEndpoint,
+  cosmosReadonlyKey,
+  databaseName,
+  postsContainerName,
+) {
   return {
     name: POSTS_DATA_SOURCE_NAME,
     type: 'cosmosdb',
@@ -528,7 +534,7 @@ function buildPostsDataSource(cosmosEndpoint, cosmosReadonlyKey, databaseName, p
       name: postsContainerName,
     },
     dataChangeDetectionPolicy: {
-      '@odata.type': '#Microsoft.Azure.Search.HighWaterMarkChangeDetectionPolicy',
+      odatatype: '#Microsoft.Azure.Search.HighWaterMarkChangeDetectionPolicy',
       highWaterMarkColumnName: '_ts',
     },
   }
@@ -563,7 +569,7 @@ async function retryUntilReady(action, timeoutMs, errorPrefix) {
   throw lastError
 }
 
-async function main() {
+export async function main() {
   const resourceGroup = readRequiredEnv('AZURE_RESOURCE_GROUP')
   const databaseName = readOptionalEnv(
     'cosmosDatabaseName',
@@ -653,7 +659,19 @@ async function main() {
   console.log('Azure AI Search schema provisioning completed.')
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error))
-  process.exitCode = 1
-})
+function isDirectExecution() {
+  const entryPoint = process.argv[1]
+
+  if (!entryPoint) {
+    return false
+  }
+
+  return import.meta.url === pathToFileURL(entryPoint).href
+}
+
+if (isDirectExecution()) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exitCode = 1
+  })
+}
