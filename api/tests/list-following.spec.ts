@@ -65,6 +65,9 @@ function createStore({
     getUserById: vi.fn(async (userId: string) => {
       return users.find((user) => user.id === userId) ?? null
     }),
+    findUserByHandle: vi.fn(async (handle: string) => {
+      return users.find((user) => user.handleLower === handle || user.handle === handle) ?? null
+    }),
   }
 }
 
