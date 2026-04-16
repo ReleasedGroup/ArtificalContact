@@ -1,12 +1,18 @@
 import type { Container } from '@azure/cosmos'
 import { getEnvironmentConfig, type EnvironmentConfig } from './config.js'
 import { createCosmosClient } from './cosmos-client.js'
+import {
+  applyKeysetPagination,
+  type KeysetCursorState,
+} from './keyset-pagination.js'
 import { readOptionalValue } from './strings.js'
 
 export const DEFAULT_FOLLOWS_CONTAINER_NAME = 'follows'
 export const DEFAULT_FOLLOWERS_CONTAINER_NAME = 'followers'
 let cachedFollowRepository: MutableFollowRepository | undefined
 let cachedFollowersMirrorRepository: FollowersMirrorRepository | undefined
+const FOLLOWS_CURSOR_PREFIX = 'ac.follows.v1:'
+const FOLLOWERS_CURSOR_PREFIX = 'ac.followers.v1:'
 
 export interface FollowDocument {
   id: string
@@ -180,35 +186,37 @@ function createCosmosFollowRepository(
       follows: FollowDocument[]
       continuationToken?: string
     }> {
-      const queryIterator = container.items.query<FollowDocument>(
+      const { resources } = await container.items
+        .query<FollowDocument>(
+          {
+            query: 'SELECT * FROM c',
+          },
+          {
+            partitionKey: followerId,
+          },
+        )
+        .fetchAll()
+      const page = applyKeysetPagination(
+        (resources ?? []).filter(
+          (follow) =>
+            follow.type === 'follow' &&
+            !isDeletedFollowDocument(follow),
+        ),
         {
-          query: `
-            SELECT * FROM c
-            WHERE c.followerId = @followerId
-              AND c.type = @type
-              AND (NOT IS_DEFINED(c.deletedAt) OR IS_NULL(c.deletedAt))
-            ORDER BY c.createdAt DESC, c.id DESC
-          `,
-          parameters: [
-            { name: '@followerId', value: followerId },
-            { name: '@type', value: 'follow' },
-          ],
-        },
-        {
-          partitionKey: followerId,
-          maxItemCount: options.limit,
-          enableQueryControl: true,
+          limit: options.limit,
+          prefix: FOLLOWS_CURSOR_PREFIX,
+          resolveCursorState: resolveFollowCursorState,
           ...(options.continuationToken === undefined
             ? {}
-            : { continuationToken: options.continuationToken }),
+            : { cursor: options.continuationToken }),
         },
       )
 
-      const { resources, continuationToken } = await queryIterator.fetchNext()
-
       return {
-        follows: resources ?? [],
-        ...(continuationToken === undefined ? {} : { continuationToken }),
+        follows: page.items,
+        ...(page.cursor === undefined
+          ? {}
+          : { continuationToken: page.cursor }),
       }
     },
   }
@@ -228,32 +236,51 @@ function createCosmosFollowersMirrorRepository(
       follows: FollowDocument[]
       continuationToken?: string
     }> {
-      const queryIterator = container.items.query<FollowDocument>(
+      const { resources } = await container.items
+        .query<FollowDocument>(
+          {
+            query: 'SELECT * FROM c',
+          },
+          {
+            partitionKey: followedId,
+          },
+        )
+        .fetchAll()
+      const page = applyKeysetPagination(
+        (resources ?? []).filter((follow) => !isDeletedFollowDocument(follow)),
         {
-          query: `
-            SELECT * FROM c
-            WHERE c.followedId = @followedId
-            ORDER BY c.createdAt DESC
-          `,
-          parameters: [{ name: '@followedId', value: followedId }],
-        },
-        {
-          partitionKey: followedId,
-          maxItemCount: options.limit,
-          enableQueryControl: true,
+          limit: options.limit,
+          prefix: FOLLOWERS_CURSOR_PREFIX,
+          resolveCursorState: resolveFollowCursorState,
           ...(options.continuationToken === undefined
             ? {}
-            : { continuationToken: options.continuationToken }),
+            : { cursor: options.continuationToken }),
         },
       )
 
-      const { resources, continuationToken } = await queryIterator.fetchNext()
-
       return {
-        follows: resources ?? [],
-        ...(continuationToken === undefined ? {} : { continuationToken }),
+        follows: page.items,
+        ...(page.cursor === undefined
+          ? {}
+          : { continuationToken: page.cursor }),
       }
     },
+  }
+}
+
+function resolveFollowCursorState(
+  follow: FollowDocument,
+): KeysetCursorState | null {
+  const createdAt = toNullableString(follow.createdAt)
+  const id = toNullableString(follow.id)
+
+  if (createdAt === null || id === null) {
+    return null
+  }
+
+  return {
+    createdAt,
+    id,
   }
 }
 

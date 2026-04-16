@@ -3,6 +3,10 @@ import { DefaultAzureCredential } from '@azure/identity'
 import { getEnvironmentConfig } from './config.js'
 import { createCosmosClient } from './cosmos-client.js'
 import {
+  applyKeysetPagination,
+  type KeysetCursorState,
+} from './keyset-pagination.js'
+import {
   DEFAULT_NOTIFICATIONS_CONTAINER_NAME,
   type NotificationDocument,
   type NotificationReadStore,
@@ -25,6 +29,8 @@ function isNotFound(error: unknown): boolean {
   const cosmosError = error as CosmosLikeError
   return cosmosError.statusCode === 404 || cosmosError.code === 404
 }
+const NOTIFICATIONS_CURSOR_PREFIX = 'ac.notifications.v1:'
+
 function createCosmosClientFromEnvironment(): CosmosClient {
   const config = getEnvironmentConfig()
 
@@ -96,39 +102,33 @@ export class CosmosNotificationStore
     notifications: StoredNotificationDocument[]
     cursor?: string
   }> {
-    const querySpec: SqlQuerySpec = {
-      query: `
-        SELECT * FROM c
-        WHERE c.targetUserId = @targetUserId
-          AND (
-            NOT IS_DEFINED(c.type)
-            OR IS_NULL(c.type)
-            OR c.type = @type
-          )
-        ORDER BY c.createdAt DESC, c.id DESC
-      `,
-      parameters: [
-        { name: '@targetUserId', value: targetUserId },
-        { name: '@type', value: 'notification' },
-      ],
-    }
-
-    const queryIterator = this.notificationsContainer.items.query<StoredNotificationDocument>(
-      querySpec,
+    const { resources } = await this.notificationsContainer.items
+      .query<StoredNotificationDocument>(
+        {
+          query: 'SELECT * FROM c',
+        },
+        {
+          partitionKey: targetUserId,
+        },
+      )
+      .fetchAll()
+    const page = applyKeysetPagination(
+      (resources ?? []).filter((notification) =>
+        notification.type === undefined ||
+        notification.type === null ||
+        notification.type === 'notification',
+      ),
       {
-        partitionKey: targetUserId,
-        maxItemCount: options.limit,
-        enableQueryControl: true,
-        ...(options.cursor === undefined
-          ? {}
-          : { continuationToken: options.cursor }),
+        limit: options.limit,
+        prefix: NOTIFICATIONS_CURSOR_PREFIX,
+        resolveCursorState: resolveNotificationCursorState,
+        ...(options.cursor === undefined ? {} : { cursor: options.cursor }),
       },
     )
-    const { resources, continuationToken } = await queryIterator.fetchNext()
 
     return {
-      notifications: resources ?? [],
-      ...(continuationToken === undefined ? {} : { cursor: continuationToken }),
+      notifications: page.items,
+      ...(page.cursor === undefined ? {} : { cursor: page.cursor }),
     }
   }
 
@@ -211,5 +211,21 @@ export class CosmosNotificationStore
 
       throw error
     }
+  }
+}
+
+function resolveNotificationCursorState(
+  notification: StoredNotificationDocument,
+): KeysetCursorState | null {
+  const createdAt = readOptionalValue(notification.createdAt)
+  const id = readOptionalValue(notification.id)
+
+  if (createdAt === undefined || id === undefined) {
+    return null
+  }
+
+  return {
+    createdAt,
+    id,
   }
 }

@@ -2,6 +2,10 @@ import { CosmosClient, type Container, type SqlQuerySpec } from '@azure/cosmos'
 import { DefaultAzureCredential } from '@azure/identity'
 import { getEnvironmentConfig } from './config.js'
 import {
+  applyKeysetPagination,
+  type KeysetCursorState,
+} from './keyset-pagination.js'
+import {
   DEFAULT_POSTS_CONTAINER_NAME,
   type MutablePostStore,
   type PostRepository,
@@ -18,6 +22,8 @@ type CosmosLikeError = Error & {
   statusCode?: number
 }
 
+const ROOT_POSTS_CURSOR_PREFIX = 'ac.posts.root.v1:'
+
 function isNotFound(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false
@@ -30,6 +36,10 @@ function isNotFound(error: unknown): boolean {
 function readOptionalValue(value?: string): string | undefined {
   const trimmed = value?.trim()
   return trimmed ? trimmed : undefined
+}
+
+function readCursorValue(value: unknown): string | undefined {
+  return typeof value === 'string' ? readOptionalValue(value) : undefined
 }
 
 function createCosmosClientFromEnvironment(): CosmosClient {
@@ -153,7 +163,6 @@ export class CosmosPostStore
               AND c.moderationState != @removedModerationState
             )
           )
-        ORDER BY c.createdAt DESC, c.id DESC
       `,
       parameters: [
         { name: '@authorIds', value: [...authorIds] },
@@ -164,21 +173,19 @@ export class CosmosPostStore
         { name: '@removedModerationState', value: 'removed' },
       ],
     }
-    const queryIterator = this.postsContainer.items.query<StoredPostDocument>(
-      querySpec,
-      {
-        maxItemCount: options.limit,
-        enableQueryControl: true,
-        ...(options.cursor === undefined
-          ? {}
-          : { continuationToken: options.cursor }),
-      },
-    )
-    const { resources, continuationToken } = await queryIterator.fetchNext()
+    const { resources } = await this.postsContainer.items
+      .query<StoredPostDocument>(querySpec)
+      .fetchAll()
+    const page = applyKeysetPagination(resources ?? [], {
+      limit: options.limit,
+      prefix: ROOT_POSTS_CURSOR_PREFIX,
+      resolveCursorState: resolvePostCursorState,
+      ...(options.cursor === undefined ? {} : { cursor: options.cursor }),
+    })
 
     return {
-      posts: resources ?? [],
-      ...(continuationToken === undefined ? {} : { cursor: continuationToken }),
+      posts: page.items,
+      ...(page.cursor === undefined ? {} : { cursor: page.cursor }),
     }
   }
 
@@ -375,6 +382,22 @@ export class CosmosPostStore
     }
 
     return this.reactionsContainer
+  }
+}
+
+function resolvePostCursorState(
+  post: StoredPostDocument,
+): KeysetCursorState | null {
+  const createdAt = readCursorValue(post.createdAt)
+  const id = readCursorValue(post.id)
+
+  if (createdAt === undefined || id === undefined) {
+    return null
+  }
+
+  return {
+    createdAt,
+    id,
   }
 }
 
