@@ -5,7 +5,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type ChangeEvent,
   type FormEvent,
   type TouchEvent,
 } from 'react'
@@ -400,7 +399,7 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
   const [composerText, setComposerText] = useState('')
   const [composerPublishing, setComposerPublishing] = useState(false)
   const [composerError, setComposerError] = useState<string | null>(null)
-  const mediaInputRef = useRef<HTMLInputElement | null>(null)
+  const composerSubmittingRef = useRef(false)
 
   const viewerMonogram = buildMonogram(
     viewer.displayName.trim() || viewer.handle?.trim(),
@@ -420,8 +419,9 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
 
   const handleComposerSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!canPublish) return
+    if (!canPublish || composerSubmittingRef.current) return
 
+    composerSubmittingRef.current = true
     setComposerPublishing(true)
     setComposerError(null)
 
@@ -434,13 +434,9 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
         error instanceof Error ? error.message : 'Unable to publish the post.',
       )
     } finally {
+      composerSubmittingRef.current = false
       setComposerPublishing(false)
     }
-  }
-
-  const handleMediaInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-    // Placeholder for image attachment flow
-    event.target.value = ''
   }
 
   return (
@@ -550,13 +546,23 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                     <textarea
                       aria-label="Post body"
                       className="block w-full resize-none rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-300/50 focus:ring-2 focus:ring-sky-300/30"
-                      disabled={composerPublishing}
+                      disabled={
+                        composerPublishing ||
+                        !viewer.handle ||
+                        viewer.status !== 'active'
+                      }
                       maxLength={280}
                       onChange={(event) => {
                         setComposerText(event.target.value)
                         setComposerError(null)
                       }}
-                      placeholder="Share an update..."
+                      placeholder={
+                        !viewer.handle
+                          ? 'Set a handle in your profile to start posting.'
+                          : viewer.status !== 'active'
+                            ? 'Activate your profile to start posting.'
+                            : 'Share an update...'
+                      }
                       rows={2}
                       value={composerText}
                     />
@@ -567,21 +573,11 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                     )}
                     <div className="mt-3 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
-                        <input
-                          accept="image/*"
-                          aria-label="Attach images"
-                          className="sr-only"
-                          multiple
-                          onChange={handleMediaInputChange}
-                          ref={mediaInputRef}
-                          tabIndex={-1}
-                          type="file"
-                        />
                         <button
                           aria-label="Browse images"
-                          className="rounded-full border border-white/10 p-2 text-slate-400 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
-                          disabled={composerPublishing}
-                          onClick={() => mediaInputRef.current?.click()}
+                          className="cursor-not-allowed rounded-full border border-white/10 p-2 text-slate-600 opacity-60"
+                          disabled
+                          title="Image attachments coming soon"
                           type="button"
                         >
                           <svg
@@ -609,18 +605,15 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                             />
                           </svg>
                         </button>
-                        <a
+                        <button
                           aria-label="Browse GIFs"
-                          className="rounded-full border border-white/10 px-2.5 py-1.5 text-[11px] font-bold text-slate-400 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
-                          href={
-                            viewer.handle
-                              ? `/p/new?gif=1`
-                              : '#'
-                          }
-                          onClick={(event) => event.preventDefault()}
+                          className="cursor-not-allowed rounded-full border border-white/10 px-2.5 py-1.5 text-[11px] font-bold text-slate-600 opacity-60"
+                          disabled
+                          title="GIF replies coming soon"
+                          type="button"
                         >
                           GIF
-                        </a>
+                        </button>
                         <span className="text-xs text-slate-500">
                           {composerText.length}/280
                         </span>
