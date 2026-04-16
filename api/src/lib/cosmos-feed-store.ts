@@ -17,6 +17,10 @@ import {
   type StoredFeedDocument,
 } from './feed.js'
 import { createFollowingListRepository, type FollowingListRepository } from './follows.js'
+import {
+  applyKeysetPagination,
+  type KeysetCursorState,
+} from './keyset-pagination.js'
 import { readOptionalValue } from './strings.js'
 import type { UserProfileStore } from './user-profile.js'
 import { DEFAULT_COSMOS_DATABASE_NAME } from './users-by-handle-mirror.js'
@@ -33,6 +37,7 @@ function isCosmosNotFound(error: unknown): boolean {
 
 const FOLLOWEE_LOOKUP_BATCH_SIZE = 100
 const FOLLOWEE_PROFILE_LOOKUP_CONCURRENCY = 10
+const FEED_ENTRY_CURSOR_PREFIX = 'ac.feed.entries.v1:'
 
 async function mapWithConcurrencyLimit<TInput, TOutput>(
   items: readonly TInput[],
@@ -100,32 +105,26 @@ export class CosmosFeedStore implements FeedFanOutStore, FeedReadStore {
     cursor?: string
   }> {
     try {
-      const queryIterator = this.container.items.query<StoredFeedDocument>(
-        {
-          query: `
-            SELECT * FROM c
-            WHERE c.feedOwnerId = @feedOwnerId
-            ORDER BY c.createdAt DESC
-          `,
-          parameters: [{ name: '@feedOwnerId', value: feedOwnerId }],
-        },
-        {
-          partitionKey: feedOwnerId,
-          maxItemCount: options.limit || DEFAULT_FEED_PAGE_SIZE,
-          enableQueryControl: true,
-          ...(options.cursor === undefined
-            ? {}
-            : { continuationToken: options.cursor }),
-        },
-      )
-
-      const { resources, continuationToken } = await queryIterator.fetchNext()
+      const { resources } = await this.container.items
+        .query<StoredFeedDocument>(
+          {
+            query: 'SELECT * FROM c',
+          },
+          {
+            partitionKey: feedOwnerId,
+          },
+        )
+        .fetchAll()
+      const page = applyKeysetPagination(resources ?? [], {
+        limit: options.limit || DEFAULT_FEED_PAGE_SIZE,
+        prefix: FEED_ENTRY_CURSOR_PREFIX,
+        resolveCursorState: resolveFeedDocumentCursorState,
+        ...(options.cursor === undefined ? {} : { cursor: options.cursor }),
+      })
 
       return {
-        entries: resources ?? [],
-        ...(continuationToken === undefined
-          ? {}
-          : { cursor: continuationToken }),
+        entries: page.items,
+        ...(page.cursor === undefined ? {} : { cursor: page.cursor }),
       }
     } catch (error) {
       if (isCosmosNotFound(error)) {
@@ -210,5 +209,21 @@ export class CosmosFeedStore implements FeedFanOutStore, FeedReadStore {
         followerCount > MAX_FANOUT_FOLLOWERS
       )
     })
+  }
+}
+
+function resolveFeedDocumentCursorState(
+  document: StoredFeedDocument,
+): KeysetCursorState | null {
+  const createdAt = readOptionalValue(document.createdAt)
+  const id = readOptionalValue(document.id)
+
+  if (createdAt === undefined || id === undefined) {
+    return null
+  }
+
+  return {
+    createdAt,
+    id,
   }
 }
