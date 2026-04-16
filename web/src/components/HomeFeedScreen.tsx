@@ -656,25 +656,25 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                 </div>
               </div>
 
-              <div className="mt-5 grid grid-cols-3 gap-3">
-                <div className="rounded-[1.4rem] border border-white/8 bg-white/5 px-3 py-4 text-center">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+              <div className="mt-5 grid grid-cols-3 gap-2">
+                <div className="overflow-hidden rounded-[1.4rem] border border-white/8 bg-white/5 px-2 py-4 text-center">
+                  <p className="truncate text-[10px] uppercase tracking-wide text-slate-400">
                     Posts
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-white">
                     {formatCount(viewer.counters.posts)}
                   </p>
                 </div>
-                <div className="rounded-[1.4rem] border border-white/8 bg-white/5 px-3 py-4 text-center">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                <div className="overflow-hidden rounded-[1.4rem] border border-white/8 bg-white/5 px-2 py-4 text-center">
+                  <p className="truncate text-[10px] uppercase tracking-wide text-slate-400">
                     Following
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-white">
                     {formatCount(viewer.counters.following)}
                   </p>
                 </div>
-                <div className="rounded-[1.4rem] border border-white/8 bg-white/5 px-3 py-4 text-center">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                <div className="overflow-hidden rounded-[1.4rem] border border-white/8 bg-white/5 px-2 py-4 text-center">
+                  <p className="truncate text-[10px] uppercase tracking-wide text-slate-400">
                     Followers
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-white">
