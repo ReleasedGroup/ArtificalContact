@@ -1,6 +1,11 @@
 param location string
 param names object
 param tags object = {}
+param blobCorsAllowedOrigins array = [
+  'https://*.azurestaticapps.net'
+  'http://127.0.0.1:4173'
+  'http://localhost:4173'
+]
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: names.storage
@@ -29,9 +34,7 @@ resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01'
     cors: {
       corsRules: [
         {
-          allowedOrigins: [
-            '*'
-          ]
+          allowedOrigins: blobCorsAllowedOrigins
           allowedMethods: [
             'OPTIONS'
             'PUT'

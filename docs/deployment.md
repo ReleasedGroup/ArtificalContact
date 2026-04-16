@@ -107,6 +107,7 @@ For the Sprint 3 media upload pipeline, the Functions app also needs:
 
 - Storage Blob Data Contributor on the media storage account so `POST /api/media/upload-url` can request user delegation keys with managed identity
 - Blob service CORS enabled for browser `PUT` uploads. The Bicep module now provisions a blob-service rule for `PUT` + `OPTIONS`, with `etag` and `x-ms-request-id` exposed so the SPA can complete direct uploads from modal-based profile media flows.
+- `blobCorsAllowedOrigins` can be overridden at deploy time to keep the upload origin allowlist narrow. The default covers local Vite development on `127.0.0.1:4173` / `localhost:4173` plus Azure Static Web Apps hostnames.
 - `BLOB_SERVICE_URL` set to the Blob service endpoint, for example `https://<account>.blob.core.windows.net`
 - `MEDIA_BASE_URL` set to the eventual public media host when Front Door/CDN is in front of Blob Storage
 - Optional container overrides via `MEDIA_IMAGES_CONTAINER_NAME`, `MEDIA_GIF_CONTAINER_NAME`, `MEDIA_AUDIO_CONTAINER_NAME`, and `MEDIA_VIDEO_CONTAINER_NAME`

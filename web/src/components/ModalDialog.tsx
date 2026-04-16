@@ -28,7 +28,12 @@ export function ModalDialog({
   const titleId = useId()
   const descriptionId = useId()
   const dialogRef = useRef<HTMLElement | null>(null)
+  const onCloseRef = useRef(onClose)
   const previouslyFocusedElementRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   useEffect(() => {
     if (!isOpen) {
@@ -53,7 +58,7 @@ export function ModalDialog({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
-        onClose()
+        onCloseRef.current()
         return
       }
 
@@ -99,7 +104,7 @@ export function ModalDialog({
         previouslyFocusedElementRef.current.focus()
       }
     }
-  }, [isOpen, onClose])
+  }, [isOpen])
 
   if (!isOpen) {
     return null
@@ -107,8 +112,10 @@ export function ModalDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/82 px-4 py-6 backdrop-blur-sm"
-      onClick={onClose}
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/82 px-4 py-6 backdrop-blur-sm"
+      onClick={() => {
+        onCloseRef.current()
+      }}
     >
       <section
         ref={dialogRef}
@@ -117,7 +124,7 @@ export function ModalDialog({
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
-        className={`w-full overflow-y-auto rounded-[1.9rem] border border-white/10 bg-slate-950/96 p-6 shadow-2xl shadow-slate-950/50 ${maxWidthClassName}`}
+        className={`mx-auto flex max-h-[calc(100vh-3rem)] w-full flex-col overflow-y-auto rounded-[1.9rem] border border-white/10 bg-slate-950/96 p-6 shadow-2xl shadow-slate-950/50 ${maxWidthClassName}`}
         onClick={(event) => {
           event.stopPropagation()
         }}
@@ -142,7 +149,9 @@ export function ModalDialog({
           <button
             type="button"
             aria-label="Close dialog"
-            onClick={onClose}
+            onClick={() => {
+              onCloseRef.current()
+            }}
             className="rounded-full border border-white/10 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/8"
           >
             Close
