@@ -5,16 +5,18 @@ import {
   useEffect,
   useRef,
   useState,
+  type ChangeEvent,
+  type FormEvent,
   type TouchEvent,
 } from 'react'
 import { AppImage } from './AppImage'
 import { NotificationBell } from './NotificationBell'
 import { hasRole, type MeProfile } from '../lib/me'
 import { getFeedPage, type FeedEntry } from '../lib/feed'
+import { createPost } from '../lib/post-write'
 import { signOut } from '../lib/auth'
 import { HeaderSearchBox } from './HeaderSearchBox'
 import { ReportDialog } from './ReportDialog'
-import { ThreadWorkspacePanel } from './ThreadWorkspacePanel'
 
 interface HomeFeedScreenProps {
   viewer: MeProfile
@@ -395,19 +397,50 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
     })
   }
 
+  const [composerText, setComposerText] = useState('')
+  const [composerPublishing, setComposerPublishing] = useState(false)
+  const [composerError, setComposerError] = useState<string | null>(null)
+  const mediaInputRef = useRef<HTMLInputElement | null>(null)
+
   const viewerMonogram = buildMonogram(
     viewer.displayName.trim() || viewer.handle?.trim(),
     'ME',
   )
   const refreshMessage = getRefreshMessage(pullRefreshState)
   const viewerIsAdmin = hasRole(viewer.roles, 'admin')
+  const canPublish =
+    viewer.status === 'active' &&
+    Boolean(viewer.handle) &&
+    composerText.trim().length > 0 &&
+    !composerPublishing
 
   function handleSignOut() {
     signOut({ queryClient })
   }
 
-  const handlePostPublished = async () => {
-    await handleRefresh()
+  const handleComposerSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!canPublish) return
+
+    setComposerPublishing(true)
+    setComposerError(null)
+
+    try {
+      await createPost({ text: composerText.trim() })
+      setComposerText('')
+      await handleRefresh()
+    } catch (error) {
+      setComposerError(
+        error instanceof Error ? error.message : 'Unable to publish the post.',
+      )
+    } finally {
+      setComposerPublishing(false)
+    }
+  }
+
+  const handleMediaInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    // Placeholder for image attachment flow
+    event.target.value = ''
   }
 
   return (
@@ -506,14 +539,102 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
                   </div>
                 )}
 
-                <ThreadWorkspacePanel
-                  authorBadge={viewerMonogram}
-                  authorHandle={viewer.handle}
-                  authorName={viewer.displayName}
-                  mode="home"
-                  onPublished={handlePostPublished}
-                  user={viewer}
-                />
+                <form
+                  className="mb-6 flex items-start gap-3 rounded-[1.75rem] border border-white/10 bg-slate-900/72 p-4 shadow-lg shadow-slate-950/20"
+                  onSubmit={handleComposerSubmit}
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[1.2rem] bg-gradient-to-br from-fuchsia-500 to-sky-500 text-xs font-semibold tracking-[0.08em] text-white">
+                    {viewerMonogram}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <textarea
+                      aria-label="Post body"
+                      className="block w-full resize-none rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-300/50 focus:ring-2 focus:ring-sky-300/30"
+                      disabled={composerPublishing}
+                      maxLength={280}
+                      onChange={(event) => {
+                        setComposerText(event.target.value)
+                        setComposerError(null)
+                      }}
+                      placeholder="Share an update..."
+                      rows={2}
+                      value={composerText}
+                    />
+                    {composerError && (
+                      <p className="mt-2 text-sm text-rose-300">
+                        {composerError}
+                      </p>
+                    )}
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <input
+                          accept="image/*"
+                          aria-label="Attach images"
+                          className="sr-only"
+                          multiple
+                          onChange={handleMediaInputChange}
+                          ref={mediaInputRef}
+                          tabIndex={-1}
+                          type="file"
+                        />
+                        <button
+                          aria-label="Browse images"
+                          className="rounded-full border border-white/10 p-2 text-slate-400 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
+                          disabled={composerPublishing}
+                          onClick={() => mediaInputRef.current?.click()}
+                          type="button"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            className="h-4 w-4"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            viewBox="0 0 24 24"
+                          >
+                            <rect
+                              x="3"
+                              y="3"
+                              width="18"
+                              height="18"
+                              rx="3"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <path
+                              d="M21 15l-5-5L5 21"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </button>
+                        <a
+                          aria-label="Browse GIFs"
+                          className="rounded-full border border-white/10 px-2.5 py-1.5 text-[11px] font-bold text-slate-400 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
+                          href={
+                            viewer.handle
+                              ? `/p/new?gif=1`
+                              : '#'
+                          }
+                          onClick={(event) => event.preventDefault()}
+                        >
+                          GIF
+                        </a>
+                        <span className="text-xs text-slate-500">
+                          {composerText.length}/280
+                        </span>
+                      </div>
+                      <button
+                        className="rounded-full bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 transition enabled:hover:bg-sky-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-300"
+                        disabled={!canPublish}
+                        type="submit"
+                      >
+                        {composerPublishing ? 'Posting...' : 'Post'}
+                      </button>
+                    </div>
+                  </div>
+                </form>
 
                 {isPending && (
                   <div className="space-y-4">

@@ -263,15 +263,12 @@ describe('HomeFeedScreen', () => {
       await screen.findByText('No posts have landed in your home feed yet'),
     ).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText('Thread post body'), {
+    fireEvent.change(screen.getByLabelText('Post body'), {
       target: { value: 'Published from home feed' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Post to feed' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
 
     expect(await screen.findByText('Published from home feed')).toBeInTheDocument()
-    expect(
-      await screen.findByText('Post published. Your home feed is refreshing.'),
-    ).toBeInTheDocument()
   })
 
   it('refetches the feed when the user performs a pull-to-refresh gesture', async () => {
