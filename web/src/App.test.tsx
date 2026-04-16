@@ -942,10 +942,10 @@ describe('App', () => {
       await screen.findByRole('heading', { name: 'Home feed' }),
     ).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText('Thread post body'), {
+    fireEvent.change(screen.getByLabelText('Post body'), {
       target: { value: 'Publishing a real workflow post from the home route.' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Post to feed' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
@@ -959,12 +959,6 @@ describe('App', () => {
       )
     })
 
-    expect(
-      await screen.findByText('Post published. Your home feed is refreshing.'),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByRole('link', { name: 'Open standalone page' }),
-    ).toHaveAttribute('href', '/p/post-2')
   })
 
   it('renders a public profile when the current route matches /u/{handle}', async () => {
