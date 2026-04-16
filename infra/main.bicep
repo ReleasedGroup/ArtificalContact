@@ -6,6 +6,12 @@ param location string = resourceGroup().location
 @description('Optional override for the Azure Static Web App region. When omitted, the deployment uses the primary location if supported by Static Web Apps, otherwise it falls back to eastasia.')
 param staticWebAppLocation string = ''
 param frontDoorCustomDomainHostName string = 'cdn-placeholder.example.com'
+@description('Allowlist for browser origins that can issue direct Blob Storage uploads. Include local dev and any deployed frontend hosts that should upload media directly.')
+param blobCorsAllowedOrigins array = [
+  'https://*.azurestaticapps.net'
+  'http://127.0.0.1:4173'
+  'http://localhost:4173'
+]
 @minValue(0)
 @maxValue(7)
 param contentSafetyThreshold int = 4
@@ -47,6 +53,7 @@ module naming './modules/naming.bicep' = {
 module storage './modules/storage.bicep' = {
   name: 'storage'
   params: {
+    blobCorsAllowedOrigins: blobCorsAllowedOrigins
     location: location
     names: naming.outputs.names
     tags: tags

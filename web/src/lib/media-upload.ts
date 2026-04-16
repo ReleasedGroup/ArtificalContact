@@ -176,7 +176,16 @@ export function uploadFileToBlobStorage(
       })
     })
     xhr.addEventListener('error', () => {
-      rejectWith(new Error('Blob upload failed before the request completed.'))
+      if (xhr.status > 0) {
+        rejectWith(new Error(`Blob upload failed with status ${xhr.status}.`))
+        return
+      }
+
+      rejectWith(
+        new Error(
+          'Blob upload failed before the request completed. Check the blob storage CORS configuration and try again.',
+        ),
+      )
     })
     xhr.addEventListener('abort', () => {
       rejectWith(createAbortError())

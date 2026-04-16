@@ -55,7 +55,7 @@ describe('PostComposer accessibility', () => {
     expect((await axe(container)).violations).toEqual([])
   })
 
-  it('has no detectable axe violations when image alt text prompts are visible', async () => {
+  it('has no detectable axe violations when images are already attached', async () => {
     const image = new File(['diagram'], 'diagram.png', { type: 'image/png' })
     const { container } = render(
       <ComposerHarness

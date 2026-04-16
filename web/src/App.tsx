@@ -11,6 +11,7 @@ import { AdminMetricsScreen } from './components/AdminMetricsScreen'
 import { AppImage } from './components/AppImage'
 import { DirectBlobUploadCard } from './components/DirectBlobUploadCard'
 import { HomeFeedScreen } from './components/HomeFeedScreen'
+import { ModalDialog } from './components/ModalDialog'
 import { ModerationQueueScreen } from './components/ModerationQueueScreen'
 import { NotificationsScreen } from './components/NotificationsScreen'
 import { PostDetailScreen } from './components/PostDetailScreen'
@@ -77,12 +78,45 @@ interface ProfileDraft {
 
 type ProfileMediaField = 'avatarUrl' | 'bannerUrl'
 
+interface ProfileMediaDialogConfig {
+  actionLabel: string
+  description: string
+  dialogDescription: string
+  helperText: string
+  title: string
+}
+
 const postLoginRedirectUri = encodeURIComponent('/')
 const maxExpertiseTags = 12
 const compactCountFormatter = new Intl.NumberFormat(undefined, {
   notation: 'compact',
   maximumFractionDigits: 1,
 })
+const profileMediaUploadAccept =
+  'image/avif,image/jpeg,image/png,image/webp'
+const profileMediaDialogConfigs: Record<
+  ProfileMediaField,
+  ProfileMediaDialogConfig
+> = {
+  avatarUrl: {
+    actionLabel: 'Upload avatar',
+    description:
+      'Open the direct-to-blob upload flow for a still image and save it as your public avatar.',
+    dialogDescription:
+      'Choose a still image and upload it directly to Blob Storage. The profile avatar updates after the upload flow completes.',
+    helperText: 'AVIF, JPEG, PNG, or WebP up to 8 MB.',
+    title: 'Avatar upload',
+  },
+  bannerUrl: {
+    actionLabel: 'Upload banner',
+    description:
+      'Open the same upload flow for a wide image and save it as your public profile banner.',
+    dialogDescription:
+      'Choose a wide image and upload it directly to Blob Storage. The profile banner updates after the upload flow completes.',
+    helperText: 'AVIF, JPEG, PNG, or WebP up to 8 MB.',
+    title: 'Banner upload',
+  },
+}
 
 function getAuthLoginHref(provider: 'aad' | 'github') {
   return `/.auth/login/${provider}?post_login_redirect_uri=${postLoginRedirectUri}`
@@ -547,6 +581,8 @@ function ProfileEditorScreen() {
   const [draft, setDraft] = useState<ProfileDraft | null>(null)
   const [expertiseInput, setExpertiseInput] = useState('')
   const [tagMessage, setTagMessage] = useState<string | null>(null)
+  const [activeProfileMediaDialog, setActiveProfileMediaDialog] =
+    useState<ProfileMediaField | null>(null)
   const [saveState, setSaveState] = useState<SaveState>({
     status: 'idle',
   })
@@ -600,6 +636,10 @@ function ProfileEditorScreen() {
   const publicProfileHref = currentUser?.handle
     ? getPublicProfileHref(currentUser.handle)
     : null
+  const activeProfileMediaConfig =
+    activeProfileMediaDialog === null
+      ? null
+      : profileMediaDialogConfigs[activeProfileMediaDialog]
 
   const addExpertiseTag = () => {
     if (draft === null) {
@@ -1126,27 +1166,74 @@ function ProfileEditorScreen() {
                 </p>
                 <p className="mt-3 text-sm leading-7 text-slate-400">
                   Upload an avatar and banner image. Changes save automatically
-                  once the upload completes.
+                  once the upload completes, and each upload flow now opens in a
+                  modal instead of expanding the profile editor.
                 </p>
-                <div className="mt-5 grid gap-4">
-                  <DirectBlobUploadCard
-                    accept="image/avif,image/jpeg,image/png,image/webp"
-                    description="Uploads a still image through the shared direct-to-blob flow, then saves it as your profile avatar."
-                    helperText="AVIF, JPEG, PNG, or WebP up to 8 MB. Upload completion saves immediately."
-                    kind="image"
-                    onUploaded={handleProfileMediaUploaded('avatarUrl')}
-                    title="Avatar upload"
-                  />
-                  <DirectBlobUploadCard
-                    accept="image/avif,image/jpeg,image/png,image/webp"
-                    description="Streams a wide image through the same upload pipeline and saves it as your public profile banner."
-                    helperText="AVIF, JPEG, PNG, or WebP up to 8 MB. Upload completion saves immediately."
-                    kind="image"
-                    onUploaded={handleProfileMediaUploaded('bannerUrl')}
-                    title="Banner upload"
-                  />
+                <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                  {(['avatarUrl', 'bannerUrl'] as ProfileMediaField[]).map(
+                    (field) => {
+                      const config = profileMediaDialogConfigs[field]
+
+                      return (
+                        <article
+                          key={field}
+                          className="rounded-[1.5rem] border border-white/10 bg-slate-950/45 p-4"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-medium text-white">
+                                {config.title}
+                              </p>
+                              <p className="mt-2 text-sm leading-7 text-slate-400">
+                                {config.description}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              aria-expanded={activeProfileMediaDialog === field}
+                              aria-haspopup="dialog"
+                              onClick={() => {
+                                setActiveProfileMediaDialog(field)
+                              }}
+                              className="rounded-full border border-sky-300/20 bg-sky-300/10 px-4 py-2 text-sm font-medium text-sky-100 transition hover:border-sky-300/35 hover:bg-sky-300/15"
+                            >
+                              {config.actionLabel}
+                            </button>
+                          </div>
+
+                          <p className="mt-4 text-xs uppercase tracking-[0.22em] text-slate-500">
+                            {config.helperText} Upload completion saves
+                            immediately.
+                          </p>
+                        </article>
+                      )
+                    },
+                  )}
                 </div>
               </section>
+
+              {activeProfileMediaConfig && activeProfileMediaDialog && (
+                <ModalDialog
+                  description={activeProfileMediaConfig.dialogDescription}
+                  isOpen
+                  maxWidthClassName="max-w-2xl"
+                  onClose={() => {
+                    setActiveProfileMediaDialog(null)
+                  }}
+                  title={activeProfileMediaConfig.title}
+                >
+                  <DirectBlobUploadCard
+                    accept={profileMediaUploadAccept}
+                    description={activeProfileMediaConfig.description}
+                    helperText={`${activeProfileMediaConfig.helperText} Upload completion saves immediately.`}
+                    kind="image"
+                    onUploaded={handleProfileMediaUploaded(
+                      activeProfileMediaDialog,
+                    )}
+                    title={activeProfileMediaConfig.title}
+                  />
+                </ModalDialog>
+              )}
 
               <section className="rounded-[1.75rem] border border-white/10 bg-slate-900/60 p-6">
                 <p className="text-sm font-medium uppercase tracking-[0.24em] text-sky-200/75">

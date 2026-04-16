@@ -79,7 +79,7 @@ It does **not** specify UI visual design or detailed copy — those live in `des
 ### 3.5 Media Upload Flow
 1. Browser requests `POST /api/media/upload-url` with `{ contentType, sizeBytes, kind }` and includes `durationSeconds` for audio/video uploads.
 2. Function validates content type, size, and duration (for audio/video), picks the target container (`images`, `video`, `audio`, `gif`), generates a deterministic blob name (`{userId}/{yyyy}/{mm}/{ulid}.{ext}`), and returns a short-lived **user delegation SAS** (≤ 15 min, write-only) plus the eventual public URL.
-3. Browser uploads the file directly to Blob Storage.
+3. Browser uploads the file directly to Blob Storage. Because this hop is cross-origin relative to the SPA, the blob service must expose a CORS rule that allows browser `PUT` uploads and surfaces `etag` / `x-ms-request-id` back to the client. The deployed allowlist should stay limited to the known frontend origins rather than `*`.
 4. A Blob-trigger function (`mediaPostProcessFn`) fires on creation, optionally generating thumbnails (images/video first frame), running content moderation (Azure AI Content Safety), and writing a `media` document into Cosmos DB.
 5. The user references the returned media id when publishing the post.
 
@@ -402,6 +402,7 @@ Initial autoscale ceilings sized at ~2x measured peak. Re-evaluated weekly durin
 
 ### 7.3 Upload Pattern
 - Direct-to-blob upload from the browser using **user delegation SAS** issued by the Functions API and signed using the storage account's managed identity (no shared keys distributed).
+- Blob service CORS is enabled for browser `PUT` + `OPTIONS` requests. The SPA surfaces profile uploads and GIF selection from modal dialogs, but the upload still goes directly to Blob Storage.
 - SAS scope: single blob, write-only (`c` permission), expiry ≤ 15 minutes, content-type pinned, max size enforced by `x-ms-blob-content-length` validation in the post-process function.
 
 ### 7.4 Delivery

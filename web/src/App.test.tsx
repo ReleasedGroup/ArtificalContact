@@ -803,6 +803,12 @@ describe('App', () => {
       await screen.findByRole('heading', { name: 'Edit your profile' }),
     ).toBeInTheDocument()
 
+    fireEvent.click(screen.getByRole('button', { name: 'Upload avatar' }))
+
+    expect(
+      screen.getByRole('dialog', { name: 'Avatar upload' }),
+    ).toBeInTheDocument()
+
     fireEvent.change(screen.getByLabelText('Avatar upload file'), {
       target: {
         files: [
@@ -2151,6 +2157,12 @@ describe('App', () => {
 
     expect(
       await screen.findByRole('heading', { name: 'Standalone post detail' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Choose GIF' }))
+
+    expect(
+      screen.getByRole('dialog', { name: 'Choose a GIF' }),
     ).toBeInTheDocument()
 
     fireEvent.change(screen.getByPlaceholderText('Search Tenor'), {
