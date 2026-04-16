@@ -21,6 +21,16 @@ import { readOptionalValue } from './strings.js'
 import type { UserProfileStore } from './user-profile.js'
 import { DEFAULT_COSMOS_DATABASE_NAME } from './users-by-handle-mirror.js'
 
+function isCosmosNotFound(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  const statusCode = (error as Error & { statusCode?: number }).statusCode
+  const code = (error as Error & { code?: number | string }).code
+  return statusCode === 404 || code === 404
+}
+
 const FOLLOWEE_LOOKUP_BATCH_SIZE = 100
 const FOLLOWEE_PROFILE_LOOKUP_CONCURRENCY = 10
 
@@ -117,10 +127,12 @@ export class CosmosFeedStore implements FeedFanOutStore, FeedReadStore {
           ? {}
           : { cursor: continuationToken }),
       }
-    } catch {
-      return {
-        entries: [],
+    } catch (error) {
+      if (isCosmosNotFound(error)) {
+        return { entries: [] }
       }
+
+      throw error
     }
   }
 
@@ -155,10 +167,12 @@ export class CosmosFeedStore implements FeedFanOutStore, FeedReadStore {
           .filter((entry): entry is FeedEntryDocument => entry !== null),
         ...(page.cursor === undefined ? {} : { cursor: page.cursor }),
       }
-    } catch {
-      return {
-        entries: [],
+    } catch (error) {
+      if (isCosmosNotFound(error)) {
+        return { entries: [] }
       }
+
+      throw error
     }
   }
 

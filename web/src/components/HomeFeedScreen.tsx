@@ -407,9 +407,6 @@ export function HomeFeedScreen({ viewer }: HomeFeedScreenProps) {
   }
 
   const handlePostPublished = async () => {
-    await queryClient.invalidateQueries({
-      queryKey: ['home-feed'],
-    })
     await handleRefresh()
   }
 

@@ -314,13 +314,20 @@ async function syncStoredUserHandleMirror(
 ): Promise<void> {
   const currentHandleLower = normalizeHandleLower(storedUser)
 
-  if (previousHandleLower !== null && previousHandleLower !== currentHandleLower) {
-    await handleStore.deleteByHandle(previousHandleLower)
-  }
-
   if (currentHandleLower === null) {
+    if (previousHandleLower !== null) {
+      await handleStore.deleteByHandle(previousHandleLower)
+    }
+
     await handleStore.deleteStateByUserId(storedUser.id)
     return
+  }
+
+  const existingMirror = await handleStore.getByHandle(currentHandleLower)
+  if (existingMirror !== null && existingMirror.userId !== storedUser.id) {
+    throw new Error(
+      `Handle "${currentHandleLower}" is already claimed by another user.`,
+    )
   }
 
   const mirrorDocument = buildMirrorDocument(storedUser)
@@ -336,4 +343,8 @@ async function syncStoredUserHandleMirror(
     userId: storedUser.id,
     currentHandle: currentHandleLower,
   })
+
+  if (previousHandleLower !== null && previousHandleLower !== currentHandleLower) {
+    await handleStore.deleteByHandle(previousHandleLower)
+  }
 }

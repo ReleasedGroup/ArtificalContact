@@ -1,7 +1,4 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import {
   AzureKeyCredential,
   SearchIndexClient,
@@ -161,45 +158,29 @@ function buildFunctionAppSettings(
 }
 
 function updateFunctionAppSearchSettings(resourceGroup, functionAppName, searchEndpoint, searchApiKey) {
-  const functionAppSettingsResourceId = `/subscriptions/${readRequiredEnv('AZURE_SUBSCRIPTION_ID')}/resourceGroups/${resourceGroup}/providers/Microsoft.Web/sites/${functionAppName}/config/appsettings`
   const storageAccountName = getSingleResourceName(
     resourceGroup,
     'Microsoft.Storage/storageAccounts',
   )
-  const tempDirectory = mkdtempSync(join(tmpdir(), 'artcontact-search-settings-'))
-  const requestBodyPath = join(tempDirectory, 'appsettings.json')
-
-  writeFileSync(
-    requestBodyPath,
-    JSON.stringify({
-      properties: buildFunctionAppSettings(
-        functionAppName,
-        storageAccountName,
-        searchEndpoint,
-        searchApiKey,
-      ),
-    }),
-    'utf8',
+  const appSettings = buildFunctionAppSettings(
+    functionAppName,
+    storageAccountName,
+    searchEndpoint,
+    searchApiKey,
   )
 
-  try {
-    runAz([
-      'rest',
-      '--method',
-      'put',
-      '--url',
-      `https://management.azure.com${functionAppSettingsResourceId}?api-version=2024-04-01`,
-      '--headers',
-      'Content-Type=application/json',
-      '--body',
-      `@${requestBodyPath}`,
-    ])
-  } finally {
-    rmSync(tempDirectory, {
-      force: true,
-      recursive: true,
-    })
-  }
+  runAz([
+    'functionapp',
+    'config',
+    'appsettings',
+    'set',
+    '--resource-group',
+    resourceGroup,
+    '--name',
+    functionAppName,
+    '--settings',
+    ...Object.entries(appSettings).map(([key, value]) => `${key}=${value}`),
+  ])
 }
 
 function getCosmosEndpoint(resourceGroup, accountName) {
@@ -547,7 +528,7 @@ function buildPostsDataSource(cosmosEndpoint, cosmosReadonlyKey, databaseName, p
       name: postsContainerName,
     },
     dataChangeDetectionPolicy: {
-      odatatype: '#Microsoft.Azure.Search.HighWaterMarkChangeDetectionPolicy',
+      '@odata.type': '#Microsoft.Azure.Search.HighWaterMarkChangeDetectionPolicy',
       highWaterMarkColumnName: '_ts',
     },
   }
@@ -573,7 +554,8 @@ async function retryUntilReady(action, timeoutMs, errorPrefix) {
       return await action()
     } catch (error) {
       lastError = error
-      console.log(`${errorPrefix}: ${error.message}. Retrying in 10s...`)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.log(`${errorPrefix}: ${errorMessage}. Retrying in 10s...`)
       await sleep(RETRY_DELAY_MS)
     }
   }

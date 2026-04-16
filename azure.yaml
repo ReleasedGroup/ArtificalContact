@@ -6,7 +6,6 @@ infra:
   path: infra
 hooks:
   postprovision:
-    shell: pwsh
     run: node ./scripts/postprovision.mjs
     continueOnError: false
     interactive: true
