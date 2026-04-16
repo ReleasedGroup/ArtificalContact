@@ -18,16 +18,20 @@ export function ReplyGifPicker({
   onSelect: (gif: GifSearchResult) => void
 }) {
   const [query, setQuery] = useState('')
-  const [activeQuery, setActiveQuery] = useState('')
+  const [searchRequest, setSearchRequest] = useState({
+    nonce: 0,
+    query: '',
+  })
   const [results, setResults] = useState<GifSearchResult[]>([])
   const [mode, setMode] = useState<'featured' | 'search'>('featured')
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const activeQuery = searchRequest.query
 
   useEffect(() => {
     const controller = new AbortController()
 
-    void searchGifs(activeQuery, {
+    void searchGifs(searchRequest.query, {
       limit: 12,
       locale: getBrowserLocale(),
       signal: controller.signal,
@@ -60,13 +64,16 @@ export function ReplyGifPicker({
     return () => {
       controller.abort()
     }
-  }, [activeQuery])
+  }, [searchRequest])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setStatus('loading')
     setErrorMessage(null)
-    setActiveQuery(query.trim())
+    setSearchRequest((currentRequest) => ({
+      nonce: currentRequest.nonce + 1,
+      query: query.trim(),
+    }))
   }
 
   const heading =

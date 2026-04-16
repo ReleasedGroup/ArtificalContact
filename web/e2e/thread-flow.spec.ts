@@ -614,6 +614,7 @@ test('an authenticated viewer can publish a GIF-only reply from the Tenor picker
     page.getByText('User A root post for the GIF reply flow.'),
   ).toBeVisible()
 
+  await page.getByRole('button', { name: 'Choose GIF' }).click()
   await page.getByPlaceholder('Search Tenor').fill('party parrot')
   await page.getByRole('button', { name: 'Find GIFs' }).click()
   await page

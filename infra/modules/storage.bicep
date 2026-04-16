@@ -25,6 +25,29 @@ var blobHostName = '${storageAccount.name}.blob.${environment().suffixes.storage
 resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
   parent: storageAccount
   name: 'default'
+  properties: {
+    cors: {
+      corsRules: [
+        {
+          allowedOrigins: [
+            '*'
+          ]
+          allowedMethods: [
+            'OPTIONS'
+            'PUT'
+          ]
+          allowedHeaders: [
+            '*'
+          ]
+          exposedHeaders: [
+            'etag'
+            'x-ms-request-id'
+          ]
+          maxAgeInSeconds: 3600
+        }
+      ]
+    }
+  }
 }
 
 var containerNames = [

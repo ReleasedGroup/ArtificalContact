@@ -140,6 +140,8 @@ describe('PostComposer', () => {
 
     render(<ComposerHarness onSubmit={handleSubmit} />)
 
+    fireEvent.click(screen.getByRole('button', { name: 'Add images' }))
+
     const dropZone = screen.getByRole('group', {
       name: 'Post image attachments',
     })
@@ -194,6 +196,8 @@ describe('PostComposer', () => {
   it('adds multiple image previews from drag and drop and removes them individually', () => {
     const { unmount } = render(<ComposerHarness />)
 
+    fireEvent.click(screen.getByRole('button', { name: 'Add images' }))
+
     const dropZone = screen.getByRole('group', {
       name: 'Post image attachments',
     })
@@ -209,7 +213,7 @@ describe('PostComposer', () => {
       dataTransfer: { files: [firstImage, secondImage] },
     })
 
-    expect(screen.getByText('2 images ready')).toBeInTheDocument()
+    expect(screen.getAllByText('2 images ready').length).toBeGreaterThan(0)
     expect(
       screen.getByRole('img', {
         name: 'Selected image preview for diagram-a.png',
@@ -225,7 +229,7 @@ describe('PostComposer', () => {
       screen.getByRole('button', { name: 'Remove diagram-a.png' }),
     )
 
-    expect(screen.getByText('1 image ready')).toBeInTheDocument()
+    expect(screen.getAllByText('1 image ready').length).toBeGreaterThan(0)
     expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:diagram-a.png')
     expect(
       screen.queryByRole('img', {
@@ -247,15 +251,18 @@ describe('PostComposer', () => {
     render(<ComposerHarness />)
 
     expect(
-      screen.getByRole('button', { name: 'Browse images' }),
+      screen.getByRole('button', { name: 'Add images' }),
     ).toBeInTheDocument()
+    expect(
+      screen.getByRole('textbox', { name: 'Post body' }),
+    ).toHaveAccessibleDescription(/image attachment manager/i)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add images' }))
+
     expect(
       screen.getByRole('group', { name: 'Post image attachments' }),
     ).toHaveAccessibleDescription(
       /drag images here or browse from the keyboard/i,
     )
-    expect(
-      screen.getByRole('textbox', { name: 'Post body' }),
-    ).toHaveAccessibleDescription(/add alternative text/i)
   })
 })

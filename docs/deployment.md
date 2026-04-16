@@ -106,6 +106,7 @@ No AI Search admin keys are configured in Function App settings.
 For the Sprint 3 media upload pipeline, the Functions app also needs:
 
 - Storage Blob Data Contributor on the media storage account so `POST /api/media/upload-url` can request user delegation keys with managed identity
+- Blob service CORS enabled for browser `PUT` uploads. The Bicep module now provisions a blob-service rule for `PUT` + `OPTIONS`, with `etag` and `x-ms-request-id` exposed so the SPA can complete direct uploads from modal-based profile media flows.
 - `BLOB_SERVICE_URL` set to the Blob service endpoint, for example `https://<account>.blob.core.windows.net`
 - `MEDIA_BASE_URL` set to the eventual public media host when Front Door/CDN is in front of Blob Storage
 - Optional container overrides via `MEDIA_IMAGES_CONTAINER_NAME`, `MEDIA_GIF_CONTAINER_NAME`, `MEDIA_AUDIO_CONTAINER_NAME`, and `MEDIA_VIDEO_CONTAINER_NAME`
@@ -122,6 +123,7 @@ For the Sprint 3 media upload pipeline, the Functions app also needs:
 ## Media pipeline settings
 
 - `MEDIA_BASE_URL` should point at the Front Door or CDN host used for public media URLs. The Bicep deployment now sets this to the deployed Front Door endpoint automatically.
+- Direct browser uploads go to `BLOB_SERVICE_URL`, not the Front Door hostname, so blob-service CORS has to remain enabled even when all public reads are served from Front Door.
 - `MEDIA_CONTAINER_NAME` defaults to `media` and backs the Cosmos container that stores blob metadata and moderation outcomes.
 - `CONTENT_SAFETY_ENDPOINT` enables live Azure AI Content Safety checks for uploaded images, GIFs, and extracted video poster frames.
 - `CONTENT_SAFETY_KEY` is optional for local development. In deployed environments, prefer leaving the key unset and granting the Functions managed identity the `Cognitive Services User` role on the Content Safety resource instead.

@@ -53,13 +53,14 @@ The k6 thresholds are derived from `docs/technical.md` §11:
 - Vitest + Testing Library validate that `/u/{handle}` renders the public profile shell, surfaces the API-backed not-found state, and returns to loading immediately when the handle changes
 - Vitest + Testing Library validate that `/p/{id}` loads the standalone post detail view, fetches thread context, and handles missing-post states safely
 - Vitest + Testing Library validate that `/p/{id}` renders mixed-media posts with inline image, GIF, video, and audio attachments
-- Vitest + Testing Library validate that authenticated `/p/{id}` viewers can search Tenor-backed GIFs and publish GIF-only replies into the thread
+- Vitest + Testing Library validate that authenticated `/p/{id}` viewers can open the modal-based Tenor GIF picker, search Tenor-backed GIFs, and publish GIF-only replies into the thread
 - Vitest + Testing Library validate the authenticated `/me` profile editor flow, including initial profile loading, error rendering, and `PUT /api/me` saves
 - Vitest + Testing Library validate the authenticated `/me` thread workspace publish flow, plus authenticated reply and delete actions on `/p/{id}`
-- Vitest + Testing Library include a screen-reader smoke test for the reusable composer, covering keyboard-accessible attachment controls, descriptive guidance, and per-image alt-text prompts
+- Vitest + Testing Library include a screen-reader smoke test for the reusable composer, covering the modal attachment manager trigger, descriptive guidance, and per-image alt-text prompts
 - `jest-axe` scans the reusable composer in CI via `npm run test:a11y --workspace @artificialcontact/web`
 - Playwright covers the Sprint 1 golden path: GitHub sign-in handoff to `/me`, initial handle claim, and navigation to the resulting public profile at `/u/{handle}`
 - Playwright covers the mixed-media `/p/{id}` route on desktop and mobile viewports, including image, GIF, video, and audio attachments
+- Playwright covers the modal GIF reply flow on `/p/{id}` so the browser automation path matches the production interaction model
 - Playwright covers the Sprint 2 thread path: user A publishes a root post, user B replies on the standalone thread page, both users see the shared thread, and a soft-deleted reply disappears from view while the backing document remains in the mocked store
 - Playwright covers the Sprint 6 search flow with simulated latency: publishing from `/me` and polling the mocked `/api/search` until the new post becomes discoverable within five seconds
 - Playwright covers the Sprint 7 notification path: user B replies to user A, the mocked notifications read model materialises asynchronously, and user A sees the unread in-app notification within five seconds

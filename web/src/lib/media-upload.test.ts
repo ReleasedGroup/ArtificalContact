@@ -67,6 +67,11 @@ class MockXMLHttpRequest {
     } as ProgressEvent)
   }
 
+  triggerError(status = 0) {
+    this.status = status
+    this.listeners.get('error')?.(new Event('error'))
+  }
+
   respond(status: number, headers: Record<string, string> = {}) {
     this.status = status
     Object.entries(headers).forEach(([name, value]) => {
@@ -234,6 +239,25 @@ describe('uploadMediaFile', () => {
 
     await expect(uploadPromise).rejects.toThrow(
       'Blob upload failed with status 403.',
+    )
+  })
+
+  it('surfaces network or CORS failures before blob storage responds', async () => {
+    const xhr = new MockXMLHttpRequest()
+    const uploadPromise = uploadMediaFile({
+      file: new File(['hello world'], 'preview.png', {
+        type: 'image/png',
+      }),
+      kind: 'image',
+      requestMediaUploadUrl: async () => createDescriptor(),
+      xhrFactory: () => xhr as unknown as XMLHttpRequest,
+    })
+
+    await Promise.resolve()
+    xhr.triggerError()
+
+    await expect(uploadPromise).rejects.toThrow(
+      'Blob upload failed before the request completed. Check the blob storage CORS configuration and try again.',
     )
   })
 })

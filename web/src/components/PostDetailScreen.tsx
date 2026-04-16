@@ -34,6 +34,7 @@ import {
 } from '../lib/thread'
 import { ReactionBar } from './ReactionBar'
 import { ReportDialog } from './ReportDialog'
+import { ModalDialog } from './ModalDialog'
 
 type PostDetailState =
   | { status: 'loading' }
@@ -802,6 +803,7 @@ function ReadyPostDetail({
   onReplyMediaFilesChange: (nextFiles: PostComposerMediaFile[]) => void
   onReplySubmit: (submission: PostComposerSubmission) => void
 }) {
+  const [isGifPickerOpen, setIsGifPickerOpen] = useState(false)
   const orderedPosts = [...data.thread.posts].sort(compareThreadPosts)
   const postsById = new Map(orderedPosts.map((post) => [post.id, post]))
   const threadEntries = buildThreadConversationEntries(
@@ -829,6 +831,8 @@ function ReadyPostDetail({
     data.post.id === data.post.threadId &&
     data.post.parentId === null
   const canReply = viewer?.status === 'active' && Boolean(viewer.handle)
+  const isGifPickerDisabled =
+    replyState.status === 'submitting' || deleteState.status === 'deleting'
   const replyTargetLabel = authorHandle ? `@${authorHandle}` : 'this thread'
   const canReact = viewer?.status === 'active' && Boolean(viewer.handle)
 
@@ -940,13 +944,51 @@ function ReadyPostDetail({
                 />
 
                 {canReply && (
-                  <ReplyGifPicker
-                    disabled={
-                      replyState.status === 'submitting' ||
-                      deleteState.status === 'deleting'
-                    }
-                    onSelect={onGifReplySelect}
-                  />
+                  <>
+                    <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-slate-950/45 px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-white">
+                            GIF-only reply
+                          </p>
+                          <p className="mt-1 text-xs leading-6 text-slate-300">
+                            Keep the thread composer focused and open the Tenor
+                            picker only when you want a visual response.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          aria-expanded={isGifPickerOpen}
+                          aria-haspopup="dialog"
+                          className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/35 hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-slate-400"
+                          disabled={isGifPickerDisabled}
+                          onClick={() => {
+                            setIsGifPickerOpen(true)
+                          }}
+                        >
+                          Choose GIF
+                        </button>
+                      </div>
+                    </div>
+
+                    <ModalDialog
+                      description="Search Tenor and publish a GIF-only reply to the selected post."
+                      isOpen={isGifPickerOpen}
+                      maxWidthClassName="max-w-4xl"
+                      onClose={() => {
+                        setIsGifPickerOpen(false)
+                      }}
+                      title="Choose a GIF"
+                    >
+                      <ReplyGifPicker
+                        disabled={isGifPickerDisabled}
+                        onSelect={(gif) => {
+                          setIsGifPickerOpen(false)
+                          onGifReplySelect(gif)
+                        }}
+                      />
+                    </ModalDialog>
+                  </>
                 )}
               </div>
             </article>

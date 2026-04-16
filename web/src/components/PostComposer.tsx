@@ -14,6 +14,7 @@ import {
   type ComposerSegment,
 } from '../lib/composer'
 import { AppImage } from './AppImage'
+import { ModalDialog } from './ModalDialog'
 
 type ComposerVariant = 'post' | 'reply'
 
@@ -194,6 +195,7 @@ export function PostComposer({
   const previousMediaFilesRef = useRef<PostComposerMediaFile[]>(mediaFiles)
   const dragDepthRef = useRef(0)
   const [isDragActive, setIsDragActive] = useState(false)
+  const [isMediaManagerOpen, setIsMediaManagerOpen] = useState(false)
   const characterCount = value.length
   const segments = getComposerSegments(value)
   const remainingCharacters = maxLength - characterCount
@@ -206,6 +208,8 @@ export function PostComposer({
 
   const isReplyComposer = variant === 'reply'
   const isDropZoneActive = isDragActive && !isMediaInputDisabled
+  const mediaManagerButtonLabel =
+    mediaFiles.length > 0 ? 'Manage images' : 'Add images'
   const mediaSectionTitle = isReplyComposer
     ? 'Reply image attachments'
     : 'Post image attachments'
@@ -375,9 +379,9 @@ export function PostComposer({
           {label}
         </label>
         <p className="sr-only" id={composerHelpId}>
-          Type your message, use the image attachments section to browse or drag
-          image files, and add alternative text so people using screen readers
-          can understand the attachment content.
+          Type your message, then use the image attachment manager to browse or
+          drag image files and add alternative text so people using screen
+          readers can understand the attachment content.
         </p>
         <div className="relative mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-slate-950/85 shadow-inner shadow-slate-950/40 transition focus-within:border-sky-300/50 focus-within:ring-2 focus-within:ring-sky-300/40 focus-within:ring-offset-2 focus-within:ring-offset-slate-950">
           <div
@@ -428,182 +432,42 @@ export function PostComposer({
           />
         </div>
 
-        <div className="mt-3 rounded-[1.5rem] border border-dashed border-white/10 bg-slate-950/55 p-4">
-          <div
-            aria-describedby={`${mediaInputHintId} ${mediaInputStatusId}`}
-            aria-disabled={isMediaInputDisabled}
-            aria-labelledby={mediaInputLabelId}
-            className={`rounded-[1.25rem] border border-dashed px-4 py-4 transition ${
-              isDropZoneActive
-                ? 'border-sky-300/70 bg-sky-400/10'
-                : 'border-white/10 bg-white/[0.03]'
-            } ${isMediaInputDisabled ? 'opacity-60' : ''}`}
-            onDragEnter={handleDragEnter}
-            onDragLeave={handleDragLeave}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            role="group"
-          >
-            <p
-              aria-live="polite"
-              className="sr-only"
-              id={mediaInputStatusId}
-              role="status"
-            >
-              {mediaFiles.length > 0
-                ? `${formatImageCount(mediaFiles.length)} attached. Consider adding alt text for each image.`
-                : 'No image attachments selected yet.'}
-            </p>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p
-                  className="text-sm font-medium text-white"
-                  id={mediaInputLabelId}
-                >
-                  {mediaSectionTitle}
-                </p>
-                <p
-                  className="mt-1 text-xs leading-6 text-slate-300"
-                  id={mediaInputHintId}
-                >
-                  Drag images here or browse from the keyboard to preview them
-                  locally. Add alt text for each image so screen readers can
-                  describe the attachment before the upload flow is wired in.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                {mediaFiles.length > 0 && (
-                  <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-emerald-100">
-                    {formatImageCount(mediaFiles.length)}
-                  </span>
-                )}
-                {isMediaInputDisabled ? (
-                  <button
-                    className="cursor-not-allowed rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-slate-500 transition"
-                    disabled
-                    type="button"
-                  >
-                    Browse images
-                  </button>
-                ) : (
-                  <button
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-slate-200 transition hover:border-sky-300/40 hover:bg-sky-400/10 hover:text-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
-                    onClick={handleBrowseImages}
-                    type="button"
-                  >
-                    Browse images
-                  </button>
-                )}
-              </div>
+        <div className="mt-3 rounded-[1.5rem] border border-white/10 bg-slate-950/55 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-white">
+                {mediaSectionTitle}
+              </p>
+              <p className="mt-1 text-xs leading-6 text-slate-300">
+                Keep the composer compact and manage image previews, drag and
+                drop, and alt text in a modal.
+              </p>
             </div>
 
-            <input
-              accept="image/*"
-              aria-label={
-                isReplyComposer ? 'Choose reply images' : 'Choose post images'
-              }
-              className="sr-only"
-              disabled={isMediaInputDisabled}
-              id={mediaInputId}
-              multiple
-              onChange={handleMediaInputChange}
-              ref={mediaInputRef}
-              tabIndex={-1}
-              type="file"
-            />
+            <div className="flex items-center gap-3">
+              {mediaFiles.length > 0 && (
+                <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-emerald-100">
+                  {formatImageCount(mediaFiles.length)}
+                </span>
+              )}
+              <button
+                aria-expanded={isMediaManagerOpen}
+                aria-haspopup="dialog"
+                className={`rounded-full border px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
+                  isMediaInputDisabled
+                    ? 'cursor-not-allowed border-white/10 bg-white/5 text-slate-500'
+                    : 'border-white/10 bg-white/5 text-slate-200 hover:border-sky-300/40 hover:bg-sky-400/10 hover:text-sky-100'
+                }`}
+                disabled={isMediaInputDisabled}
+                onClick={() => {
+                  setIsMediaManagerOpen(true)
+                }}
+                type="button"
+              >
+                {mediaManagerButtonLabel}
+              </button>
+            </div>
           </div>
-
-          {mediaFiles.length > 0 && (
-            <ul
-              className={`mt-4 grid gap-3 ${
-                mediaFiles.length === 1 ? 'sm:grid-cols-1' : 'sm:grid-cols-2'
-              }`}
-            >
-              {mediaFiles.map((item) => {
-                const altInputId = buildMediaFieldId(
-                  textAreaId,
-                  item.signature,
-                  'alt',
-                )
-                const altInputHelpId = buildMediaFieldId(
-                  textAreaId,
-                  item.signature,
-                  'alt-help',
-                )
-
-                return (
-                  <li
-                    key={item.signature}
-                    className="overflow-hidden rounded-[1.25rem] border border-white/10 bg-slate-900/80 shadow-lg shadow-slate-950/30"
-                  >
-                    {item.previewUrl ? (
-                      <AppImage
-                        alt={buildImagePreviewAltText(item)}
-                        className="h-40 w-full object-cover"
-                        loading="eager"
-                        src={item.previewUrl}
-                      />
-                    ) : (
-                      <div className="flex h-40 items-center justify-center bg-slate-950 text-sm text-slate-400">
-                        Preview unavailable in this environment
-                      </div>
-                    )}
-
-                    <div className="flex items-start justify-between gap-3 px-4 py-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-white">
-                          {item.file.name}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-400">
-                          {formatFileSize(item.file.size)}
-                        </p>
-                        <div className="mt-3">
-                          <label
-                            className="text-xs font-medium uppercase tracking-[0.18em] text-slate-300"
-                            htmlFor={altInputId}
-                          >
-                            Alt text
-                          </label>
-                          <p
-                            className="mt-1 text-xs leading-6 text-slate-400"
-                            id={altInputHelpId}
-                          >
-                            Describe the important visual details for people
-                            using screen readers.
-                          </p>
-                          <input
-                            aria-describedby={altInputHelpId}
-                            className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-sky-300/60 focus:ring-2 focus:ring-sky-300/30"
-                            id={altInputId}
-                            maxLength={240}
-                            onChange={(event) =>
-                              handleAltTextChange(
-                                item.signature,
-                                event.target.value,
-                              )
-                            }
-                            placeholder="Describe the image for screen readers"
-                            type="text"
-                            value={item.altText}
-                          />
-                        </div>
-                      </div>
-
-                      <button
-                        aria-label={`Remove ${item.file.name}`}
-                        className="rounded-full border border-rose-300/20 bg-rose-400/10 px-3 py-1 text-xs font-medium text-rose-100 transition hover:border-rose-300/40 hover:bg-rose-400/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-                        onClick={() => handleRemoveMediaFile(item.signature)}
-                        type="button"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
         </div>
 
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
@@ -630,6 +494,195 @@ export function PostComposer({
             </button>
           </div>
         </div>
+
+        <ModalDialog
+          description="Browse or drag image files, preview them locally, and add alt text before submitting the composer."
+          isOpen={isMediaManagerOpen}
+          maxWidthClassName="max-w-4xl"
+          onClose={() => {
+            setIsMediaManagerOpen(false)
+          }}
+          title={mediaSectionTitle}
+        >
+          <div className="space-y-4">
+            <div
+              aria-describedby={`${mediaInputHintId} ${mediaInputStatusId}`}
+              aria-disabled={isMediaInputDisabled}
+              aria-labelledby={mediaInputLabelId}
+              className={`rounded-[1.5rem] border border-dashed px-4 py-4 transition ${
+                isDropZoneActive
+                  ? 'border-sky-300/70 bg-sky-400/10'
+                  : 'border-white/10 bg-white/[0.03]'
+              } ${isMediaInputDisabled ? 'opacity-60' : ''}`}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              role="group"
+            >
+              <p
+                aria-live="polite"
+                className="sr-only"
+                id={mediaInputStatusId}
+                role="status"
+              >
+                {mediaFiles.length > 0
+                  ? `${formatImageCount(mediaFiles.length)} attached. Consider adding alt text for each image.`
+                  : 'No image attachments selected yet.'}
+              </p>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p
+                    className="text-sm font-medium text-white"
+                    id={mediaInputLabelId}
+                  >
+                    {mediaSectionTitle}
+                  </p>
+                  <p
+                    className="mt-1 text-sm leading-7 text-slate-300"
+                    id={mediaInputHintId}
+                  >
+                    Drag images here or browse from the keyboard to preview
+                    them locally. Add alt text for each image so screen readers
+                    can describe the attachment before the upload flow is wired
+                    in.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {mediaFiles.length > 0 && (
+                    <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-emerald-100">
+                      {formatImageCount(mediaFiles.length)}
+                    </span>
+                  )}
+                  {isMediaInputDisabled ? (
+                    <button
+                      className="cursor-not-allowed rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-slate-500 transition"
+                      disabled
+                      type="button"
+                    >
+                      Browse images
+                    </button>
+                  ) : (
+                    <button
+                      className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-slate-200 transition hover:border-sky-300/40 hover:bg-sky-400/10 hover:text-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                      onClick={handleBrowseImages}
+                      type="button"
+                    >
+                      Browse images
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <input
+                accept="image/*"
+                aria-label={
+                  isReplyComposer ? 'Choose reply images' : 'Choose post images'
+                }
+                className="sr-only"
+                disabled={isMediaInputDisabled}
+                id={mediaInputId}
+                multiple
+                onChange={handleMediaInputChange}
+                ref={mediaInputRef}
+                tabIndex={-1}
+                type="file"
+              />
+            </div>
+
+            {mediaFiles.length > 0 && (
+              <ul
+                className={`grid gap-3 ${
+                  mediaFiles.length === 1 ? 'sm:grid-cols-1' : 'sm:grid-cols-2'
+                }`}
+              >
+                {mediaFiles.map((item) => {
+                  const altInputId = buildMediaFieldId(
+                    textAreaId,
+                    item.signature,
+                    'alt',
+                  )
+                  const altInputHelpId = buildMediaFieldId(
+                    textAreaId,
+                    item.signature,
+                    'alt-help',
+                  )
+
+                  return (
+                    <li
+                      key={item.signature}
+                      className="overflow-hidden rounded-[1.25rem] border border-white/10 bg-slate-900/80 shadow-lg shadow-slate-950/30"
+                    >
+                      {item.previewUrl ? (
+                        <AppImage
+                          alt={buildImagePreviewAltText(item)}
+                          className="h-40 w-full object-cover"
+                          loading="eager"
+                          src={item.previewUrl}
+                        />
+                      ) : (
+                        <div className="flex h-40 items-center justify-center bg-slate-950 text-sm text-slate-400">
+                          Preview unavailable in this environment
+                        </div>
+                      )}
+
+                      <div className="flex items-start justify-between gap-3 px-4 py-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-white">
+                            {item.file.name}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-400">
+                            {formatFileSize(item.file.size)}
+                          </p>
+                          <div className="mt-3">
+                            <label
+                              className="text-xs font-medium uppercase tracking-[0.18em] text-slate-300"
+                              htmlFor={altInputId}
+                            >
+                              Alt text
+                            </label>
+                            <p
+                              className="mt-1 text-xs leading-6 text-slate-400"
+                              id={altInputHelpId}
+                            >
+                              Describe the important visual details for people
+                              using screen readers.
+                            </p>
+                            <input
+                              aria-describedby={altInputHelpId}
+                              className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-sky-300/60 focus:ring-2 focus:ring-sky-300/30"
+                              id={altInputId}
+                              maxLength={240}
+                              onChange={(event) =>
+                                handleAltTextChange(
+                                  item.signature,
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="Describe the image for screen readers"
+                              type="text"
+                              value={item.altText}
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          aria-label={`Remove ${item.file.name}`}
+                          className="rounded-full border border-rose-300/20 bg-rose-400/10 px-3 py-1 text-xs font-medium text-rose-100 transition hover:border-rose-300/40 hover:bg-rose-400/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                          onClick={() => handleRemoveMediaFile(item.signature)}
+                          type="button"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+        </ModalDialog>
       </div>
     </form>
   )
