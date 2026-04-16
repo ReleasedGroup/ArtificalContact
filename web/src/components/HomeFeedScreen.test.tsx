@@ -399,7 +399,7 @@ describe('HomeFeedScreen', () => {
     expect(await screen.findByText('Inline reply target')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Reply to post' }))
-    fireEvent.change(screen.getByLabelText('Reply to feed post'), {
+    fireEvent.change(await screen.findByLabelText('Reply to feed post'), {
       target: { value: 'Reply from the home feed' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
