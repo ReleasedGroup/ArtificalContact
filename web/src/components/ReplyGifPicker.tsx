@@ -11,11 +11,19 @@ function getBrowserLocale(): string | undefined {
 }
 
 export function ReplyGifPicker({
+  descriptionText = 'Search Tenor and select a result to publish a GIF-only reply to the current post.',
   disabled = false,
+  headingLabel = 'GIF replies',
   onSelect,
+  resultActionLabel = 'Reply',
+  resultAriaLabelPrefix = 'Reply with GIF',
 }: {
+  descriptionText?: string
   disabled?: boolean
+  headingLabel?: string
   onSelect: (gif: GifSearchResult) => void
+  resultActionLabel?: string
+  resultAriaLabelPrefix?: string
 }) {
   const [query, setQuery] = useState('')
   const [searchRequest, setSearchRequest] = useState({
@@ -86,11 +94,10 @@ export function ReplyGifPicker({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-medium uppercase tracking-[0.24em] text-fuchsia-100/80">
-            GIF replies
+            {headingLabel}
           </p>
           <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-400">
-            Search Tenor and select a result to publish a GIF-only reply to the
-            current post.
+            {descriptionText}
           </p>
         </div>
         <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-300">
@@ -149,7 +156,7 @@ export function ReplyGifPicker({
             <li key={gif.id}>
               <button
                 type="button"
-                aria-label={`Reply with GIF: ${gif.title ?? gif.id}`}
+                aria-label={`${resultAriaLabelPrefix}: ${gif.title ?? gif.id}`}
                 className="group flex h-full w-full flex-col overflow-hidden rounded-[1.25rem] border border-white/10 bg-slate-900/80 text-left shadow-lg shadow-slate-950/25 transition hover:border-cyan-300/35 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={disabled}
                 onClick={() => onSelect(gif)}
@@ -171,7 +178,7 @@ export function ReplyGifPicker({
                     </p>
                   </div>
                   <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-cyan-100 transition group-hover:border-cyan-300/35 group-hover:bg-cyan-300/15">
-                    Reply
+                    {resultActionLabel}
                   </span>
                 </div>
               </button>

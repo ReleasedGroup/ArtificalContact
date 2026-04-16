@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildCreatePostRequestSchema,
   buildCreateReplyRequestSchema,
   buildPostContentSchema,
   DEFAULT_POST_MAX_LENGTH,
@@ -169,5 +170,89 @@ describe('buildCreateReplyRequestSchema', () => {
       'A reply must include text or a GIF.',
     )
     expect(result.error.issues[0]?.path).toEqual(['text'])
+  })
+})
+
+describe('buildCreatePostRequestSchema', () => {
+  it('accepts a media-only post and normalizes the stored media payload', () => {
+    const result = buildCreatePostRequestSchema(280).parse({
+      media: [
+        {
+          id: 'm_uploaded',
+          kind: 'image',
+          url: 'https://cdn.example.com/media/post-image.png',
+          thumbUrl: 'https://cdn.example.com/media/post-image-thumb.png',
+          width: 1280,
+          height: 720,
+        },
+        {
+          id: 'tenor-123',
+          kind: 'gif',
+          url: 'https://media.tenor.com/full.gif',
+          thumbUrl: 'https://media.tenor.com/tiny.gif',
+          width: 320,
+          height: 240,
+        },
+      ],
+    })
+
+    expect(result).toEqual({
+      text: '',
+      hashtags: [],
+      mentions: [],
+      media: [
+        {
+          id: 'm_uploaded',
+          kind: 'image',
+          url: 'https://cdn.example.com/media/post-image.png',
+          thumbUrl: 'https://cdn.example.com/media/post-image-thumb.png',
+          width: 1280,
+          height: 720,
+        },
+        {
+          id: 'tenor-123',
+          kind: 'gif',
+          url: 'https://media.tenor.com/full.gif',
+          thumbUrl: 'https://media.tenor.com/tiny.gif',
+          width: 320,
+          height: 240,
+        },
+      ],
+    })
+  })
+
+  it('rejects posts that omit both text and media', () => {
+    const result = buildCreatePostRequestSchema(280).safeParse({
+      text: '   ',
+    })
+
+    expect(result.success).toBe(false)
+    if (result.success) {
+      throw new Error('Expected validation failure for an empty post.')
+    }
+
+    expect(result.error.issues[0]?.message).toBe(
+      'A post must include text or media.',
+    )
+    expect(result.error.issues[0]?.path).toEqual(['text'])
+  })
+
+  it('rejects post media URLs that are not https', () => {
+    const result = buildCreatePostRequestSchema(280).safeParse({
+      media: [
+        {
+          kind: 'image',
+          url: 'http://cdn.example.com/media/post-image.png',
+        },
+      ],
+    })
+
+    expect(result.success).toBe(false)
+    if (result.success) {
+      throw new Error('Expected validation failure for an insecure media URL.')
+    }
+
+    expect(result.error.issues[0]?.path).toEqual(['media', 0, 'url'])
+    expect(result.error.issues[0]?.message).toContain('must use an https:// URL')
   })
 })

@@ -25,8 +25,18 @@ interface DeletePostPayload {
   alreadyDeleted: boolean
 }
 
+export interface CreatePostMediaInput {
+  id?: string | null
+  kind: 'image' | 'gif'
+  url: string
+  thumbUrl?: string | null
+  width?: number | null
+  height?: number | null
+}
+
 interface CreatePostInput {
-  text: string
+  text?: string
+  media?: CreatePostMediaInput[]
 }
 
 export interface ReplyGifMediaInput {

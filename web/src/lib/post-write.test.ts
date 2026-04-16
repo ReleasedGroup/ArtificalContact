@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createReply } from './post-write'
+import { createPost, createReply } from './post-write'
 
 const mockFetch = vi.fn()
 
@@ -72,6 +72,88 @@ describe('createReply', () => {
         method: 'POST',
         body: JSON.stringify({
           media: [
+            {
+              id: 'tenor-123',
+              kind: 'gif',
+              url: 'https://media.tenor.com/full.gif',
+              thumbUrl: 'https://media.tenor.com/tiny.gif',
+              width: 320,
+              height: 240,
+            },
+          ],
+        }),
+      }),
+    )
+  })
+})
+
+describe('createPost', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', mockFetch)
+    mockFetch.mockReset()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('uses a post-specific invalid JSON error message', async () => {
+    mockFetch.mockResolvedValue(createBrokenJsonResponse(201))
+
+    await expect(
+      createPost({
+        text: 'Root post body',
+      }),
+    ).rejects.toThrow('The post publish response was not valid JSON.')
+  })
+
+  it('posts media attachments to the root post endpoint', async () => {
+    mockFetch.mockResolvedValue(
+      createJsonResponse(201, {
+        data: {
+          post: {
+            id: 'post-with-media',
+          },
+        },
+        errors: [],
+      }),
+    )
+
+    await createPost({
+      media: [
+        {
+          id: 'm_uploaded',
+          kind: 'image',
+          url: 'https://cdn.example.com/media/post-image.png',
+          thumbUrl: 'https://cdn.example.com/media/post-image-thumb.png',
+          width: 1280,
+          height: 720,
+        },
+        {
+          id: 'tenor-123',
+          kind: 'gif',
+          url: 'https://media.tenor.com/full.gif',
+          thumbUrl: 'https://media.tenor.com/tiny.gif',
+          width: 320,
+          height: 240,
+        },
+      ],
+    })
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/posts',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          media: [
+            {
+              id: 'm_uploaded',
+              kind: 'image',
+              url: 'https://cdn.example.com/media/post-image.png',
+              thumbUrl: 'https://cdn.example.com/media/post-image-thumb.png',
+              width: 1280,
+              height: 720,
+            },
             {
               id: 'tenor-123',
               kind: 'gif',
