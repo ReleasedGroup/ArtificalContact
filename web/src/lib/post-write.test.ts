@@ -162,6 +162,43 @@ describe('createPost', () => {
     )
   })
 
+  it('accepts media file uploads without alt text until the API stores it', async () => {
+    const imageFile = new File(['diagram'], 'architecture.png', {
+      type: 'image/png',
+    })
+
+    uploadMediaFileMock.mockResolvedValue({
+      kind: 'image',
+      blobName: 'github:abc123/2026/04/architecture.png',
+      blobUrl: 'https://media.example.com/images/architecture.png',
+    })
+    mockFetch.mockResolvedValue(
+      createJsonResponse(201, {
+        data: {
+          post: {
+            id: 'post-with-image',
+          },
+        },
+        errors: [],
+      }),
+    )
+
+    await createPost({
+      text: 'Architecture update',
+      mediaFiles: [
+        {
+          file: imageFile,
+        },
+      ],
+    })
+
+    expect(uploadMediaFileMock).toHaveBeenCalledWith({
+      file: imageFile,
+      kind: 'image',
+      signal: undefined,
+    })
+  })
+
   it('posts a Tenor GIF payload without uploading a file first', async () => {
     mockFetch.mockResolvedValue(
       createJsonResponse(201, {

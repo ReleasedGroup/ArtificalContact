@@ -214,6 +214,52 @@ describe('notifications client', () => {
     })
   })
 
+  it('treats readAt notifications as read when unreadCount is missing', async () => {
+    mockFetch.mockResolvedValue(
+      createJsonResponse(200, {
+        data: [
+          {
+            id: 'notif-1',
+            type: 'follow',
+            message: 'started following you.',
+            readAt: '2026-04-15T08:05:00.000Z',
+            createdAt: '2026-04-15T08:00:00.000Z',
+            actorHandle: 'grace',
+            actorDisplayName: 'Grace Hopper',
+          },
+        ],
+        cursor: null,
+        errors: [],
+      }),
+    )
+
+    await expect(getNotificationsPage()).resolves.toEqual({
+      notifications: [
+        {
+          id: 'notif-1',
+          eventType: 'follow',
+          text: 'started following you.',
+          read: true,
+          createdAt: '2026-04-15T08:00:00.000Z',
+          targetUrl: null,
+          postId: null,
+          threadId: null,
+          excerpt: null,
+          eventCount: 1,
+          coalesced: false,
+          actor: {
+            id: null,
+            handle: 'grace',
+            displayName: 'Grace Hopper',
+            avatarUrl: null,
+          },
+        },
+      ],
+      cursor: null,
+      unreadCount: 0,
+    })
+  })
+
   it('posts a single mark-read request', async () => {
     mockFetch.mockResolvedValue(
       createJsonResponse(200, {

@@ -33,6 +33,7 @@ function isCosmosNotFound(error: unknown): boolean {
 }
 
 const FOLLOWEE_LOOKUP_BATCH_SIZE = 100
+export const MAX_PULL_ON_READ_FOLLOWEES = 250
 const FEED_ENTRY_CURSOR_PREFIX = 'ac.feed.entries.v1:'
 
 export class CosmosFeedStore implements FeedFanOutStore, FeedReadStore {
@@ -179,8 +180,14 @@ export class CosmosFeedStore implements FeedFanOutStore, FeedReadStore {
 
   private async listFolloweeIdsByFeedOwnerId(
     feedOwnerId: string,
+    maxFollowees = MAX_PULL_ON_READ_FOLLOWEES,
   ): Promise<string[]> {
+    if (maxFollowees <= 0) {
+      return []
+    }
+
     const followedIds: string[] = []
+    const seenFollowedIds = new Set<string>()
     let continuationToken: string | undefined
 
     do {
@@ -189,9 +196,24 @@ export class CosmosFeedStore implements FeedFanOutStore, FeedReadStore {
         ...(continuationToken === undefined ? {} : { continuationToken }),
       })
 
-      followedIds.push(...page.follows.map((follow) => follow.followedId))
+      for (const follow of page.follows) {
+        if (seenFollowedIds.has(follow.followedId)) {
+          continue
+        }
+
+        seenFollowedIds.add(follow.followedId)
+        followedIds.push(follow.followedId)
+
+        if (followedIds.length >= maxFollowees) {
+          break
+        }
+      }
+
       continuationToken = page.continuationToken
-    } while (continuationToken !== undefined)
+    } while (
+      continuationToken !== undefined &&
+      followedIds.length < maxFollowees
+    )
 
     if (followedIds.length === 0) {
       return []

@@ -34,6 +34,7 @@ interface NotificationApiRecord {
   excerpt?: string | null
   read?: boolean | null
   isRead?: boolean | null
+  readAt?: string | null
   createdAt?: string | null
   targetUrl?: string | null
   postId?: string | null
@@ -46,6 +47,14 @@ interface NotificationApiRecord {
   actorAvatarUrl?: string | null
   eventCount?: number | null
   coalesced?: boolean | null
+}
+
+function isNotificationRecordRead(record: NotificationApiRecord): boolean {
+  return (
+    record.read === true ||
+    record.isRead === true ||
+    (typeof record.readAt === 'string' && record.readAt.trim().length > 0)
+  )
 }
 
 interface MarkNotificationsReadEnvelope {
@@ -159,7 +168,7 @@ function normalizeNotification(record: NotificationApiRecord): NotificationItem 
     id: record.id,
     eventType: (record.eventType ?? record.type ?? 'unknown').trim(),
     text: record.text ?? record.message ?? null,
-    read: Boolean(record.read ?? record.isRead ?? false),
+    read: isNotificationRecordRead(record),
     createdAt: record.createdAt ?? null,
     targetUrl: record.targetUrl ?? null,
     postId: record.postId ?? null,
@@ -203,8 +212,7 @@ function resolveUnreadCount(
   }
 
   return records.reduce(
-    (count, notification) =>
-      count + (notification.read === true || notification.isRead === true ? 0 : 1),
+    (count, notification) => count + (isNotificationRecordRead(notification) ? 0 : 1),
     0,
   )
 }

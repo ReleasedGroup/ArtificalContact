@@ -27,7 +27,7 @@ interface DeletePostPayload {
 }
 
 export interface CreatePostMediaFileInput {
-  altText: string
+  altText?: string
   file: File
 }
 
